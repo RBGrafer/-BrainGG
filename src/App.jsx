@@ -3,6 +3,25 @@ import React, { useEffect, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 
+function calculateUpgradeChance(source, target) {
+  const sourcePrice = Number(source?.value_gg);
+  const targetPrice = Number(target?.value_gg);
+
+  if (
+    !Number.isFinite(sourcePrice) ||
+    !Number.isFinite(targetPrice) ||
+    sourcePrice <= 0 ||
+    targetPrice <= 0
+  ) {
+    return 0;
+  }
+
+  return Math.min(
+    90,
+    Math.max(0.1, (sourcePrice / targetPrice) * 100)
+  );
+}
+
 export default function App() {
   const [page, setPage] = useState("Главная");
   const [openCount, setOpenCount] = useState(1);
@@ -12,6 +31,7 @@ export default function App() {
   const [opening, setOpening] = useState(false);
   const [authError, setAuthError] = useState("");
   const [lastRewards, setLastRewards] = useState([]);
+
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState("");
@@ -54,6 +74,7 @@ export default function App() {
         );
 
         if (error) throw error;
+
         if (!data?.success || !data?.player) {
           throw new Error(data?.error || "Не удалось загрузить игрока");
         }
@@ -86,6 +107,7 @@ export default function App() {
       );
 
       if (error) throw error;
+
       if (!data?.success) {
         throw new Error(data?.error || "Не удалось загрузить инвентарь");
       }
@@ -93,7 +115,9 @@ export default function App() {
       setInventory(data.items || []);
     } catch (error) {
       console.error("Ошибка инвентаря:", error);
-      setInventoryError("Не удалось загрузить инвентарь. Попробуй ещё раз.");
+      setInventoryError(
+        "Не удалось загрузить инвентарь. Попробуй ещё раз."
+      );
     } finally {
       setInventoryLoading(false);
     }
@@ -114,6 +138,7 @@ export default function App() {
       );
 
       if (error) throw error;
+
       if (!data?.success) {
         throw new Error(data?.error || "Не удалось загрузить цели");
       }
@@ -125,6 +150,63 @@ export default function App() {
     } finally {
       setTargetsLoading(false);
     }
+  }
+
+  function findClosestTarget(source, desiredChance) {
+    if (!source || upgradeTargets.length === 0) return null;
+
+    const possible = upgradeTargets
+      .filter((item) => item.item_name !== source.item_name)
+      .map((item) => ({
+        ...item,
+        actualChance: calculateUpgradeChance(source, item),
+      }))
+      .filter((item) => item.actualChance > 0);
+
+    if (possible.length === 0) return null;
+
+    possible.sort((a, b) => {
+      const differenceA = Math.abs(a.actualChance - desiredChance);
+      const differenceB = Math.abs(b.actualChance - desiredChance);
+
+      if (differenceA !== differenceB) {
+        return differenceA - differenceB;
+      }
+
+      // При одинаковом расстоянии предпочитаем шанс не выше выбранного.
+      const aAbove = a.actualChance > desiredChance;
+      const bAbove = b.actualChance > desiredChance;
+
+      if (aAbove !== bAbove) return aAbove ? 1 : -1;
+
+      return a.value_gg - b.value_gg;
+    });
+
+    return possible[0];
+  }
+
+  function chooseChance(preset) {
+    setUpgradeChance(preset);
+    setUpgradeResult(null);
+    setActionMessage("");
+
+    const closest = findClosestTarget(selectedUpgrade, preset);
+
+    if (closest) {
+      setTargetItem(closest.item_name);
+    } else {
+      setTargetItem("");
+    }
+  }
+
+  function chooseSource(item) {
+    setSelectedUpgrade(item);
+    setUpgradeResult(null);
+    setActionMessage("");
+
+    const closest = findClosestTarget(item, upgradeChance);
+
+    setTargetItem(closest?.item_name || "");
   }
 
   async function changePage(nextPage) {
@@ -161,15 +243,18 @@ export default function App() {
         );
 
         if (error) throw error;
+
         if (!data?.success || !data?.result?.success) {
           throw new Error(data?.error || "Не удалось открыть кейс");
         }
 
         rewards.push(data.result);
+
         setPlayer((previous) => ({
           ...previous,
           balance: data.result.balance,
         }));
+
         setLastRewards([...rewards]);
       }
 
@@ -177,6 +262,7 @@ export default function App() {
       alert(`Готово! Открыто кейсов: ${rewards.length}`);
     } catch (error) {
       console.error("Ошибка открытия:", error);
+
       alert(
         rewards.length > 0
           ? `Открыто кейсов: ${rewards.length}. Остальные открыть не удалось.`
@@ -191,7 +277,10 @@ export default function App() {
     if (sellingId || upgradeLoading) return;
 
     const price = Number(item.value_gg) || 0;
-    if (!window.confirm(`Продать ${item.item_name} за ${price} GG?`)) return;
+
+    if (!window.confirm(`Продать ${item.item_name} за ${price} GG?`)) {
+      return;
+    }
 
     setSellingId(item.id);
     setActionMessage("");
@@ -209,6 +298,7 @@ export default function App() {
       );
 
       if (error) throw error;
+
       if (!data?.success || !data?.result?.success) {
         throw new Error(data?.error || "Не удалось продать предмет");
       }
@@ -224,6 +314,7 @@ export default function App() {
 
       if (selectedUpgrade?.id === item.id) {
         setSelectedUpgrade(null);
+        setTargetItem("");
       }
 
       setActionMessage(
@@ -241,8 +332,8 @@ export default function App() {
     if (
       !selectedUpgrade ||
       !targetItem ||
-      upgradeLoading ||
-      ![75, 50, 25, 10].includes(upgradeChance)
+      !selectedTarget ||
+      upgradeLoading
     ) {
       return;
     }
@@ -260,37 +351,39 @@ export default function App() {
             action: "upgrade_item",
             inventoryId: selectedUpgrade.id,
             targetItem,
-            chance: upgradeChance,
           },
         }
       );
 
       if (error) throw error;
+
       if (!data?.success || !data?.result?.success) {
         throw new Error(data?.error || "Не удалось выполнить апгрейд");
       }
 
       const result = data.result;
-      const chance = Number(result.chance);
+      const actualChance = Number(result.chance);
 
-      // Зелёный сектор занимает выбранный процент круга.
-      // При победе его середина остановится под белой стрелкой.
-      // При проигрыше под стрелкой окажется тёмный сектор.
-      const sectorCenter = result.won
-        ? chance * 1.8
-        : 180 + chance * 1.8;
+      const greenCenter = actualChance * 1.8;
+      const darkCenter = 180 + actualChance * 1.8;
 
-      setUpgradeRotation((previous) => previous + 360 * 5 - sectorCenter);
+      const sectorCenter = result.won ? greenCenter : darkCenter;
+
+      setUpgradeRotation(
+        (previous) => previous + 360 * 5 - sectorCenter
+      );
 
       await new Promise((resolve) => setTimeout(resolve, 4200));
 
       setUpgradeResult(result);
+
       setPlayer((previous) => ({
         ...previous,
         balance: result.balance,
       }));
 
       await loadInventory();
+
       setSelectedUpgrade(null);
       setTargetItem("");
     } catch (error) {
@@ -305,11 +398,20 @@ export default function App() {
     (item) => item.item_name === targetItem
   );
 
-  const availableTargets = upgradeTargets.filter(
-    (item) => item.item_name !== selectedUpgrade?.item_name
-  );
+  const actualChance = selectedUpgrade && selectedTarget
+    ? calculateUpgradeChance(selectedUpgrade, selectedTarget)
+    : 0;
 
-  const wheelAngle = upgradeChance * 3.6;
+  const availableTargets = upgradeTargets
+    .filter((item) => item.item_name !== selectedUpgrade?.item_name)
+    .map((item) => ({
+      ...item,
+      actualChance: selectedUpgrade
+        ? calculateUpgradeChance(selectedUpgrade, item)
+        : null,
+    }));
+
+  const wheelAngle = actualChance * 3.6;
 
   return (
     <div className="app">
@@ -352,6 +454,7 @@ export default function App() {
               <p>
                 Открывай кейсы, собирай персонажей и улучшай свою коллекцию.
               </p>
+
               {player && (
                 <>
                   <p>
@@ -365,6 +468,7 @@ export default function App() {
                   </p>
                 </>
               )}
+
               <button
                 className="main-button"
                 onClick={() => changePage("Кейсы")}
@@ -386,6 +490,7 @@ export default function App() {
                     <h3>{item.name}</h3>
                     <p>{item.description}</p>
                     <div className="case-price">🪙 {item.price} GG</div>
+
                     <button
                       className={
                         selectedCase?.id === item.id
@@ -407,6 +512,7 @@ export default function App() {
 
               <div className="opening-panel">
                 <h3>Количество открытий</h3>
+
                 <div className="opening-options">
                   {[1, 3, 5].map((count) => (
                     <button
@@ -448,6 +554,7 @@ export default function App() {
                 {lastRewards.length > 0 && (
                   <div className="rewards-list">
                     <h3>🎉 Твои выпадения</h3>
+
                     {lastRewards.map((reward, index) => (
                       <div className="reward-item" key={index}>
                         <b>{reward.item_name}</b>
@@ -465,8 +572,11 @@ export default function App() {
               <div className="upgrade-heading">
                 <div>
                   <h2>⚡ Апгрейдер BrainGG</h2>
-                  <p>Поставь своего брейнрота на кон и попробуй получить редкого!</p>
+                  <p>
+                    Выбери своего брейнрота и цель, которую хочешь получить!
+                  </p>
                 </div>
+
                 <div className="upgrade-badge">UPGRADE</div>
               </div>
 
@@ -480,6 +590,7 @@ export default function App() {
                   <div className="empty-brain">🧠</div>
                   <h3>У тебя пока нет брейнротов</h3>
                   <p>Открой кейс, чтобы получить первый предмет.</p>
+
                   <button
                     className="main-button"
                     onClick={() => changePage("Кейсы")}
@@ -494,8 +605,8 @@ export default function App() {
                       <div className="upgrade-column-title">
                         <span>1</span>
                         <div>
-                          <b>ТВОЙ БРЕЙНРОТ</b>
-                          <small>Отдаёшь</small>
+                          <b>ТВОИ БРЕЙНРОТЫ</b>
+                          <small>Выбери предмет, который отдаёшь</small>
                         </div>
                       </div>
 
@@ -509,21 +620,24 @@ export default function App() {
                                 : "upgrade-item"
                             }
                             disabled={upgradeLoading}
-                            onClick={() => {
-                              setSelectedUpgrade(item);
-                              setUpgradeResult(null);
-                              setTargetItem("");
-                              setActionMessage("");
-                            }}
+                            onClick={() => chooseSource(item)}
                           >
                             <span className="upgrade-item-emoji">🧠</span>
+
                             <span className="upgrade-item-info">
                               <b>{item.item_name}</b>
-                              <small style={{ color: rarityColors[item.rarity] }}>
+
+                              <small
+                                style={{
+                                  color: rarityColors[item.rarity],
+                                }}
+                              >
                                 {item.rarity}
                               </small>
-                              <small>{item.value_gg ?? 10} GG</small>
+
+                              <small>{item.value_gg} GG</small>
                             </span>
+
                             {selectedUpgrade?.id === item.id && (
                               <span className="item-check">✓</span>
                             )}
@@ -535,6 +649,7 @@ export default function App() {
                     <section className="upgrade-middle">
                       <div className="upgrade-wheel-wrap">
                         <div className="wheel-glow" />
+
                         <div
                           className="upgrade-wheel-rotor"
                           style={{
@@ -544,15 +659,24 @@ export default function App() {
                         >
                           <div className="wheel-inner">
                             <span className="wheel-chance">
-                              {upgradeChance}%
+                              {selectedTarget
+                                ? `${actualChance.toFixed(1)}%`
+                                : "—"}
                             </span>
-                            <span className="wheel-label">ШАНС ПОБЕДЫ</span>
+
+                            <span className="wheel-label">
+                              РЕАЛЬНЫЙ ШАНС
+                            </span>
                           </div>
                         </div>
+
                         <div className="upgrade-pointer" />
                       </div>
 
-                      <div className="chance-title">ВЫБЕРИ ШАНС</div>
+                      <div className="chance-title">
+                        ВЫБЕРИ ЖЕЛАЕМЫЙ ШАНС
+                      </div>
+
                       <div className="chance-options">
                         {[75, 50, 25, 10].map((chance) => (
                           <button
@@ -563,21 +687,32 @@ export default function App() {
                                 : "chance-button"
                             }
                             disabled={upgradeLoading}
-                            onClick={() => {
-                              setUpgradeChance(chance);
-                              setUpgradeResult(null);
-                            }}
+                            onClick={() => chooseChance(chance)}
                           >
                             {chance}%
                           </button>
                         ))}
                       </div>
 
+                      <p className="chance-explanation">
+                        Кнопка подберёт брейнрота с наиболее близким
+                        настоящим шансом. Вероятность зависит от стоимости
+                        предметов.
+                      </p>
+
+                      {selectedTarget && (
+                        <div className="actual-chance-info">
+                          <span>Настоящий шанс:</span>
+                          <b>{actualChance.toFixed(2)}%</b>
+                        </div>
+                      )}
+
                       <button
                         className="main-button upgrade-start-button"
                         disabled={
                           !selectedUpgrade ||
                           !targetItem ||
+                          !selectedTarget ||
                           upgradeLoading ||
                           targetsLoading
                         }
@@ -587,8 +722,12 @@ export default function App() {
                       </button>
 
                       <div className="wheel-legend">
-                        <span><i className="legend-green" /> Победа</span>
-                        <span><i className="legend-dark" /> Проигрыш</span>
+                        <span>
+                          <i className="legend-green" /> Победа
+                        </span>
+                        <span>
+                          <i className="legend-dark" /> Проигрыш
+                        </span>
                       </div>
                     </section>
 
@@ -596,8 +735,8 @@ export default function App() {
                       <div className="upgrade-column-title target-title">
                         <span>2</span>
                         <div>
-                          <b>ЖЕЛАЕМЫЙ БРЕЙНРОТ</b>
-                          <small>Хочешь получить</small>
+                          <b>БРЕЙНРОТЫ ДЛЯ ПОЛУЧЕНИЯ</b>
+                          <small>Выбери желаемую цель</small>
                         </div>
                       </div>
 
@@ -618,13 +757,27 @@ export default function App() {
                             }}
                           >
                             <span className="upgrade-item-emoji">🧠</span>
+
                             <span className="upgrade-item-info">
                               <b>{item.item_name}</b>
-                              <small style={{ color: rarityColors[item.rarity] }}>
+
+                              <small
+                                style={{
+                                  color: rarityColors[item.rarity],
+                                }}
+                              >
                                 {item.rarity}
                               </small>
+
                               <small>{item.value_gg} GG</small>
+
+                              {selectedUpgrade && (
+                                <small className="target-real-chance">
+                                  Шанс: {item.actualChance.toFixed(2)}%
+                                </small>
+                              )}
                             </span>
+
                             {targetItem === item.item_name && (
                               <span className="item-check">✓</span>
                             )}
@@ -632,7 +785,9 @@ export default function App() {
                         ))}
 
                         {availableTargets.length === 0 && (
-                          <p className="no-targets">Нет доступных целей.</p>
+                          <p className="no-targets">
+                            Нет доступных целей.
+                          </p>
                         )}
                       </div>
                     </section>
@@ -641,12 +796,24 @@ export default function App() {
                   <div className="upgrade-selection-summary">
                     <div>
                       <small>ТВОЙ ПРЕДМЕТ</small>
-                      <b>{selectedUpgrade?.item_name || "Не выбран"}</b>
+                      <b>
+                        {selectedUpgrade?.item_name || "Не выбран"}
+                      </b>
+                      {selectedUpgrade && (
+                        <small>{selectedUpgrade.value_gg} GG</small>
+                      )}
                     </div>
+
                     <div className="summary-arrow">➜</div>
+
                     <div>
                       <small>ТВОЯ ЦЕЛЬ</small>
-                      <b>{selectedTarget?.item_name || "Не выбрана"}</b>
+                      <b>
+                        {selectedTarget?.item_name || "Не выбрана"}
+                      </b>
+                      {selectedTarget && (
+                        <small>{selectedTarget.value_gg} GG</small>
+                      )}
                     </div>
                   </div>
 
@@ -661,18 +828,23 @@ export default function App() {
                       <div className="result-icon">
                         {upgradeResult.won ? "🏆" : "💔"}
                       </div>
+
                       <div>
                         <h3>
                           {upgradeResult.won
                             ? "ПОБЕДА! БРЕЙНРОТ ТВОЙ!"
                             : "НЕ ПОВЕЗЛО! БРЕЙНРОТ СГОРЕЛ"}
                         </h3>
+
                         <p>
                           {upgradeResult.won
                             ? `Ты получил ${upgradeResult.target_item}!`
                             : `Ты пытался получить ${upgradeResult.target_item}.`}
                         </p>
-                        <small>Шанс апгрейда: {upgradeResult.chance}%</small>
+
+                        <small>
+                          Настоящий шанс: {upgradeResult.chance}%
+                        </small>
                       </div>
                     </div>
                   )}
@@ -680,7 +852,9 @@ export default function App() {
               )}
 
               {actionMessage && (
-                <div className="upgrade-message">{actionMessage}</div>
+                <div className="upgrade-message">
+                  {actionMessage}
+                </div>
               )}
 
               {inventoryError && (
@@ -702,6 +876,7 @@ export default function App() {
               {inventoryError && (
                 <>
                   <p>{inventoryError}</p>
+
                   <button className="main-button" onClick={loadInventory}>
                     Повторить
                   </button>
@@ -719,6 +894,7 @@ export default function App() {
                       <div className="case-emoji">🎁</div>
                       <h3>Пока здесь пусто</h3>
                       <p>Открой свой первый кейс!</p>
+
                       <button
                         className="main-button"
                         onClick={() => changePage("Кейсы")}
@@ -732,6 +908,7 @@ export default function App() {
                         <div className="case-card" key={item.id}>
                           <div className="case-emoji">🧠</div>
                           <h3>{item.item_name}</h3>
+
                           <div
                             className="case-price"
                             style={{
@@ -740,27 +917,35 @@ export default function App() {
                           >
                             {item.rarity}
                           </div>
+
                           <p>
                             Получен:{" "}
                             {new Date(item.created_at).toLocaleDateString(
                               "ru-RU"
                             )}
                           </p>
+
                           <div className="case-price">
-                            🪙 {item.value_gg ?? 10} GG
+                            🪙 {item.value_gg} GG
                           </div>
+
                           <button
                             className="main-button"
-                            disabled={sellingId === item.id || upgradeLoading}
+                            disabled={
+                              sellingId === item.id || upgradeLoading
+                            }
                             onClick={() => sellItem(item)}
                           >
                             {sellingId === item.id
                               ? "Продаём..."
-                              : `Продать за ${item.value_gg ?? 10} GG`}
+                              : `Продать за ${item.value_gg} GG`}
                           </button>
+
                           <button
                             className="case-button"
-                            disabled={sellingId === item.id || upgradeLoading}
+                            disabled={
+                              sellingId === item.id || upgradeLoading
+                            }
                             onClick={() => {
                               setSelectedUpgrade(item);
                               setTargetItem("");
