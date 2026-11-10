@@ -1,27 +1,35 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
+:root {
+  font-family: "Inter", sans-serif;
+  color: #fff;
+  background: #090711;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: #090912;
-  color: #fff;
-  font-family: "Inter", sans-serif;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% -20%, #48206e 0%, transparent 55%),
+    #090711;
 }
 
 button {
   font-family: inherit;
+  cursor: pointer;
 }
 
 .app {
   min-height: 100vh;
   padding: 30px;
-  background:
-    radial-gradient(ellipse at top, #24103d 0%, transparent 45%),
-    #090912;
 }
 
 .header {
@@ -29,21 +37,24 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 35px;
+  margin-bottom: 32px;
 }
 
 .logo {
   font-size: 32px;
   font-weight: 900;
-  color: #b66cff;
+  letter-spacing: -1px;
+  color: #d5a3ff;
+  text-shadow: 0 0 25px #a64cff88;
 }
 
 .balance {
-  padding: 12px 20px;
-  border: 1px solid #59327d;
-  border-radius: 12px;
-  background: #171020;
+  padding: 13px 22px;
+  border: 1px solid #7041a0;
+  border-radius: 14px;
+  background: #1a1027;
   font-weight: 800;
+  box-shadow: 0 0 20px #8d35d522;
 }
 
 .navigation {
@@ -53,29 +64,31 @@ button {
 }
 
 .navigation button {
-  padding: 13px 20px;
-  border: 1px solid #352447;
+  padding: 13px 22px;
+  border: 1px solid #342342;
   border-radius: 12px;
-  background: #171322;
-  color: #aaa;
+  background: #171020;
+  color: #aaa0b8;
+  font-size: 14px;
   font-weight: 700;
-  cursor: pointer;
   transition: 0.2s;
 }
 
 .navigation button:hover,
 .navigation button.active {
-  background: #823bd0;
-  border-color: #a65aff;
+  background: linear-gradient(135deg, #873bca, #54218b);
+  border-color: #b66cff;
   color: white;
+  box-shadow: 0 0 20px #8b36d655;
 }
 
 .content {
-  margin-top: 40px;
+  margin-top: 35px;
   padding: 30px;
-  border: 1px solid #30203f;
-  border-radius: 20px;
-  background: #120e1b;
+  border: 1px solid #352344;
+  border-radius: 22px;
+  background: #120d1b;
+  box-shadow: 0 15px 50px #0005;
 }
 
 .content h2 {
@@ -83,9 +96,141 @@ button {
   font-size: 28px;
 }
 
+.content > p {
+  color: #aaa0b8;
+  line-height: 1.6;
+}
+
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 30px;
+}
+
+.case-card {
+  padding: 22px;
+  text-align: center;
+  border: 1px solid #38234d;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #21132f, #130e1d);
+  transition: 0.25s;
+}
+
+.case-card:hover {
+  transform: translateY(-7px);
+  border-color: #b66cff;
+  box-shadow: 0 12px 35px #a33cff30;
+}
+
+.case-emoji {
+  display: grid;
+  place-items: center;
+  height: 115px;
+  font-size: 68px;
+  border-radius: 16px;
+  background: radial-gradient(circle, #7837a855, #251433);
+}
+
+.case-card h3 {
+  margin: 18px 0 8px;
+  font-size: 18px;
+}
+
+.case-card p {
+  min-height: 40px;
+  color: #a99bb5;
+  font-size: 13px;
+}
+
+.case-price {
+  margin: 18px 0;
+  color: #d6a1ff;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.case-button,
+.main-button {
+  width: 100%;
+  padding: 13px;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #a54df0, #6724ac);
+  color: white;
+  font-weight: 800;
+  transition: 0.2s;
+}
+
+.case-button:hover,
+.main-button:hover:not(:disabled) {
+  filter: brightness(1.2);
+  box-shadow: 0 0 20px #a54df077;
+}
+
+.case-button.selected {
+  background: linear-gradient(135deg, #4dba87, #23845d);
+}
+
+.opening-panel {
+  max-width: 520px;
+  margin: 35px auto 0;
+  padding: 25px;
+  text-align: center;
+  border: 1px solid #543272;
+  border-radius: 18px;
+  background: #1b1028;
+}
+
+.opening-panel h3 {
+  margin-top: 0;
+}
+
+.opening-options {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.count-button {
+  width: 75px;
+  padding: 13px;
+  border: 1px solid #59377a;
+  border-radius: 10px;
+  background: #241432;
+  color: white;
+  font-weight: 900;
+}
+
+.count-button.active {
+  background: #8c3ed0;
+  border-color: #d39aff;
+  box-shadow: 0 0 18px #a84df055;
+}
+
+.opening-panel p {
+  color: #c7b6d5;
+}
+
+.open-button {
+  margin-top: 15px;
+}
+
+.main-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1000px) {
+  .case-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 600px) {
   .app {
-    padding: 18px;
+    padding: 16px;
   }
 
   .header {
@@ -93,7 +238,19 @@ button {
     flex-direction: column;
   }
 
+  .logo {
+    font-size: 27px;
+  }
+
   .content {
-    padding: 20px;
+    padding: 18px;
+  }
+
+  .case-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .navigation button {
+    padding: 11px 14px;
   }
 }
