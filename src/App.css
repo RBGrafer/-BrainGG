@@ -1,0 +1,99 @@
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #090912;
+  color: #fff;
+  font-family: "Inter", sans-serif;
+}
+
+button {
+  font-family: inherit;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 30px;
+  background:
+    radial-gradient(ellipse at top, #24103d 0%, transparent 45%),
+    #090912;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 35px;
+}
+
+.logo {
+  font-size: 32px;
+  font-weight: 900;
+  color: #b66cff;
+}
+
+.balance {
+  padding: 12px 20px;
+  border: 1px solid #59327d;
+  border-radius: 12px;
+  background: #171020;
+  font-weight: 800;
+}
+
+.navigation {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.navigation button {
+  padding: 13px 20px;
+  border: 1px solid #352447;
+  border-radius: 12px;
+  background: #171322;
+  color: #aaa;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.navigation button:hover,
+.navigation button.active {
+  background: #823bd0;
+  border-color: #a65aff;
+  color: white;
+}
+
+.content {
+  margin-top: 40px;
+  padding: 30px;
+  border: 1px solid #30203f;
+  border-radius: 20px;
+  background: #120e1b;
+}
+
+.content h2 {
+  margin-top: 0;
+  font-size: 28px;
+}
+
+@media (max-width: 600px) {
+  .app {
+    padding: 18px;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .content {
+    padding: 20px;
+  }
+}
