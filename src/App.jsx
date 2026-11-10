@@ -4,38 +4,56 @@ import React, { useState } from "react";
 export default function App() {
   const [page, setPage] = useState("Главная");
 
-  return (
-    <div style={{
-      minHeight: "100vh",
-      background: "#090912",
-      color: "white",
-      fontFamily: "Arial, sans-serif",
-      padding: "30px"
-    }}>
-      <h1 style={{ color: "#a855f7" }}>BrainGG</h1>
-      <p>Добро пожаловать в BrainGG!</p>
+  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
 
-      <nav style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-        {["Главная", "Кейсы", "Апгрейдер", "Инвентарь"].map(item => (
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="logo">BrainGG</div>
+        <div className="balance">🪙 0 GG</div>
+      </header>
+
+      <nav className="navigation">
+        {pages.map((item) => (
           <button
             key={item}
+            className={page === item ? "active" : ""}
             onClick={() => setPage(item)}
-            style={{
-              padding: "12px 20px",
-              borderRadius: "10px",
-              border: "1px solid #7136a8",
-              background: page === item ? "#7136a8" : "#171322",
-              color: "white",
-              cursor: "pointer"
-            }}
           >
             {item}
           </button>
         ))}
       </nav>
 
-      <h2 style={{ marginTop: "40px" }}>{page}</h2>
-      <p>Раздел {page} скоро появится.</p>
+      <main className="content">
+        {page === "Главная" && (
+          <>
+            <h2>Добро пожаловать в BrainGG!</h2>
+            <p>Открывай кейсы, получай персонажей и улучшай свою коллекцию.</p>
+          </>
+        )}
+
+        {page === "Кейсы" && (
+          <>
+            <h2>Кейсы</h2>
+            <p>Скоро здесь появятся наши кейсы!</p>
+          </>
+        )}
+
+        {page === "Апгрейдер" && (
+          <>
+            <h2>Апгрейдер</h2>
+            <p>Улучшай свои предметы и пробуй удачу!</p>
+          </>
+        )}
+
+        {page === "Инвентарь" && (
+          <>
+            <h2>Инвентарь</h2>
+            <p>Здесь будут храниться твои предметы.</p>
+          </>
+        )}
+      </main>
     </div>
   );
 }
