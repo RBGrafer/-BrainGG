@@ -1,11 +1,53 @@
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { cases } from "./data/cases.js";
+import { supabase } from "./supabase.js";
 
 export default function App() {
   const [page, setPage] = useState("Главная");
   const [openCount, setOpenCount] = useState(1);
   const [selectedCase, setSelectedCase] = useState(null);
+
+  const [player, setPlayer] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    async function registerPlayer() {
+      const telegram = window.Telegram?.WebApp;
+      const initData = telegram?.initData;
+
+      if (!initData) {
+        setAuthError("Открой BrainGG через Telegram");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "braingg-api",
+          {
+            body: { initData },
+          }
+        );
+
+        if (error) throw error;
+        if (!data?.success || !data?.player) {
+          throw new Error(data?.error || "Не удалось загрузить игрока");
+        }
+
+        setPlayer(data.player);
+        setAuthError("");
+      } catch (error) {
+        console.error("Ошибка регистрации:", error);
+        setAuthError("Не удалось подключиться к серверу");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    registerPlayer();
+  }, []);
 
   const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
 
@@ -13,8 +55,22 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="logo">💜 BrainGG</div>
-        <div className="balance">🪙 0 GG</div>
+        <div className="balance">
+          🪙 {player ? player.balance : 0} GG
+        </div>
       </header>
+
+      {loading && (
+        <div className="content">
+          <p>Загружаем твой профиль...</p>
+        </div>
+      )}
+
+      {!loading && authError && (
+        <div className="content">
+          <p>{authError}</p>
+        </div>
+      )}
 
       <nav className="navigation">
         {pages.map((item) => (
@@ -31,7 +87,16 @@ export default function App() {
       {page === "Главная" && (
         <main className="content">
           <h2>Добро пожаловать в BrainGG!</h2>
-          <p>Открывай кейсы, собирай персонажей и улучшай свою коллекцию.</p>
+          <p>
+            Открывай кейсы, собирай персонажей и улучшай свою коллекцию.
+          </p>
+
+          {player && (
+            <p>
+              Привет, <b>{player.username ? `@${player.username}` : "игрок"}!</b>
+            </p>
+          )}
+
           <button
             className="main-button"
             onClick={() => setPage("Кейсы")}
@@ -52,9 +117,7 @@ export default function App() {
                 <div className="case-emoji">{item.emoji}</div>
                 <h3>{item.name}</h3>
                 <p>{item.description}</p>
-                <div className="case-price">
-                  🪙 {item.price} GG
-                </div>
+                <div className="case-price">🪙 {item.price} GG</div>
 
                 <button
                   className={
@@ -80,7 +143,9 @@ export default function App() {
                 <button
                   key={count}
                   className={
-                    openCount === count ? "count-button active" : "count-button"
+                    openCount === count
+                      ? "count-button active"
+                      : "count-button"
                   }
                   onClick={() => setOpenCount(count)}
                 >
@@ -105,9 +170,9 @@ export default function App() {
 
             <button
               className="main-button open-button"
-              disabled={!selectedCase}
+              disabled={!selectedCase || !player}
               onClick={() =>
-                alert("Открытие кейсов подключим на следующем этапе!")
+                alert("Настоящее открытие кейсов подключим отдельно!")
               }
             >
               Открыть ×{openCount}
