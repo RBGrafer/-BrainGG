@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Загрузка инвентаря
+    // Загрузка инвентаря игрока
     if (body.action === "get_inventory") {
       const { data: items, error } = await supabase
         .from("inventory")
@@ -168,7 +168,6 @@ Deno.serve(async (req) => {
       return respond({ success: true, result: data });
     }
 
-
     // Список всех доступных целей для апгрейда
     if (body.action === "get_upgrade_targets") {
       const { data: items, error } = await supabase
@@ -184,18 +183,18 @@ Deno.serve(async (req) => {
       return respond({ success: true, items: items ?? [] });
     }
 
-    // Апгрейд предмета с выбранным шансом
+    // Апгрейд предмета
+    // Шанс рассчитывается SQL-функцией по стоимости предметов.
+    // Клиент не может передать или подменить вероятность.
     if (body.action === "upgrade_item") {
       const inventoryId = Number(body.inventoryId);
       const targetItem = body.targetItem;
-      const chance = Number(body.chance);
 
       if (
         !Number.isSafeInteger(inventoryId) ||
         inventoryId <= 0 ||
         typeof targetItem !== "string" ||
-        !targetItem.trim() ||
-        ![75, 50, 25, 10].includes(chance)
+        !targetItem.trim()
       ) {
         return respond({ error: "Invalid upgrade parameters" }, 400);
       }
@@ -205,8 +204,7 @@ Deno.serve(async (req) => {
         {
           p_telegram_id: telegramUser.id,
           p_inventory_id: inventoryId,
-          p_target_item: targetItem,
-          p_chance: chance,
+          p_target_item: targetItem.trim(),
         },
       );
 
@@ -218,14 +216,17 @@ Deno.serve(async (req) => {
       return respond({ success: true, result: data });
     }
 
-
     // Открытие кейса
     if (body.action === "open_case") {
       const caseName = body.caseName;
 
       if (
-        !["Starter Case", "Lucky Case", "Epic Case", "Legendary Case"]
-          .includes(caseName)
+        ![
+          "Starter Case",
+          "Lucky Case",
+          "Epic Case",
+          "Legendary Case",
+        ].includes(caseName)
       ) {
         return respond({ error: "Unknown case" }, 400);
       }
