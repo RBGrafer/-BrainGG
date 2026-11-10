@@ -12,15 +12,17 @@ export default function App() {
   const [opening, setOpening] = useState(false);
   const [authError, setAuthError] = useState("");
   const [lastRewards, setLastRewards] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState("");
 
   const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
 
+  const initData = () => window.Telegram?.WebApp?.initData;
+
   useEffect(() => {
     async function registerPlayer() {
-      const telegram = window.Telegram?.WebApp;
-      const initData = telegram?.initData;
-
-      if (!initData) {
+      if (!initData()) {
         setAuthError("Открой BrainGG через Telegram");
         setLoading(false);
         return;
@@ -29,7 +31,7 @@ export default function App() {
       try {
         const { data, error } = await supabase.functions.invoke(
           "braingg-api",
-          { body: { initData } }
+          { body: { initData: initData() } }
         );
 
         if (error) throw error;
@@ -50,6 +52,43 @@ export default function App() {
     registerPlayer();
   }, []);
 
+  async function loadInventory() {
+    setInventoryLoading(true);
+    setInventoryError("");
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "braingg-api",
+        {
+          body: {
+            initData: initData(),
+            action: "get_inventory",
+          },
+        }
+      );
+
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.error || "Не удалось загрузить инвентарь");
+      }
+
+      setInventory(data.items || []);
+    } catch (error) {
+      console.error("Ошибка инвентаря:", error);
+      setInventoryError("Не удалось загрузить инвентарь. Попробуй ещё раз.");
+    } finally {
+      setInventoryLoading(false);
+    }
+  }
+
+  async function changePage(nextPage) {
+    setPage(nextPage);
+
+    if (nextPage === "Инвентарь") {
+      await loadInventory();
+    }
+  }
+
   async function openSelectedCase() {
     if (!selectedCase || !player || opening) return;
 
@@ -57,7 +96,6 @@ export default function App() {
     setLastRewards([]);
 
     const rewards = [];
-    let currentBalance = player.balance;
 
     try {
       for (let i = 0; i < openCount; i++) {
@@ -65,7 +103,7 @@ export default function App() {
           "braingg-api",
           {
             body: {
-              initData: window.Telegram?.WebApp?.initData,
+              initData: initData(),
               action: "open_case",
               caseName: selectedCase.name,
             },
@@ -73,16 +111,18 @@ export default function App() {
         );
 
         if (error) throw error;
+
         if (!data?.success || !data?.result?.success) {
           throw new Error(data?.error || "Не удалось открыть кейс");
         }
 
         rewards.push(data.result);
-        currentBalance = data.result.balance;
+
         setPlayer((previous) => ({
           ...previous,
-          balance: currentBalance,
+          balance: data.result.balance,
         }));
+
         setLastRewards([...rewards]);
       }
 
@@ -98,6 +138,14 @@ export default function App() {
       setOpening(false);
     }
   }
+
+  const rarityColors = {
+    "Обычный": "#a5a5b5",
+    "Редкий": "#43a5ff",
+    "Эпический": "#bd65ff",
+    "Легендарный": "#ffbd45",
+    "Мифический": "#ff5c9d",
+  };
 
   return (
     <div className="app">
@@ -127,7 +175,7 @@ export default function App() {
               <button
                 key={item}
                 className={page === item ? "active" : ""}
-                onClick={() => setPage(item)}
+                onClick={() => changePage(item)}
               >
                 {item}
               </button>
@@ -152,7 +200,7 @@ export default function App() {
 
               <button
                 className="main-button"
-                onClick={() => setPage("Кейсы")}
+                onClick={() => changePage("Кейсы")}
               >
                 Смотреть кейсы 🎁
               </button>
@@ -259,8 +307,72 @@ export default function App() {
 
           {page === "Инвентарь" && (
             <main className="content">
-              <h2>🎒 Инвентарь</h2>
-              <p>Здесь будут храниться твои персонажи.</p>
+              <h2>🎒 Мой инвентарь</h2>
+              <p>Все твои полученные брейнроты в одном месте!</p>
+
+              {inventoryLoading && <p>Загружаем инвентарь...</p>}
+
+              {inventoryError && (
+                <>
+                  <p>{inventoryError}</p>
+                  <button
+                    className="main-button"
+                    onClick={loadInventory}
+                  >
+                    Повторить
+                  </button>
+                </>
+              )}
+
+              {!inventoryLoading && !inventoryError && (
+                <>
+                  <div className="inventory-count">
+                    Всего предметов: <b>{inventory.length}</b>
+                  </div>
+
+                  {inventory.length === 0 ? (
+                    <div className="opening-panel">
+                      <div className="case-emoji">🎁</div>
+                      <h3>Пока здесь пусто</h3>
+                      <p>Открой свой первый кейс!</p>
+                      <button
+                        className="main-button"
+                        onClick={() => changePage("Кейсы")}
+                      >
+                        Перейти к кейсам
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="case-grid">
+                      {inventory.map((item) => (
+                        <div className="case-card" key={item.id}>
+                          <div className="case-emoji">🧠</div>
+                          <h3>{item.item_name}</h3>
+                          <div
+                            className="case-price"
+                            style={{
+                              color: rarityColors[item.rarity] || "#fff",
+                            }}
+                          >
+                            {item.rarity}
+                          </div>
+                          <p>
+                            Получен:{" "}
+                            {new Date(item.created_at).toLocaleDateString("ru-RU")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    className="main-button"
+                    onClick={loadInventory}
+                  >
+                    Обновить инвентарь ↻
+                  </button>
+                </>
+              )}
             </main>
           )}
         </>
