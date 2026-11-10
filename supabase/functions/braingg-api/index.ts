@@ -168,16 +168,34 @@ Deno.serve(async (req) => {
       return respond({ success: true, result: data });
     }
 
-    // Апгрейд предмета
+
+    // Список всех доступных целей для апгрейда
+    if (body.action === "get_upgrade_targets") {
+      const { data: items, error } = await supabase
+        .from("case_rewards")
+        .select("item_name, rarity, value_gg")
+        .order("value_gg", { ascending: true });
+
+      if (error) {
+        console.error("Upgrade targets loading failed:", error.message);
+        return respond({ error: "Could not load upgrade targets" }, 500);
+      }
+
+      return respond({ success: true, items: items ?? [] });
+    }
+
+    // Апгрейд предмета с выбранным шансом
     if (body.action === "upgrade_item") {
       const inventoryId = Number(body.inventoryId);
       const targetItem = body.targetItem;
+      const chance = Number(body.chance);
 
       if (
         !Number.isSafeInteger(inventoryId) ||
         inventoryId <= 0 ||
         typeof targetItem !== "string" ||
-        !targetItem.trim()
+        !targetItem.trim() ||
+        ![75, 50, 25, 10].includes(chance)
       ) {
         return respond({ error: "Invalid upgrade parameters" }, 400);
       }
@@ -188,6 +206,7 @@ Deno.serve(async (req) => {
           p_telegram_id: telegramUser.id,
           p_inventory_id: inventoryId,
           p_target_item: targetItem,
+          p_chance: chance,
         },
       );
 
@@ -198,6 +217,7 @@ Deno.serve(async (req) => {
 
       return respond({ success: true, result: data });
     }
+
 
     // Открытие кейса
     if (body.action === "open_case") {
