@@ -16,11 +16,15 @@ export default function App() {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState("");
 
+  const [upgradeTargets, setUpgradeTargets] = useState([]);
+  const [targetsLoading, setTargetsLoading] = useState(false);
   const [selectedUpgrade, setSelectedUpgrade] = useState(null);
   const [targetItem, setTargetItem] = useState("");
+  const [upgradeChance, setUpgradeChance] = useState(50);
   const [upgradeResult, setUpgradeResult] = useState(null);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeRotation, setUpgradeRotation] = useState(0);
+
   const [sellingId, setSellingId] = useState(null);
   const [actionMessage, setActionMessage] = useState("");
 
@@ -95,11 +99,44 @@ export default function App() {
     }
   }
 
+  async function loadUpgradeTargets() {
+    setTargetsLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "braingg-api",
+        {
+          body: {
+            initData: initData(),
+            action: "get_upgrade_targets",
+          },
+        }
+      );
+
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.error || "Не удалось загрузить цели");
+      }
+
+      setUpgradeTargets(data.items || []);
+    } catch (error) {
+      console.error("Ошибка загрузки целей:", error);
+      setActionMessage("Не удалось загрузить список целей апгрейда.");
+    } finally {
+      setTargetsLoading(false);
+    }
+  }
+
   async function changePage(nextPage) {
     setPage(nextPage);
+    setActionMessage("");
 
     if (nextPage === "Инвентарь" || nextPage === "Апгрейдер") {
       await loadInventory();
+    }
+
+    if (nextPage === "Апгрейдер" && upgradeTargets.length === 0) {
+      await loadUpgradeTargets();
     }
   }
 
@@ -201,7 +238,14 @@ export default function App() {
   }
 
   async function performUpgrade() {
-    if (!selectedUpgrade || !targetItem || upgradeLoading) return;
+    if (
+      !selectedUpgrade ||
+      !targetItem ||
+      upgradeLoading ||
+      ![75, 50, 25, 10].includes(upgradeChance)
+    ) {
+      return;
+    }
 
     setUpgradeLoading(true);
     setUpgradeResult(null);
@@ -216,6 +260,7 @@ export default function App() {
             action: "upgrade_item",
             inventoryId: selectedUpgrade.id,
             targetItem,
+            chance: upgradeChance,
           },
         }
       );
@@ -226,11 +271,18 @@ export default function App() {
       }
 
       const result = data.result;
-      const finalRotation = upgradeRotation + 360 * 5 + (result.won ? 45 : 225);
+      const chance = Number(result.chance);
 
-      setUpgradeRotation(finalRotation);
+      // Зелёный сектор занимает выбранный процент круга.
+      // При победе его середина остановится под белой стрелкой.
+      // При проигрыше под стрелкой окажется тёмный сектор.
+      const sectorCenter = result.won
+        ? chance * 1.8
+        : 180 + chance * 1.8;
 
-      await new Promise((resolve) => setTimeout(resolve, 3200));
+      setUpgradeRotation((previous) => previous + 360 * 5 - sectorCenter);
+
+      await new Promise((resolve) => setTimeout(resolve, 4200));
 
       setUpgradeResult(result);
       setPlayer((previous) => ({
@@ -249,30 +301,15 @@ export default function App() {
     }
   }
 
-  const possibleTargets = inventory
-    .map((item) => ({
-      name: item.item_name,
-      rarity: item.rarity,
-      value: Number(item.value_gg) || 0,
-    }))
-    .filter((item, index, array) =>
-      array.findIndex((other) => other.name === item.name) === index
-    );
-
-  const selectedTarget = possibleTargets.find(
-    (item) => item.name === targetItem
+  const selectedTarget = upgradeTargets.find(
+    (item) => item.item_name === targetItem
   );
 
-  const upgradeChance =
-    selectedUpgrade && selectedTarget && selectedTarget.value > 0
-      ? Math.min(
-          90,
-          Math.max(
-            1,
-            (Number(selectedUpgrade.value_gg) / selectedTarget.value) * 90
-          )
-        )
-      : 0;
+  const availableTargets = upgradeTargets.filter(
+    (item) => item.item_name !== selectedUpgrade?.item_name
+  );
+
+  const wheelAngle = upgradeChance * 3.6;
 
   return (
     <div className="app">
@@ -348,9 +385,7 @@ export default function App() {
                     <div className="case-emoji">{item.emoji}</div>
                     <h3>{item.name}</h3>
                     <p>{item.description}</p>
-                    <div className="case-price">
-                      🪙 {item.price} GG
-                    </div>
+                    <div className="case-price">🪙 {item.price} GG</div>
                     <button
                       className={
                         selectedCase?.id === item.id
@@ -395,8 +430,7 @@ export default function App() {
                       Выбран: <b>{selectedCase.name}</b>
                     </p>
                     <p>
-                      Стоимость:{" "}
-                      <b>{selectedCase.price * openCount} GG</b>
+                      Стоимость: <b>{selectedCase.price * openCount} GG</b>
                     </p>
                   </>
                 ) : (
@@ -427,146 +461,234 @@ export default function App() {
           )}
 
           {page === "Апгрейдер" && (
-            <main className="content">
-              <h2>⚡ Апгрейдер</h2>
-              <p>Выбери предмет из инвентаря и цель для улучшения.</p>
+            <main className="content upgrade-content">
+              <div className="upgrade-heading">
+                <div>
+                  <h2>⚡ Апгрейдер BrainGG</h2>
+                  <p>Поставь своего брейнрота на кон и попробуй получить редкого!</p>
+                </div>
+                <div className="upgrade-badge">UPGRADE</div>
+              </div>
 
-              {inventoryLoading && <p>Загружаем инвентарь...</p>}
-
-              {!inventoryLoading && inventory.length === 0 && (
-                <div className="opening-panel">
-                  <h3>Инвентарь пуст</h3>
-                  <p>Сначала открой кейс, чтобы получить предмет.</p>
+              {inventoryLoading || targetsLoading ? (
+                <div className="upgrade-empty">
+                  <div className="loading-orb">⚡</div>
+                  <p>Загружаем брейнротов...</p>
+                </div>
+              ) : inventory.length === 0 ? (
+                <div className="upgrade-empty">
+                  <div className="empty-brain">🧠</div>
+                  <h3>У тебя пока нет брейнротов</h3>
+                  <p>Открой кейс, чтобы получить первый предмет.</p>
                   <button
                     className="main-button"
                     onClick={() => changePage("Кейсы")}
                   >
-                    Открыть кейсы
+                    Перейти к кейсам
                   </button>
                 </div>
-              )}
-
-              {!inventoryLoading && inventory.length > 0 && (
+              ) : (
                 <>
-                  <h3>1. Выбери свой предмет</h3>
-                  <div className="case-grid">
-                    {inventory.map((item) => (
-                      <button
-                        key={item.id}
-                        className={
-                          selectedUpgrade?.id === item.id
-                            ? "case-card selected"
-                            : "case-card"
-                        }
-                        disabled={upgradeLoading}
-                        onClick={() => {
-                          setSelectedUpgrade(item);
-                          setUpgradeResult(null);
-                        }}
-                      >
-                        <div className="case-emoji">🧠</div>
-                        <h3>{item.item_name}</h3>
-                        <p style={{ color: rarityColors[item.rarity] }}>
-                          {item.rarity}
-                        </p>
-                        <b>{item.value_gg} GG</b>
-                      </button>
-                    ))}
-                  </div>
-
-                  {selectedUpgrade && (
-                    <div className="opening-panel">
-                      <h3>2. Выбери цель апгрейда</h3>
-                      <select
-                        className="upgrade-select"
-                        value={targetItem}
-                        disabled={upgradeLoading}
-                        onChange={(event) => {
-                          setTargetItem(event.target.value);
-                          setUpgradeResult(null);
-                        }}
-                      >
-                        <option value="">Выбери персонажа</option>
-                        {possibleTargets.map((target) => (
-                          <option
-                            key={target.name}
-                            value={target.name}
-                            disabled={
-                              target.name === selectedUpgrade.item_name
-                            }
-                          >
-                            {target.name} — {target.value} GG
-                          </option>
-                        ))}
-                      </select>
-
-                      <div className="upgrade-wheel">
-                        <div
-                          className="upgrade-wheel-fill"
-                          style={{
-                            background: `conic-gradient(#36e58c ${
-                              upgradeChance * 3.6
-                            }deg, #292438 0deg)`,
-                          }}
-                        />
-                        <div className="upgrade-wheel-center">
-                          <b>{upgradeChance.toFixed(1)}%</b>
-                          <span>ШАНС</span>
-                        </div>
-                        <div
-                          className="upgrade-pointer"
-                          style={{
-                            transform: `translateX(-50%) rotate(${upgradeRotation}deg)`,
-                            transition: upgradeLoading
-                              ? "transform 3s cubic-bezier(.12,.75,.18,1)"
-                              : "none",
-                          }}
-                        >
-                          ▲
+                  <div className="upgrade-arena">
+                    <section className="upgrade-column">
+                      <div className="upgrade-column-title">
+                        <span>1</span>
+                        <div>
+                          <b>ТВОЙ БРЕЙНРОТ</b>
+                          <small>Отдаёшь</small>
                         </div>
                       </div>
 
-                      <p>
-                        Твой предмет: <b>{selectedUpgrade.item_name}</b>
-                      </p>
-                      {selectedTarget && (
-                        <p>
-                          Цель: <b>{selectedTarget.name}</b>
-                        </p>
-                      )}
+                      <div className="upgrade-items-list">
+                        {inventory.map((item) => (
+                          <button
+                            key={item.id}
+                            className={
+                              selectedUpgrade?.id === item.id
+                                ? "upgrade-item selected"
+                                : "upgrade-item"
+                            }
+                            disabled={upgradeLoading}
+                            onClick={() => {
+                              setSelectedUpgrade(item);
+                              setUpgradeResult(null);
+                              setTargetItem("");
+                              setActionMessage("");
+                            }}
+                          >
+                            <span className="upgrade-item-emoji">🧠</span>
+                            <span className="upgrade-item-info">
+                              <b>{item.item_name}</b>
+                              <small style={{ color: rarityColors[item.rarity] }}>
+                                {item.rarity}
+                              </small>
+                              <small>{item.value_gg ?? 10} GG</small>
+                            </span>
+                            {selectedUpgrade?.id === item.id && (
+                              <span className="item-check">✓</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="upgrade-middle">
+                      <div className="upgrade-wheel-wrap">
+                        <div className="wheel-glow" />
+                        <div
+                          className="upgrade-wheel-rotor"
+                          style={{
+                            transform: `rotate(${upgradeRotation}deg)`,
+                            background: `conic-gradient(#39e58b 0deg ${wheelAngle}deg, #292438 ${wheelAngle}deg 360deg)`,
+                          }}
+                        >
+                          <div className="wheel-inner">
+                            <span className="wheel-chance">
+                              {upgradeChance}%
+                            </span>
+                            <span className="wheel-label">ШАНС ПОБЕДЫ</span>
+                          </div>
+                        </div>
+                        <div className="upgrade-pointer" />
+                      </div>
+
+                      <div className="chance-title">ВЫБЕРИ ШАНС</div>
+                      <div className="chance-options">
+                        {[75, 50, 25, 10].map((chance) => (
+                          <button
+                            key={chance}
+                            className={
+                              upgradeChance === chance
+                                ? "chance-button active"
+                                : "chance-button"
+                            }
+                            disabled={upgradeLoading}
+                            onClick={() => {
+                              setUpgradeChance(chance);
+                              setUpgradeResult(null);
+                            }}
+                          >
+                            {chance}%
+                          </button>
+                        ))}
+                      </div>
 
                       <button
-                        className="main-button"
+                        className="main-button upgrade-start-button"
                         disabled={
+                          !selectedUpgrade ||
                           !targetItem ||
                           upgradeLoading ||
-                          !selectedUpgrade
+                          targetsLoading
                         }
                         onClick={performUpgrade}
                       >
-                        {upgradeLoading ? "Апгрейд..." : "⚡ Улучшить"}
+                        {upgradeLoading ? "КРУТИМ..." : "⚡ УЛУЧШИТЬ"}
                       </button>
 
-                      {upgradeResult && (
-                        <div className="rewards-list">
-                          <h3>
-                            {upgradeResult.won
-                              ? "🎉 УСПЕХ! Предмет получен!"
-                              : "💔 Не повезло! Предмет сгорел"}
-                          </h3>
-                          <p>
-                            Шанс: {upgradeResult.chance}%
-                          </p>
-                          <b>{upgradeResult.target_item}</b>
+                      <div className="wheel-legend">
+                        <span><i className="legend-green" /> Победа</span>
+                        <span><i className="legend-dark" /> Проигрыш</span>
+                      </div>
+                    </section>
+
+                    <section className="upgrade-column">
+                      <div className="upgrade-column-title target-title">
+                        <span>2</span>
+                        <div>
+                          <b>ЖЕЛАЕМЫЙ БРЕЙНРОТ</b>
+                          <small>Хочешь получить</small>
                         </div>
-                      )}
+                      </div>
+
+                      <div className="upgrade-items-list">
+                        {availableTargets.map((item) => (
+                          <button
+                            key={item.item_name}
+                            className={
+                              targetItem === item.item_name
+                                ? "upgrade-item target-item selected"
+                                : "upgrade-item target-item"
+                            }
+                            disabled={upgradeLoading}
+                            onClick={() => {
+                              setTargetItem(item.item_name);
+                              setUpgradeResult(null);
+                              setActionMessage("");
+                            }}
+                          >
+                            <span className="upgrade-item-emoji">🧠</span>
+                            <span className="upgrade-item-info">
+                              <b>{item.item_name}</b>
+                              <small style={{ color: rarityColors[item.rarity] }}>
+                                {item.rarity}
+                              </small>
+                              <small>{item.value_gg} GG</small>
+                            </span>
+                            {targetItem === item.item_name && (
+                              <span className="item-check">✓</span>
+                            )}
+                          </button>
+                        ))}
+
+                        {availableTargets.length === 0 && (
+                          <p className="no-targets">Нет доступных целей.</p>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+
+                  <div className="upgrade-selection-summary">
+                    <div>
+                      <small>ТВОЙ ПРЕДМЕТ</small>
+                      <b>{selectedUpgrade?.item_name || "Не выбран"}</b>
+                    </div>
+                    <div className="summary-arrow">➜</div>
+                    <div>
+                      <small>ТВОЯ ЦЕЛЬ</small>
+                      <b>{selectedTarget?.item_name || "Не выбрана"}</b>
+                    </div>
+                  </div>
+
+                  {upgradeResult && (
+                    <div
+                      className={
+                        upgradeResult.won
+                          ? "upgrade-result win"
+                          : "upgrade-result lose"
+                      }
+                    >
+                      <div className="result-icon">
+                        {upgradeResult.won ? "🏆" : "💔"}
+                      </div>
+                      <div>
+                        <h3>
+                          {upgradeResult.won
+                            ? "ПОБЕДА! БРЕЙНРОТ ТВОЙ!"
+                            : "НЕ ПОВЕЗЛО! БРЕЙНРОТ СГОРЕЛ"}
+                        </h3>
+                        <p>
+                          {upgradeResult.won
+                            ? `Ты получил ${upgradeResult.target_item}!`
+                            : `Ты пытался получить ${upgradeResult.target_item}.`}
+                        </p>
+                        <small>Шанс апгрейда: {upgradeResult.chance}%</small>
+                      </div>
                     </div>
                   )}
                 </>
               )}
 
-              {actionMessage && <p>{actionMessage}</p>}
-              {inventoryError && <p>{inventoryError}</p>}
+              {actionMessage && (
+                <div className="upgrade-message">{actionMessage}</div>
+              )}
+
+              {inventoryError && (
+                <div className="upgrade-message error">
+                  {inventoryError}
+                  <button onClick={loadInventory}>Повторить</button>
+                </div>
+              )}
             </main>
           )}
 
