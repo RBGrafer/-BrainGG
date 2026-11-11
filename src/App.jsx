@@ -61,6 +61,7 @@ export default function App() {
   const [adminGrantType, setAdminGrantType] = useState("coins");
   const [adminAmount, setAdminAmount] = useState("100");
   const [adminItemName, setAdminItemName] = useState("");
+  const [adminCaseName, setAdminCaseName] = useState("Starter Case");
   const [adminGrantLoading, setAdminGrantLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
   const [adminMessageError, setAdminMessageError] = useState(false);
@@ -381,6 +382,12 @@ export default function App() {
       return;
     }
 
+    if (adminGrantType === "cases" && !adminCaseName) {
+      setAdminMessage("Выбери кейс для бесплатной выдачи.");
+      setAdminMessageError(true);
+      return;
+    }
+
     setAdminGrantLoading(true);
     setAdminMessage("");
     setAdminMessageError(false);
@@ -396,6 +403,7 @@ export default function App() {
             grantType: adminGrantType,
             amount,
             itemName: adminGrantType === "brainrot" ? adminItemName : null,
+            caseName: adminGrantType === "cases" ? adminCaseName : null,
           },
         }
       );
@@ -427,10 +435,19 @@ export default function App() {
       });
 
       if (!refreshed.error && refreshed.data?.success) {
-        setAdminPlayer(refreshed.data.player || adminPlayer);
+        const freshPlayer = refreshed.data.player || adminPlayer;
+        setAdminPlayer(freshPlayer);
         setAdminInventory(
           refreshed.data.inventory || refreshed.data.items || []
         );
+
+        // Если админ выдал награду самому себе, обновляем баланс в шапке сразу.
+        if (
+          player?.telegram_id != null &&
+          String(freshPlayer.telegram_id) === String(player.telegram_id)
+        ) {
+          setPlayer(freshPlayer);
+        }
       }
 
       await loadAdminLogs();
@@ -554,10 +571,24 @@ export default function App() {
 
         rewards.push(data.result);
 
-        setPlayer((previous) => ({
-          ...previous,
-          balance: data.result.balance,
-        }));
+        setPlayer((previous) => {
+          if (!previous) return previous;
+          const next = { ...previous, balance: data.result.balance };
+          if (data.result.free_case_used) {
+            const credits = Array.isArray(previous.free_case_credits)
+              ? previous.free_case_credits.map((credit) => ({ ...credit }))
+              : [];
+            const index = credits.findIndex(
+              (credit) => credit.case_name === selectedCase.name
+            );
+            if (index >= 0) {
+              credits[index].amount = Math.max(0, Number(credits[index].amount || 0) - 1);
+              next.free_case_credits = credits.filter((credit) => Number(credit.amount) > 0);
+            }
+            next.free_cases_total = Math.max(0, Number(previous.free_cases_total || 0) - 1);
+          }
+          return next;
+        });
 
         setLastRewards([...rewards]);
       }
@@ -865,9 +896,28 @@ export default function App() {
                     <p>
                       Выбран: <b>{selectedCase.name}</b>
                     </p>
-                    <p>
-                      Стоимость: <b>{selectedCase.price * openCount} GG</b>
-                    </p>
+                    {(() => {
+                      const freeCount = Number(
+                        player?.free_case_credits?.find(
+                          (credit) => credit.case_name === selectedCase.name
+                        )?.amount || 0
+                      );
+                      const freeToUse = Math.min(freeCount, openCount);
+                      const paidCount = Math.max(0, openCount - freeToUse);
+                      return (
+                        <>
+                          <p>
+                            Бесплатно доступно: <b>{freeCount}</b>
+                          </p>
+                          <p>
+                            Бесплатных открытий сейчас: <b>{freeToUse}</b>
+                          </p>
+                          <p>
+                            К оплате: <b>{paidCount * selectedCase.price} GG</b>
+                          </p>
+                        </>
+                      );
+                    })()}
                   </>
                 ) : (
                   <p>Сначала выбери кейс 👆</p>
@@ -1380,7 +1430,7 @@ export default function App() {
                       </div>
                       <div>
                         <small>БЕСПЛАТНЫЕ КЕЙСЫ</small>
-                        <b>🎁 {adminPlayer.free_cases ?? 0}</b>
+                        <b>🎁 {adminPlayer.free_cases_total ?? adminPlayer.free_cases ?? 0}</b>
                       </div>
                       <div>
                         <small>БРЕЙНРОТЫ</small>
@@ -1388,6 +1438,21 @@ export default function App() {
                       </div>
                     </div>
                   </section>
+
+                  {Array.isArray(adminPlayer.free_case_credits) &&
+                    adminPlayer.free_case_credits.length > 0 && (
+                      <section className="admin-free-cases">
+                        <b>Бесплатные кейсы по типам</b>
+                        <div className="admin-free-case-list">
+                          {adminPlayer.free_case_credits.map((credit) => (
+                            <div className="admin-free-case-row" key={credit.case_name}>
+                              <span>{cases.find((item) => item.name === credit.case_name)?.emoji || "🎁"} {credit.case_name}</span>
+                              <strong>×{credit.amount}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
 
                   <section className="admin-panel-card">
                     <div className="admin-section-title">
@@ -1414,6 +1479,23 @@ export default function App() {
                           <option value="brainrot">🧠 Брейнрот</option>
                         </select>
                       </label>
+
+                      {adminGrantType === "cases" && (
+                        <label className="admin-field admin-full-field">
+                          <span>Какой кейс выдать бесплатно?</span>
+                          <select
+                            className="admin-input"
+                            value={adminCaseName}
+                            onChange={(event) => setAdminCaseName(event.target.value)}
+                          >
+                            {cases.map((item) => (
+                              <option key={item.id} value={item.name}>
+                                {item.emoji} {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
 
                       {adminGrantType === "brainrot" && (
                         <label className="admin-field admin-full-field">
@@ -1522,7 +1604,7 @@ export default function App() {
                             {log.action === "coins"
                               ? `+${log.amount} GG`
                               : log.action === "cases"
-                              ? `+${log.amount} бесплатных кейсов`
+                              ? `+${log.amount} бесплатных ${log.case_name || "кейсов"}`
                               : `+${log.amount} ${log.item_name || "брейнрот"}`}
                           </b>
                           <small>Game ID: {log.game_id}</small>
