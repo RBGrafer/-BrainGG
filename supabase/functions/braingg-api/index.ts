@@ -127,11 +127,9 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
-
-    // Проверка администратора выполняется только на сервере.
     const isAdmin = adminIds.includes(String(telegramUser.id));
 
-    // Админ: найти игрока по Game ID.
+    // Админ: найти игрока по Game ID и получить его бесплатные кейсы по типам.
     if (body.action === "admin_find_player") {
       if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
 
@@ -150,7 +148,9 @@ Deno.serve(async (req) => {
         console.error("Admin player lookup failed:", error.message);
         return respond({ error: "Не удалось найти игрока" }, 500);
       }
-      if (!player) return respond({ error: "Игрок с таким Game ID не найден" }, 404);
+      if (!player) {
+        return respond({ error: "Игрок с таким Game ID не найден" }, 404);
+      }
 
       const { data: inventory, error: inventoryError } = await supabase
         .from("inventory")
@@ -164,10 +164,33 @@ Deno.serve(async (req) => {
         return respond({ error: "Не удалось загрузить инвентарь игрока" }, 500);
       }
 
-      return respond({ success: true, player, inventory: inventory ?? [] });
+      const { data: freeCaseCredits, error: creditsError } = await supabase
+        .from("player_free_case_credits")
+        .select("case_name, amount, updated_at")
+        .eq("telegram_id", player.telegram_id)
+        .order("case_name", { ascending: true });
+
+      if (creditsError) {
+        console.error("Free case credits loading failed:", creditsError.message);
+        return respond({ error: "Не удалось загрузить бесплатные кейсы игрока" }, 500);
+      }
+
+      return respond({
+        success: true,
+        player: {
+          ...player,
+          free_case_credits: freeCaseCredits ?? [],
+          free_cases_total: (freeCaseCredits ?? []).reduce(
+            (sum, row) => sum + Number(row.amount || 0),
+            0,
+          ),
+        },
+        inventory: inventory ?? [],
+        freeCaseCredits: freeCaseCredits ?? [],
+      });
     }
 
-    // Админ: выдать монеты, бесплатные кейсы или брейнрота.
+    // Админ: выдать GG, бесплатные кейсы выбранного типа или брейнрота.
     if (body.action === "admin_grant") {
       if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
 
@@ -176,6 +199,9 @@ Deno.serve(async (req) => {
       const amount = Number(body.amount);
       const itemName = typeof body.itemName === "string"
         ? body.itemName.trim()
+        : "";
+      const caseName = typeof body.caseName === "string"
+        ? body.caseName.trim()
         : "";
 
       if (!gameId || gameId.length > 100) {
@@ -186,6 +212,17 @@ Deno.serve(async (req) => {
       }
       if (!["coins", "cases", "brainrot"].includes(grantType)) {
         return respond({ error: "Неизвестный тип выдачи" }, 400);
+      }
+      if (
+        grantType === "cases" &&
+        ![
+          "Starter Case",
+          "Lucky Case",
+          "Epic Case",
+          "Legendary Case",
+        ].includes(caseName)
+      ) {
+        return respond({ error: "Выбери тип бесплатного кейса" }, 400);
       }
       if (grantType === "brainrot" && (!itemName || itemName.length > 120)) {
         return respond({ error: "Выбери брейнрота" }, 400);
@@ -201,7 +238,9 @@ Deno.serve(async (req) => {
         console.error("Admin grant player lookup failed:", playerError.message);
         return respond({ error: "Не удалось проверить игрока" }, 500);
       }
-      if (!player) return respond({ error: "Игрок с таким Game ID не найден" }, 404);
+      if (!player) {
+        return respond({ error: "Игрок с таким Game ID не найден" }, 404);
+      }
 
       const { data, error } = await supabase.rpc("admin_grant_player", {
         p_admin_telegram_id: telegramUser.id,
@@ -209,6 +248,7 @@ Deno.serve(async (req) => {
         p_action: grantType,
         p_amount: amount,
         p_item_name: grantType === "brainrot" ? itemName : null,
+        p_case_name: grantType === "cases" ? caseName : null,
       });
 
       if (error) {
@@ -216,6 +256,8 @@ Deno.serve(async (req) => {
         return respond({
           error: error.message.includes("BRAINROT_NOT_FOUND")
             ? "Такого брейнрота нет в списке наград"
+            : error.message.includes("INVALID_CASE_NAME")
+            ? "Выбран неизвестный тип кейса"
             : "Не удалось выполнить выдачу",
         }, 400);
       }
@@ -229,7 +271,7 @@ Deno.serve(async (req) => {
 
       const { data: logs, error } = await supabase
         .from("admin_grant_logs")
-        .select("id, admin_telegram_id, player_telegram_id, game_id, action, amount, item_name, created_at")
+        .select("id, admin_telegram_id, player_telegram_id, game_id, action, amount, item_name, case_name, created_at")
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -360,7 +402,27 @@ Deno.serve(async (req) => {
       return respond({ error: "Could not register player" }, 500);
     }
 
-    return respond({ success: true, player });
+    const { data: freeCaseCredits, error: creditsError } = await supabase
+      .from("player_free_case_credits")
+      .select("case_name, amount")
+      .eq("telegram_id", telegramUser.id);
+
+    if (creditsError) {
+      console.error("Player free cases loading failed:", creditsError.message);
+      return respond({ error: "Could not load free case credits" }, 500);
+    }
+
+    return respond({
+      success: true,
+      player: {
+        ...player,
+        free_case_credits: freeCaseCredits ?? [],
+        free_cases_total: (freeCaseCredits ?? []).reduce(
+          (sum, row) => sum + Number(row.amount || 0),
+          0,
+        ),
+      },
+    });
   } catch (error) {
     console.error("Function error:", error);
     return respond({ error: "Internal server error" }, 500);
