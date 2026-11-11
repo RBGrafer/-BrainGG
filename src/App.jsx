@@ -49,7 +49,23 @@ export default function App() {
   const [actionMessage, setActionMessage] = useState("");
 
   const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
+  const visiblePages = isAdmin ? [...pages, "Админка"] : pages;
   const [customError, setCustomError] = useState("");
+
+  // Состояние защищённой админ-панели BrainGG
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminGameId, setAdminGameId] = useState("");
+  const [adminPlayer, setAdminPlayer] = useState(null);
+  const [adminInventory, setAdminInventory] = useState([]);
+  const [adminSearchLoading, setAdminSearchLoading] = useState(false);
+  const [adminGrantType, setAdminGrantType] = useState("coins");
+  const [adminAmount, setAdminAmount] = useState("100");
+  const [adminItemName, setAdminItemName] = useState("");
+  const [adminGrantLoading, setAdminGrantLoading] = useState(false);
+  const [adminMessage, setAdminMessage] = useState("");
+  const [adminMessageError, setAdminMessageError] = useState(false);
+  const [adminLogs, setAdminLogs] = useState([]);
+  const [adminLogsLoading, setAdminLogsLoading] = useState(false);
 
   const initData = () => window.Telegram?.WebApp?.initData;
 
@@ -170,6 +186,25 @@ export default function App() {
         }
 
         setPlayer(data.player);
+
+        // Сервер сам проверяет Telegram ID по ADMIN_TELEGRAM_IDS.
+        // Наличие вкладки в интерфейсе не даёт права выполнять админ-действия.
+        try {
+          const { data: adminData, error: adminError } =
+            await supabase.functions.invoke("braingg-api", {
+              body: {
+                initData: initData(),
+                action: "admin_get_logs",
+              },
+            });
+
+          if (!adminError && adminData?.success) {
+            setIsAdmin(true);
+            setAdminLogs(adminData.logs || []);
+          }
+        } catch (adminCheckError) {
+          console.info("Админ-доступ не активирован для этого аккаунта.");
+        }
       } catch (error) {
         console.error("Ошибка регистрации:", error);
         setAuthError("Не удалось подключиться к серверу");
@@ -242,6 +277,174 @@ export default function App() {
     }
   }
 
+  async function loadAdminLogs() {
+    if (!isAdmin) return;
+    setAdminLogsLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "braingg-api",
+        {
+          body: {
+            initData: initData(),
+            action: "admin_get_logs",
+          },
+        }
+      );
+
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.error || "Не удалось загрузить историю");
+      }
+
+      setAdminLogs(data.logs || []);
+    } catch (error) {
+      console.error("Ошибка истории админки:", error);
+      setAdminMessage("Не удалось загрузить историю выдач.");
+      setAdminMessageError(true);
+    } finally {
+      setAdminLogsLoading(false);
+    }
+  }
+
+  async function searchAdminPlayer(event) {
+    event?.preventDefault();
+    const gameId = adminGameId.trim();
+
+    if (!gameId) {
+      setAdminMessage("Введи игровой ID игрока.");
+      setAdminMessageError(true);
+      return;
+    }
+
+    setAdminSearchLoading(true);
+    setAdminMessage("");
+    setAdminMessageError(false);
+    setAdminPlayer(null);
+    setAdminInventory([]);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "braingg-api",
+        {
+          body: {
+            initData: initData(),
+            action: "admin_find_player",
+            gameId,
+          },
+        }
+      );
+
+      if (error) throw error;
+      if (!data?.success || !data?.player) {
+        throw new Error(data?.error || "Игрок с таким Game ID не найден.");
+      }
+
+      setAdminPlayer(data.player);
+      setAdminInventory(data.inventory || data.items || []);
+      setAdminMessage("Игрок найден. Проверь профиль перед выдачей.");
+      setAdminMessageError(false);
+
+      if (upgradeTargets.length === 0) {
+        await loadUpgradeTargets();
+      }
+    } catch (error) {
+      console.error("Ошибка поиска игрока:", error);
+      setAdminMessage(
+        error?.message || "Не удалось найти игрока. Проверь Game ID."
+      );
+      setAdminMessageError(true);
+    } finally {
+      setAdminSearchLoading(false);
+    }
+  }
+
+  async function grantAdminReward(event) {
+    event?.preventDefault();
+
+    if (!adminPlayer?.game_id) {
+      setAdminMessage("Сначала найди игрока по Game ID.");
+      setAdminMessageError(true);
+      return;
+    }
+
+    const amount = Number(adminAmount);
+    if (!Number.isInteger(amount) || amount < 1 || amount > 1000000) {
+      setAdminMessage("Количество должно быть целым числом от 1 до 1 000 000.");
+      setAdminMessageError(true);
+      return;
+    }
+
+    if (adminGrantType === "brainrot" && !adminItemName) {
+      setAdminMessage("Выбери брейнрота для выдачи.");
+      setAdminMessageError(true);
+      return;
+    }
+
+    setAdminGrantLoading(true);
+    setAdminMessage("");
+    setAdminMessageError(false);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "braingg-api",
+        {
+          body: {
+            initData: initData(),
+            action: "admin_grant",
+            gameId: String(adminPlayer.game_id),
+            grantType: adminGrantType,
+            amount,
+            itemName: adminGrantType === "brainrot" ? adminItemName : null,
+          },
+        }
+      );
+
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.error || "Сервер не подтвердил выдачу.");
+      }
+
+      const labels = {
+        coins: "GG",
+        cases: "бесплатных кейсов",
+        brainrot: "брейнротов",
+      };
+      setAdminMessage(
+        `Успешно выдано: ${amount} ${
+          adminGrantType === "brainrot" ? adminItemName : labels[adminGrantType]
+        }.`
+      );
+      setAdminMessageError(false);
+
+      // Обновляем профиль и инвентарь выбранного игрока после выдачи.
+      const refreshed = await supabase.functions.invoke("braingg-api", {
+        body: {
+          initData: initData(),
+          action: "admin_find_player",
+          gameId: String(adminPlayer.game_id),
+        },
+      });
+
+      if (!refreshed.error && refreshed.data?.success) {
+        setAdminPlayer(refreshed.data.player || adminPlayer);
+        setAdminInventory(
+          refreshed.data.inventory || refreshed.data.items || []
+        );
+      }
+
+      await loadAdminLogs();
+    } catch (error) {
+      console.error("Ошибка выдачи админом:", error);
+      setAdminMessage(
+        error?.message || "Не удалось выполнить выдачу. Проверь настройки сервера."
+      );
+      setAdminMessageError(true);
+    } finally {
+      setAdminGrantLoading(false);
+    }
+  }
+
   function findClosestTarget(source, desiredChance) {
     if (!source || upgradeTargets.length === 0) return null;
 
@@ -309,6 +512,13 @@ export default function App() {
 
     if (nextPage === "Апгрейдер" && upgradeTargets.length === 0) {
       await loadUpgradeTargets();
+    }
+
+    if (nextPage === "Админка" && isAdmin) {
+      if (upgradeTargets.length === 0) {
+        await loadUpgradeTargets();
+      }
+      await loadAdminLogs();
     }
   }
 
@@ -557,7 +767,7 @@ export default function App() {
       {!loading && !authError && (
         <>
           <nav className="navigation">
-            {pages.map((item) => (
+            {visiblePages.map((item) => (
               <button
                 key={item}
                 className={page === item ? "active" : ""}
@@ -1109,6 +1319,224 @@ export default function App() {
                   </button>
                 </>
               )}
+            </main>
+          )}
+
+          {page === "Админка" && isAdmin && (
+            <main className="content admin-content">
+              <div className="admin-heading">
+                <div>
+                  <span className="admin-kicker">CONTROL CENTER</span>
+                  <h2>🛡️ BrainGG Admin Panel</h2>
+                  <p>Управление игроками, балансом, кейсами и коллекциями.</p>
+                </div>
+                <div className="admin-secure-badge">● ЗАЩИЩЁННЫЙ ДОСТУП</div>
+              </div>
+
+              <section className="admin-panel-card">
+                <div className="admin-section-title">
+                  <span className="admin-section-icon">⌕</span>
+                  <div>
+                    <h3>Найти игрока</h3>
+                    <p>Введи точный Game ID игрока.</p>
+                  </div>
+                </div>
+
+                <form className="admin-search-row" onSubmit={searchAdminPlayer}>
+                  <input
+                    className="admin-input"
+                    value={adminGameId}
+                    onChange={(event) => setAdminGameId(event.target.value)}
+                    placeholder="Например: 102938"
+                    autoComplete="off"
+                  />
+                  <button
+                    className="main-button admin-search-button"
+                    type="submit"
+                    disabled={adminSearchLoading}
+                  >
+                    {adminSearchLoading ? "Ищем..." : "Найти игрока"}
+                  </button>
+                </form>
+              </section>
+
+              {adminPlayer && (
+                <>
+                  <section className="admin-player-card">
+                    <div className="admin-player-avatar">👤</div>
+                    <div className="admin-player-details">
+                      <span className="admin-kicker">PLAYER FOUND</span>
+                      <h3>
+                        {adminPlayer.username
+                          ? `@${adminPlayer.username}`
+                          : "Игрок BrainGG"}
+                      </h3>
+                      <p>Game ID: <b>{adminPlayer.game_id}</b></p>
+                    </div>
+                    <div className="admin-player-stats">
+                      <div>
+                        <small>БАЛАНС</small>
+                        <b>🪙 {adminPlayer.balance ?? 0} GG</b>
+                      </div>
+                      <div>
+                        <small>БЕСПЛАТНЫЕ КЕЙСЫ</small>
+                        <b>🎁 {adminPlayer.free_cases ?? 0}</b>
+                      </div>
+                      <div>
+                        <small>БРЕЙНРОТЫ</small>
+                        <b>🧠 {adminInventory.length}</b>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="admin-panel-card">
+                    <div className="admin-section-title">
+                      <span className="admin-section-icon">✦</span>
+                      <div>
+                        <h3>Выдать награду</h3>
+                        <p>Выдача применяется сервером и записывается в историю.</p>
+                      </div>
+                    </div>
+
+                    <form className="admin-grant-form" onSubmit={grantAdminReward}>
+                      <label className="admin-field">
+                        <span>Тип награды</span>
+                        <select
+                          className="admin-input"
+                          value={adminGrantType}
+                          onChange={(event) => {
+                            setAdminGrantType(event.target.value);
+                            setAdminMessage("");
+                          }}
+                        >
+                          <option value="coins">🪙 Монеты GG</option>
+                          <option value="cases">🎁 Бесплатные кейсы</option>
+                          <option value="brainrot">🧠 Брейнрот</option>
+                        </select>
+                      </label>
+
+                      {adminGrantType === "brainrot" && (
+                        <label className="admin-field admin-full-field">
+                          <span>Выбери брейнрота</span>
+                          <select
+                            className="admin-input"
+                            value={adminItemName}
+                            onChange={(event) => setAdminItemName(event.target.value)}
+                          >
+                            <option value="">Выбрать брейнрота...</option>
+                            {upgradeTargets.map((item) => (
+                              <option key={item.item_name} value={item.item_name}>
+                                {item.item_name} · {item.value_gg} GG
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+
+                      <label className="admin-field">
+                        <span>Количество</span>
+                        <input
+                          className="admin-input"
+                          type="number"
+                          min="1"
+                          max="1000000"
+                          step="1"
+                          value={adminAmount}
+                          onChange={(event) => setAdminAmount(event.target.value)}
+                        />
+                      </label>
+
+                      <button
+                        className="main-button admin-grant-button"
+                        type="submit"
+                        disabled={adminGrantLoading}
+                      >
+                        {adminGrantLoading ? "Выполняем выдачу..." : "✦ ВЫДАТЬ НАГРАДУ"}
+                      </button>
+                    </form>
+                  </section>
+
+                  <section className="admin-panel-card">
+                    <div className="admin-section-title">
+                      <span className="admin-section-icon">🧠</span>
+                      <div>
+                        <h3>Инвентарь игрока</h3>
+                        <p>Предметы, которые сейчас находятся у игрока.</p>
+                      </div>
+                    </div>
+
+                    {adminInventory.length === 0 ? (
+                      <p className="admin-muted">У игрока пока нет брейнротов.</p>
+                    ) : (
+                      <div className="admin-inventory-list">
+                        {adminInventory.map((item) => (
+                          <div className="admin-inventory-row" key={item.id}>
+                            <span>🧠</span>
+                            <b>{item.item_name}</b>
+                            <small>{item.rarity}</small>
+                            <strong>{item.value_gg} GG</strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
+
+              {adminMessage && (
+                <div className={`admin-feedback ${adminMessageError ? "error" : "success"}`}>
+                  {adminMessage}
+                </div>
+              )}
+
+              <section className="admin-panel-card admin-history-card">
+                <div className="admin-section-title admin-history-heading">
+                  <span className="admin-section-icon">◷</span>
+                  <div>
+                    <h3>История выдач</h3>
+                    <p>Последние административные операции.</p>
+                  </div>
+                  <button
+                    className="admin-refresh-button"
+                    type="button"
+                    onClick={loadAdminLogs}
+                    disabled={adminLogsLoading}
+                  >
+                    {adminLogsLoading ? "..." : "↻ Обновить"}
+                  </button>
+                </div>
+
+                {adminLogsLoading ? (
+                  <p className="admin-muted">Загружаем историю...</p>
+                ) : adminLogs.length === 0 ? (
+                  <p className="admin-muted">Пока выдач не было.</p>
+                ) : (
+                  <div className="admin-history-list">
+                    {adminLogs.map((log) => (
+                      <div className="admin-history-row" key={log.id}>
+                        <div className="admin-history-symbol">
+                          {log.action === "coins" ? "🪙" : log.action === "cases" ? "🎁" : "🧠"}
+                        </div>
+                        <div className="admin-history-main">
+                          <b>
+                            {log.action === "coins"
+                              ? `+${log.amount} GG`
+                              : log.action === "cases"
+                              ? `+${log.amount} бесплатных кейсов`
+                              : `+${log.amount} ${log.item_name || "брейнрот"}`}
+                          </b>
+                          <small>Game ID: {log.game_id}</small>
+                        </div>
+                        <time>
+                          {log.created_at
+                            ? new Date(log.created_at).toLocaleString("ru-RU")
+                            : "—"}
+                        </time>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             </main>
           )}
         </>
