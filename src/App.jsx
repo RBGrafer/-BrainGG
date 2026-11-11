@@ -49,7 +49,39 @@ export default function App() {
   const [actionMessage, setActionMessage] = useState("");
 
   const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
+  const [customError, setCustomError] = useState("");
+
   const initData = () => window.Telegram?.WebApp?.initData;
+
+  // Перехватываем стандартные браузерные alert(), чтобы они не показывались
+  // поверх приложения в системном стиле WebView.
+  useEffect(() => {
+    const originalAlert = window.alert;
+
+    window.alert = (message) => {
+      const raw = String(message || "").toLowerCase();
+      let friendly = "Не удалось выполнить действие. Попробуй ещё раз.";
+
+      if (
+        raw.includes("insufficient") ||
+        raw.includes("not enough") ||
+        raw.includes("balance")
+      ) {
+        friendly = "Недостаточно средств для этого действия.";
+      } else if (
+        raw.includes("telegram") ||
+        raw.includes("auth")
+      ) {
+        friendly = "Не удалось подтвердить профиль. Перезапусти BrainGG через Telegram.";
+      }
+
+      setCustomError(friendly);
+    };
+
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, []);
 
   async function friendlyActionError(error, data, fallback) {
     let message =
@@ -1079,6 +1111,86 @@ export default function App() {
               )}
             </main>
           )}
+        </>
+      )}
+
+      {customError && (
+        <>
+          <style>{`
+            .braingg-error-overlay {
+              position: fixed;
+              inset: 0;
+              z-index: 99999;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 22px;
+              background: rgba(5, 3, 12, .78);
+              backdrop-filter: blur(10px);
+              animation: brainErrorFade .18s ease-out;
+            }
+            .braingg-error-card {
+              width: min(100%, 360px);
+              padding: 26px 22px 20px;
+              border: 1px solid rgba(183, 112, 255, .38);
+              border-radius: 22px;
+              background: linear-gradient(145deg, #211532 0%, #100d1d 75%);
+              box-shadow: 0 18px 70px rgba(0, 0, 0, .58), 0 0 34px rgba(155, 83, 255, .16);
+              color: #f8f3ff;
+              text-align: center;
+              animation: brainErrorPop .22s ease-out;
+            }
+            .braingg-error-icon {
+              width: 58px;
+              height: 58px;
+              margin: 0 auto 14px;
+              display: grid;
+              place-items: center;
+              border-radius: 18px;
+              background: linear-gradient(135deg, #9b5cff, #6234bb);
+              box-shadow: 0 8px 28px rgba(142, 82, 255, .3);
+              font-size: 29px;
+            }
+            .braingg-error-card h3 {
+              margin: 0 0 9px;
+              font-size: 21px;
+              font-weight: 900;
+            }
+            .braingg-error-card p {
+              margin: 0 0 21px;
+              color: #c9bddb;
+              font-size: 14px;
+              line-height: 1.55;
+            }
+            .braingg-error-card button {
+              width: 100%;
+              min-height: 46px;
+              border: 0;
+              border-radius: 13px;
+              color: white;
+              background: linear-gradient(100deg, #9b5cff, #7040d5);
+              font-weight: 800;
+              font-size: 15px;
+              box-shadow: 0 7px 22px rgba(126, 72, 225, .25);
+              cursor: pointer;
+            }
+            @keyframes brainErrorFade { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes brainErrorPop { from { opacity: 0; transform: translateY(9px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+          `}</style>
+          <div className="braingg-error-overlay" onClick={() => setCustomError("")}>
+            <div
+              className="braingg-error-card"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="braingg-error-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="braingg-error-icon">!</div>
+              <h3 id="braingg-error-title">Что-то пошло не так</h3>
+              <p>{customError}</p>
+              <button onClick={() => setCustomError("")}>ПОНЯТНО</button>
+            </div>
+          </div>
         </>
       )}
     </div>
