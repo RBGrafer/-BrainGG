@@ -51,6 +51,64 @@ export default function App() {
   const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
   const initData = () => window.Telegram?.WebApp?.initData;
 
+  async function friendlyActionError(error, data, fallback) {
+    let message =
+      data?.error ||
+      data?.result?.error ||
+      error?.message ||
+      fallback;
+
+    if (error?.context) {
+      try {
+        const response = error.context.clone();
+        const body = await response.json();
+        message = body?.error || body?.message || message;
+      } catch {
+        // Используем уже полученное сообщение.
+      }
+    }
+
+    const normalized = String(message || "").toLowerCase();
+
+    if (
+      normalized.includes("insufficient") ||
+      normalized.includes("not enough") ||
+      normalized.includes("недостаточно") ||
+      normalized.includes("balance")
+    ) {
+      return "Недостаточно средств";
+    }
+
+    if (
+      normalized.includes("telegram") ||
+      normalized.includes("authentication") ||
+      normalized.includes("auth")
+    ) {
+      return "Открой BrainGG через Telegram";
+    }
+
+    if (
+      normalized.includes("inventory") ||
+      normalized.includes("not found")
+    ) {
+      return "Предмет не найден. Обнови инвентарь и попробуй ещё раз.";
+    }
+
+    // Не показываем игрокам технические ответы базы данных и сервера.
+    if (
+      normalized.includes("postgres") ||
+      normalized.includes("sql") ||
+      normalized.includes("rpc") ||
+      normalized.includes("function") ||
+      normalized.includes("invalid input") ||
+      normalized.includes("internal server")
+    ) {
+      return fallback;
+    }
+
+    return message || fallback;
+  }
+
   const rarityColors = {
     "Обычный": "#a5a5b5",
     "Редкий": "#43a5ff",
@@ -227,6 +285,7 @@ export default function App() {
 
     setOpening(true);
     setLastRewards([]);
+    setActionMessage("");
     const rewards = [];
 
     try {
@@ -242,10 +301,13 @@ export default function App() {
           }
         );
 
-        if (error) throw error;
-
-        if (!data?.success || !data?.result?.success) {
-          throw new Error(data?.error || "Не удалось открыть кейс");
+        if (error || !data?.success || !data?.result?.success) {
+          const message = await friendlyActionError(
+            error,
+            data,
+            "Не удалось открыть кейс. Попробуй ещё раз."
+          );
+          throw new Error(message);
         }
 
         rewards.push(data.result);
@@ -259,14 +321,15 @@ export default function App() {
       }
 
       await loadInventory();
-      alert(`Готово! Открыто кейсов: ${rewards.length}`);
+      setActionMessage(`Готово! Открыто кейсов: ${rewards.length}`);
     } catch (error) {
       console.error("Ошибка открытия:", error);
+      const message = error.message || "Не удалось открыть кейс. Попробуй ещё раз.";
 
-      alert(
+      setActionMessage(
         rewards.length > 0
-          ? `Открыто кейсов: ${rewards.length}. Остальные открыть не удалось.`
-          : error.message || "Не удалось открыть кейс"
+          ? `Открыто кейсов: ${rewards.length}. ${message}`
+          : message
       );
     } finally {
       setOpening(false);
@@ -322,7 +385,9 @@ export default function App() {
       );
     } catch (error) {
       console.error("Ошибка продажи:", error);
-      setActionMessage(error.message || "Ошибка продажи");
+      setActionMessage(
+        await friendlyActionError(error, null, "Не удалось продать предмет. Попробуй ещё раз.")
+      );
     } finally {
       setSellingId(null);
     }
@@ -409,11 +474,9 @@ export default function App() {
       setTargetItem("");
     } catch (error) {
       console.error("Ошибка апгрейда:", error);
-
-      const message = error.message || "Неизвестная ошибка";
-      setActionMessage(`Ошибка улучшения: ${message}`);
-      alert(`Ошибка улучшения:
-${message}`);
+      setActionMessage(
+        await friendlyActionError(error, null, "Не удалось выполнить апгрейд. Попробуй ещё раз.")
+      );
     } finally {
       setUpgradeLoading(false);
     }
@@ -575,6 +638,16 @@ ${message}`);
                 >
                   {opening ? "Открываем..." : `Открыть ×${openCount}`}
                 </button>
+
+                {actionMessage && (
+                  <div
+                    className="upgrade-message"
+                    role="status"
+                    style={{ marginTop: 14, textAlign: "center" }}
+                  >
+                    {actionMessage}
+                  </div>
+                )}
 
                 {lastRewards.length > 0 && (
                   <div className="rewards-list">
