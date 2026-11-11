@@ -751,7 +751,6 @@ export default function App() {
                         <div
                           className="upgrade-wheel-rotor"
                           style={{
-                            transform: `rotate(${upgradeRotation}deg)`,
                             background: `conic-gradient(#39e58b 0deg ${wheelAngle}deg, #292438 ${wheelAngle}deg 360deg)`,
                           }}
                         >
@@ -768,7 +767,16 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="upgrade-pointer" />
+                        <div
+                          className="upgrade-pointer"
+                          style={{
+                            transform: `rotate(${upgradeRotation}deg)`,
+                            transformOrigin: "50% 115px",
+                            transition: upgradeLoading
+                              ? "transform 4.2s cubic-bezier(0.12, 0.72, 0.12, 1)"
+                              : "none",
+                          }}
+                        />
                       </div>
 
                       <div className="chance-title">
