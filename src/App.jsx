@@ -49,11 +49,11 @@ export default function App() {
   const [actionMessage, setActionMessage] = useState("");
 
   const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
-  const visiblePages = isAdmin ? [...pages, "Админка"] : pages;
   const [customError, setCustomError] = useState("");
 
   // Состояние защищённой админ-панели BrainGG
   const [isAdmin, setIsAdmin] = useState(false);
+  const visiblePages = isAdmin ? [...pages, "Админка"] : pages;
   const [adminGameId, setAdminGameId] = useState("");
   const [adminPlayer, setAdminPlayer] = useState(null);
   const [adminInventory, setAdminInventory] = useState([]);
