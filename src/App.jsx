@@ -329,18 +329,19 @@ export default function App() {
   }
 
   async function performUpgrade() {
-    if (
-      !selectedUpgrade ||
-      !targetItem ||
-      !selectedTarget ||
-      upgradeLoading
-    ) {
+    if (!selectedUpgrade || !targetItem || !selectedTarget || upgradeLoading) {
+      setActionMessage("Сначала выбери свой брейнрот и цель для улучшения.");
+      return;
+    }
+
+    if (!initData()) {
+      setActionMessage("Ошибка: открой BrainGG через Telegram.");
       return;
     }
 
     setUpgradeLoading(true);
     setUpgradeResult(null);
-    setActionMessage("");
+    setActionMessage("Отправляем запрос на улучшение...");
 
     try {
       const { data, error } = await supabase.functions.invoke(
@@ -355,10 +356,29 @@ export default function App() {
         }
       );
 
-      if (error) throw error;
+      if (error) {
+        let details = error.message || "Ошибка сервера";
+
+        if (error.context) {
+          try {
+            const response = error.context.clone();
+            const body = await response.json();
+            details = body.error || body.message || JSON.stringify(body);
+          } catch {
+            // Оставляем исходное сообщение ошибки.
+          }
+        }
+
+        throw new Error(details);
+      }
 
       if (!data?.success || !data?.result?.success) {
-        throw new Error(data?.error || "Не удалось выполнить апгрейд");
+        throw new Error(
+          data?.error ||
+          data?.result?.error ||
+          data?.message ||
+          "Сервер не подтвердил улучшение"
+        );
       }
 
       const result = data.result;
@@ -366,12 +386,13 @@ export default function App() {
 
       const greenCenter = actualChance * 1.8;
       const darkCenter = 180 + actualChance * 1.8;
-
       const sectorCenter = result.won ? greenCenter : darkCenter;
 
       setUpgradeRotation(
         (previous) => previous + 360 * 5 - sectorCenter
       );
+
+      setActionMessage("Улучшение выполнено!");
 
       await new Promise((resolve) => setTimeout(resolve, 4200));
 
@@ -388,7 +409,11 @@ export default function App() {
       setTargetItem("");
     } catch (error) {
       console.error("Ошибка апгрейда:", error);
-      setActionMessage(error.message || "Ошибка апгрейда");
+
+      const message = error.message || "Неизвестная ошибка";
+      setActionMessage(`Ошибка улучшения: ${message}`);
+      alert(`Ошибка улучшения:
+${message}`);
     } finally {
       setUpgradeLoading(false);
     }
