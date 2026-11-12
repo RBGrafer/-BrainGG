@@ -25,6 +25,7 @@ function calculateUpgradeChance(source, target) {
 export default function App() {
   const [page, setPage] = useState("Главная");
   const [openCount, setOpenCount] = useState(1);
+  const [fastOpen, setFastOpen] = useState(true);
   const [selectedCase, setSelectedCase] = useState(null);
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +62,7 @@ export default function App() {
   const [adminGrantType, setAdminGrantType] = useState("coins");
   const [adminAmount, setAdminAmount] = useState("100");
   const [adminItemName, setAdminItemName] = useState("");
-  const [adminCaseName, setAdminCaseName] = useState("Starter Case");
+  const [adminCaseName, setAdminCaseName] = useState("Truckini Case");
   const [adminGrantLoading, setAdminGrantLoading] = useState(false);
   const [adminMessage, setAdminMessage] = useState("");
   const [adminMessageError, setAdminMessageError] = useState(false);
@@ -573,24 +574,23 @@ export default function App() {
 
         setPlayer((previous) => {
           if (!previous) return previous;
-          const next = { ...previous, balance: data.result.balance };
-          if (data.result.free_case_used) {
-            const credits = Array.isArray(previous.free_case_credits)
-              ? previous.free_case_credits.map((credit) => ({ ...credit }))
-              : [];
-            const index = credits.findIndex(
-              (credit) => credit.case_name === selectedCase.name
-            );
-            if (index >= 0) {
-              credits[index].amount = Math.max(0, Number(credits[index].amount || 0) - 1);
-              next.free_case_credits = credits.filter((credit) => Number(credit.amount) > 0);
-            }
-            next.free_cases_total = Math.max(0, Number(previous.free_cases_total || 0) - 1);
-          }
-          return next;
+          return {
+            ...previous,
+            balance: data.result.balance,
+            // Источник истины — остаток, который Edge Function перечитала из Supabase.
+            ...(Array.isArray(data.free_case_credits)
+              ? { free_case_credits: data.free_case_credits }
+              : {}),
+            ...(Number.isFinite(Number(data.free_cases_total))
+              ? { free_cases_total: Number(data.free_cases_total) }
+              : {}),
+          };
         });
 
         setLastRewards([...rewards]);
+        if (!fastOpen && i < openCount - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 650));
+        }
       }
 
       await loadInventory();
@@ -840,120 +840,171 @@ export default function App() {
           )}
 
           {page === "Кейсы" && (
-            <main className="content">
-              <h2>🎁 Кейсы BrainGG</h2>
-              <p>Выбирай кейс и испытывай удачу!</p>
-
-              <div className="case-grid">
-                {cases.map((item) => (
-                  <div className="case-card" key={item.id}>
-                    <div className="case-emoji">{item.emoji}</div>
-                    <h3>{item.name}</h3>
-                    <p>{item.description}</p>
-                    <div className="case-price">🪙 {item.price} GG</div>
-
-                    <button
-                      className={
-                        selectedCase?.id === item.id
-                          ? "case-button selected"
-                          : "case-button"
-                      }
-                      onClick={() => {
-                        setSelectedCase(item);
-                        setLastRewards([]);
-                      }}
-                    >
-                      {selectedCase?.id === item.id
-                        ? "Выбран ✓"
-                        : "Выбрать кейс"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="opening-panel">
-                <h3>Количество открытий</h3>
-
-                <div className="opening-options">
-                  {[1, 3, 5].map((count) => (
-                    <button
-                      key={count}
-                      className={
-                        openCount === count
-                          ? "count-button active"
-                          : "count-button"
-                      }
-                      disabled={opening}
-                      onClick={() => setOpenCount(count)}
-                    >
-                      ×{count}
-                    </button>
-                  ))}
-                </div>
-
-                {selectedCase ? (
-                  <>
-                    <p>
-                      Выбран: <b>{selectedCase.name}</b>
-                    </p>
-                    {(() => {
-                      const freeCount = Number(
-                        player?.free_case_credits?.find(
-                          (credit) => credit.case_name === selectedCase.name
-                        )?.amount || 0
-                      );
-                      const freeToUse = Math.min(freeCount, openCount);
-                      const paidCount = Math.max(0, openCount - freeToUse);
-                      return (
-                        <>
-                          <p>
-                            Бесплатно доступно: <b>{freeCount}</b>
-                          </p>
-                          <p>
-                            Бесплатных открытий сейчас: <b>{freeToUse}</b>
-                          </p>
-                          <p>
-                            К оплате: <b>{paidCount * selectedCase.price} GG</b>
-                          </p>
-                        </>
-                      );
-                    })()}
-                  </>
-                ) : (
-                  <p>Сначала выбери кейс 👆</p>
-                )}
-
-                <button
-                  className="main-button open-button"
-                  disabled={!selectedCase || !player || opening}
-                  onClick={openSelectedCase}
-                >
-                  {opening ? "Открываем..." : `Открыть ×${openCount}`}
-                </button>
-
-                {actionMessage && (
-                  <div
-                    className="upgrade-message"
-                    role="status"
-                    style={{ marginTop: 14, textAlign: "center" }}
+            <main className="content cases-page">
+              {selectedCase ? (
+                <section className="case-detail-page">
+                  <button
+                    className="case-back-button"
+                    onClick={() => { setSelectedCase(null); setLastRewards([]); setActionMessage(""); }}
                   >
-                    {actionMessage}
+                    ← Назад к кейсам
+                  </button>
+
+                  <div className={`case-detail-visual case-theme-${selectedCase.color}`}>
+                    {selectedCase.image ? (
+                      <img src={selectedCase.image} alt={selectedCase.name} />
+                    ) : (
+                      <span>{selectedCase.emoji}</span>
+                    )}
+                    {selectedCase.maxReward && (
+                      <span className="case-detail-max">До {selectedCase.maxReward.toLocaleString("ru-RU")} GG</span>
+                    )}
                   </div>
-                )}
 
-                {lastRewards.length > 0 && (
-                  <div className="rewards-list">
-                    <h3>🎉 Твои выпадения</h3>
+                  <div className="case-detail-name">
+                    <span>Кейс: <b>{selectedCase.name}</b></span>
+                  </div>
 
-                    {lastRewards.map((reward, index) => (
-                      <div className="reward-item" key={index}>
+                  <div className="case-detail-controls">
+                    <div className="opening-options">
+                      {[1, 2, 3].map((count) => (
+                        <button
+                          key={count}
+                          className={openCount === count ? "count-button active" : "count-button"}
+                          disabled={opening}
+                          onClick={() => setOpenCount(count)}
+                        >
+                          {count} {count === 1 ? "кейс" : "кейса"}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="case-fast-toggle">
+                      <input
+                        type="checkbox"
+                        checked={fastOpen}
+                        onChange={(event) => setFastOpen(event.target.checked)}
+                      />
+                      <span>Быстрое открытие</span>
+                    </label>
+                  </div>
+
+                  <div className="case-roulette-strip">
+                    {(lastRewards.length ? lastRewards : Array.from({ length: 8 }, (_, i) => ({
+                      item_name: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.item_name || ["Fishino Clownino", "Los Dragons", "Elefanto Frigo", "Antonio"][i % 4],
+                      value_gg: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.value_gg || 0,
+                    }))).map((reward, index) => (
+                      <div className="case-roulette-item" key={`${reward.item_name}-${index}`}>
+                        <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>
                         <b>{reward.item_name}</b>
-                        <span>{reward.rarity}</span>
+                        {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
                       </div>
                     ))}
+                    <i className="case-roulette-pointer" />
                   </div>
-                )}
-              </div>
+
+                  {(() => {
+                    const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.name)?.amount || 0);
+                    const freeToUse = Math.min(freeCount, openCount);
+                    const paidCount = Math.max(0, openCount - freeToUse);
+                    return (
+                      <div className="case-payment-summary">
+                        <div><span>Бесплатно доступно</span><b>{freeCount}</b></div>
+                        <div><span>Бесплатных открытий</span><b>{freeToUse}</b></div>
+                        <div><span>К оплате</span><b>{(paidCount * selectedCase.price).toLocaleString("ru-RU")} GG</b></div>
+                      </div>
+                    );
+                  })()}
+
+                  <button
+                    className="main-button case-open-main"
+                    disabled={!player || opening}
+                    onClick={openSelectedCase}
+                  >
+                    {opening ? "Открываем..." : (() => {
+                      const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.name)?.amount || 0);
+                      const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
+                      return `Крутить · ${(selectedCase.price * paidCount).toLocaleString("ru-RU")} GG`;
+                    })()}
+                  </button>
+
+                  {actionMessage && <div className="upgrade-message" role="status">{actionMessage}</div>}
+
+                  {lastRewards.length > 0 && (
+                    <div className="rewards-list case-last-rewards">
+                      <h3>🎉 Твои выпадения</h3>
+                      {lastRewards.map((reward, index) => (
+                        <div className="reward-item" key={`${reward.item_name}-${index}`}>
+                          <b>{reward.item_name}</b><span>{reward.rarity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <section className="case-contents-panel">
+                    <h3>Содержимое кейса</h3>
+                    <p className="case-contents-caption">Возможные награды из пула BrainGG</p>
+                    <div className="case-contents-grid">
+                      {(upgradeTargets.length ? upgradeTargets.slice(0, 12) : []).map((item, index) => (
+                        <div className="case-content-item" key={`${item.item_name}-${index}`}>
+                          <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>
+                          <div><b>{item.item_name}</b><small>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small></div>
+                        </div>
+                      ))}
+                      {!upgradeTargets.length && <p className="case-contents-caption">Список наград загружается при переходе в апгрейдер.</p>}
+                    </div>
+                  </section>
+                </section>
+              ) : (
+                <>
+                  <div className="cases-page-heading">
+                    <div>
+                      <span className="cases-eyebrow">BRAINROT CASER</span>
+                      <h2>Кейсы</h2>
+                      <p>Открывай кейсы, собирай коллекцию и забирай редкие награды</p>
+                    </div>
+                    <div className="cases-balance-chip">🟡 {Number(player?.balance || 0).toLocaleString("ru-RU")} GG</div>
+                  </div>
+
+                  {["Обычные кейсы", "Rich Cases 💎", "All In 🎲"].map((category) => (
+                    <section className="case-category-section" key={category}>
+                      <h3>{category}</h3>
+                      <div className="case-grid case-grid-reference">
+                        {cases.filter((item) => item.category === category).map((item) => (
+                          <article className={`case-card case-card-reference case-theme-${item.color}`} key={item.id}>
+                            {item.maxReward && <span className="case-max-badge">до {item.maxReward.toLocaleString("ru-RU")} 🟡</span>}
+                            <button
+                              type="button"
+                              className="case-card-reference-button"
+                              onClick={() => {
+                                setSelectedCase(item);
+                                setLastRewards([]);
+                                setOpenCount(1);
+                                setActionMessage("");
+                                if (upgradeTargets.length === 0) loadUpgradeTargets();
+                              }}
+                            >
+                              <div className="case-card-art">
+                                {item.image ? <img src={item.image} alt={item.name} /> : <span>{item.emoji}</span>}
+                              </div>
+                              <div className="case-card-details">
+                                <h4>{item.name}</h4>
+                                <p>{item.description}</p>
+                                <div className="case-price-row">
+                                  <span>Цена:</span>
+                                  {item.oldPrice && <del>{item.oldPrice.toLocaleString("ru-RU")}</del>}
+                                  <b>{item.price.toLocaleString("ru-RU")} 🟡 GG</b>
+                                  {item.discount && <em>-{item.discount}%</em>}
+                                </div>
+                                <span className="case-card-open-label">Открыть ›</span>
+                              </div>
+                            </button>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </>
+              )}
             </main>
           )}
 
