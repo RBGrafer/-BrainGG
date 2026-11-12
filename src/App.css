@@ -1,3 +1,4 @@
+
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
 :root {
@@ -290,10 +291,10 @@ body { background: #090606; }
 .case-card-reference { position:relative; overflow:hidden; padding:0; border:1px solid #382426; border-radius:17px; background:#1a1011; box-shadow:0 10px 24px #0007; }
 .case-card-reference:hover { border-color:#91414a; box-shadow:0 14px 30px #0009; }
 .case-card-reference-button { display:block; width:100%; padding:0; border:0; background:transparent; color:#fff; text-align:left; cursor:pointer; }
-.case-card-art { position:relative; display:grid; place-items:center; height:148px; overflow:hidden; isolation:isolate; background:radial-gradient(circle at 50% 42%,#7c2b2d,#1b0d0e 76%); }
+.case-card-art { position:relative; display:grid; place-items:center; height:148px; overflow:hidden; isolation:isolate; background:#000; }
 .case-card-art::before { content:""; position:absolute; inset:-35%; z-index:-1; background:repeating-conic-gradient(from 4deg,#ffffff13 0deg 8deg,transparent 8deg 25deg); animation:case-ray-spin 34s linear infinite; }
-.case-card-art img { width:100%; height:100%; object-fit:cover; display:block; transition:transform .3s; }
-.case-card-reference:hover .case-card-art img { transform:scale(1.055); }
+.case-card-art img { width:100%; height:100%; object-fit:contain; display:block; transition:none; background:#000; }
+.case-card-reference:hover .case-card-art img { transform:none; }
 .case-card-art > span { font-size:78px; filter:drop-shadow(0 12px 12px #000b); }
 .case-card-details { padding:12px; }
 .case-card-details h4 { margin:0 0 7px; font-size:13px; font-weight:900; }
@@ -304,18 +305,18 @@ body { background: #090606; }
 .case-price-row em { padding:3px 6px; border-radius:9px; background:#08a77b; color:white; font-size:9px; font-style:normal; font-weight:900; }
 .case-card-open-label { display:block; padding:10px; border-radius:11px; background:linear-gradient(110deg,#ff3855,#d90e2f); box-shadow:0 6px 16px #f21b3b36; color:#fff; font-size:12px; font-weight:900; text-align:center; }
 .case-max-badge { position:absolute; z-index:2; top:9px; right:9px; padding:5px 8px; border:1px solid #ff8798; border-radius:20px; background:#ae102b; color:#fff; font-size:9px; font-weight:900; }
-.case-theme-orange .case-card-art { background:radial-gradient(circle,#ff8e22,#4d1609 75%); }
-.case-theme-blue .case-card-art { background:radial-gradient(circle,#13b9e8,#063451 75%); }
-.case-theme-red .case-card-art { background:radial-gradient(circle,#9b252c,#300d13 75%); }
-.case-theme-gold .case-card-art { background:radial-gradient(circle,#ffc12c,#513008 75%); }
-.case-theme-elite .case-card-art { background:radial-gradient(circle,#a72a39,#0c573a 52%,#210f29 78%); }
-.case-theme-strawberry .case-card-art { background:radial-gradient(circle,#e93c59,#4c0d20 75%); }
-.case-theme-horseman .case-card-art { background:radial-gradient(circle,#e9a832,#4c2b08 75%); }
+.case-theme-orange .case-card-art,
+.case-theme-blue .case-card-art,
+.case-theme-red .case-card-art,
+.case-theme-gold .case-card-art,
+.case-theme-elite .case-card-art,
+.case-theme-strawberry .case-card-art,
+.case-theme-horseman .case-card-art { background:#000; }
 .case-detail-page { max-width:980px; margin:0 auto; }
 .case-back-button { padding:10px 15px; border:1px solid #422529; border-radius:10px; background:#170e10; color:#d9c9ca; cursor:pointer; }
-.case-detail-visual { position:relative; display:grid; place-items:center; width:min(100%,525px); height:295px; margin:18px auto; overflow:hidden; border:1px solid #5c471c; border-radius:20px; background:radial-gradient(circle,#704b10,#140e08 78%); }
-.case-detail-visual::before { content:""; position:absolute; inset:-40%; background:repeating-conic-gradient(from 5deg,#fff2 0deg 7deg,transparent 7deg 23deg); animation:case-ray-spin 36s linear infinite; }
-.case-detail-visual img { position:relative; z-index:1; width:100%; height:100%; object-fit:contain; }
+.case-detail-visual { position:relative; display:grid; place-items:center; width:min(100%,525px); height:295px; margin:18px auto; overflow:hidden; border:1px solid #5c471c; border-radius:20px; background:#000; }
+.case-detail-visual::before { content:""; position:absolute; inset:-40%; background:repeating-conic-gradient(from 5deg,#fff2 0deg 7deg,transparent 7deg 23deg); animation:case-ray-spin 36s linear infinite; display:none; }
+.case-detail-visual img { position:relative; z-index:1; width:100%; height:100%; object-fit:contain; background:#000; }
 .case-detail-visual > span:not(.case-detail-max) { position:relative; z-index:1; font-size:145px; filter:drop-shadow(0 16px 16px #000c); }
 .case-detail-max { position:absolute; z-index:2; top:13px; right:13px; padding:7px 11px; border-radius:18px; background:#b10f2b; color:white; font-size:11px; font-weight:900; }
 .case-detail-name { margin:17px 0; text-align:center; color:#d8c7c9; font-size:13px; }
@@ -357,4 +358,58 @@ body { background: #090606; }
  .case-price-row { gap:3px; font-size:9px; }.case-card-open-label { padding:9px; }
  .case-detail-visual { height:220px; }.case-payment-summary { grid-template-columns:1fr; }
  .case-contents-grid { grid-template-columns:1fr; }.case-roulette-item { flex-basis:105px; }
+}
+
+/* ФИНАЛЬНОЕ ОФОРМЛЕНИЕ КАРТИНОК КЕЙСОВ */
+.case-card-art {
+  background: #000 !important;
+  overflow: hidden;
+}
+
+.case-card-art::before {
+  display: none !important;
+  content: none !important;
+}
+
+.case-card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain !important;
+  object-position: center;
+  display: block;
+  background: #000;
+  transform: none !important;
+}
+
+.case-card-reference:hover .case-card-art img {
+  transform: none !important;
+}
+
+.case-theme-orange .case-card-art,
+.case-theme-blue .case-card-art,
+.case-theme-red .case-card-art,
+.case-theme-gold .case-card-art,
+.case-theme-elite .case-card-art,
+.case-theme-strawberry .case-card-art,
+.case-theme-horseman .case-card-art {
+  background: #000 !important;
+}
+
+.case-detail-visual {
+  background: #000 !important;
+  overflow: hidden;
+}
+
+.case-detail-visual::before {
+  display: none !important;
+  content: none !important;
+}
+
+.case-detail-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain !important;
+  object-position: center;
+  display: block;
+  background: #000;
 }
