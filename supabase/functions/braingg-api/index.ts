@@ -7,6 +7,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const ALLOWED_CASES = [
+  "Starter Case",
+  "Lucky Case",
+  "Epic Case",
+  "Legendary Case",
+] as const;
+
 function toHex(buffer: ArrayBuffer) {
   return Array.from(new Uint8Array(buffer))
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -195,14 +202,19 @@ Deno.serve(async (req) => {
       if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
 
       const gameId = String(body.gameId ?? "").trim();
-      const grantType = String(body.grantType ?? "");
+      const grantType = String(body.grantType ?? "").trim();
       const amount = Number(body.amount);
       const itemName = typeof body.itemName === "string"
         ? body.itemName.trim()
         : "";
-      const caseName = typeof body.caseName === "string"
+
+      // Приводим название к одному из точных значений, которые принимает SQL.
+      const rawCaseName = typeof body.caseName === "string"
         ? body.caseName.trim()
         : "";
+      const caseName = ALLOWED_CASES.find(
+        (allowedName) => allowedName.toLowerCase() === rawCaseName.toLowerCase(),
+      ) ?? "";
 
       if (!gameId || gameId.length > 100) {
         return respond({ error: "Укажи корректный Game ID" }, 400);
@@ -213,16 +225,14 @@ Deno.serve(async (req) => {
       if (!["coins", "cases", "brainrot"].includes(grantType)) {
         return respond({ error: "Неизвестный тип выдачи" }, 400);
       }
-      if (
-        grantType === "cases" &&
-        ![
-          "Starter Case",
-          "Lucky Case",
-          "Epic Case",
-          "Legendary Case",
-        ].includes(caseName)
-      ) {
-        return respond({ error: "Выбери тип бесплатного кейса" }, 400);
+      if (grantType === "cases" && !caseName) {
+        console.error("Admin grant rejected: invalid case name", {
+          receivedCaseName: rawCaseName,
+          receivedType: typeof body.caseName,
+        });
+        return respond({
+          error: `Не удалось определить кейс. Получено: ${rawCaseName || "пусто"}`,
+        }, 400);
       }
       if (grantType === "brainrot" && (!itemName || itemName.length > 120)) {
         return respond({ error: "Выбери брейнрота" }, 400);
@@ -242,23 +252,49 @@ Deno.serve(async (req) => {
         return respond({ error: "Игрок с таким Game ID не найден" }, 404);
       }
 
-      const { data, error } = await supabase.rpc("admin_grant_player", {
+      // Диагностика: в логах будет видно точное значение, отправляемое в SQL.
+      console.log("ADMIN GRANT DEBUG:", {
+        grantType,
+        receivedCaseName: rawCaseName,
+        normalizedCaseName: caseName,
+        amount,
+      });
+
+      const rpcArgs = {
         p_admin_telegram_id: telegramUser.id,
         p_player_telegram_id: player.telegram_id,
         p_action: grantType,
         p_amount: amount,
         p_item_name: grantType === "brainrot" ? itemName : null,
         p_case_name: grantType === "cases" ? caseName : null,
-      });
+      };
+
+      const { data, error } = await supabase.rpc("admin_grant_player", rpcArgs);
 
       if (error) {
-        console.error("Admin grant failed:", error.message);
+        console.error("Admin grant failed:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          rpcArgs: {
+            ...rpcArgs,
+            p_admin_telegram_id: "[hidden]",
+            p_player_telegram_id: "[hidden]",
+          },
+        });
+
         return respond({
           error: error.message.includes("BRAINROT_NOT_FOUND")
             ? "Такого брейнрота нет в списке наград"
             : error.message.includes("INVALID_CASE_NAME")
-            ? "Выбран неизвестный тип кейса"
+            ? `SQL отклонил название кейса: ${caseName || "пусто"}. Проверьте актуальную SQL-функцию admin_grant_player.`
             : "Не удалось выполнить выдачу",
+          debug: {
+            grantType,
+            caseName: grantType === "cases" ? caseName : null,
+            code: error.code,
+          },
         }, 400);
       }
 
@@ -362,12 +398,7 @@ Deno.serve(async (req) => {
     if (body.action === "open_case") {
       const caseName = body.caseName;
       if (
-        ![
-          "Starter Case",
-          "Lucky Case",
-          "Epic Case",
-          "Legendary Case",
-        ].includes(caseName)
+        !ALLOWED_CASES.includes(caseName)
       ) {
         return respond({ error: "Unknown case" }, 400);
       }
