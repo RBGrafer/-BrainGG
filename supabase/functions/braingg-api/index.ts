@@ -9,11 +9,23 @@ const corsHeaders = {
 };
 
 const ALLOWED_CASES = [
-  "Starter Case",
-  "Lucky Case",
-  "Epic Case",
-  "Legendary Case",
+  "Truckini Case",
+  "Summer Case",
+  "Bloody Case",
+  "Crafting Case",
+  "Legend Case",
+  "Elite Case",
+  "All In Strawberry Elephant",
+  "All In Headless Horseman",
 ] as const;
+
+function normalizeCaseName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  return ALLOWED_CASES.find(
+    (name) => name.toLowerCase() === value.trim().toLowerCase(),
+  ) ?? null;
+}
 
 function toHex(buffer: ArrayBuffer) {
   return Array.from(new Uint8Array(buffer))
@@ -260,14 +272,7 @@ Deno.serve(async (req) => {
           ? body.itemName.trim()
           : "";
 
-      const rawCaseName =
-        typeof body.caseName === "string"
-          ? body.caseName.trim()
-          : "";
-
-      const caseName = ALLOWED_CASES.find(
-        (name) => name.toLowerCase() === rawCaseName.toLowerCase(),
-      ) ?? "";
+      const caseName = normalizeCaseName(body.caseName);
 
       if (!gameId || gameId.length > 100) {
         return respond({ error: "Укажи корректный Game ID" }, 400);
@@ -351,7 +356,6 @@ Deno.serve(async (req) => {
           );
         }
 
-        // Возвращаем обновлённый остаток выданных кейсов.
         const credits = await getFreeCaseCredits(
           supabase,
           player.telegram_id,
@@ -522,14 +526,7 @@ Deno.serve(async (req) => {
 
     // ОТКРЫТИЕ КЕЙСА
     if (body.action === "open_case") {
-      const rawCaseName =
-        typeof body.caseName === "string"
-          ? body.caseName.trim()
-          : "";
-
-      const caseName = ALLOWED_CASES.find(
-        (name) => name.toLowerCase() === rawCaseName.toLowerCase(),
-      );
+      const caseName = normalizeCaseName(body.caseName);
 
       if (!caseName) {
         return respond({ error: "Unknown case" }, 400);
@@ -549,10 +546,16 @@ Deno.serve(async (req) => {
           caseName,
         });
 
-        return respond({ error: error.message }, 400);
+        const message = error.message.includes("Not enough GG")
+          ? "Недостаточно GG для открытия кейса"
+          : error.message.includes("No rewards available")
+            ? "Пока нет доступных наград"
+            : "Не удалось открыть кейс";
+
+        return respond({ error: message }, 400);
       }
 
-      // После открытия обязательно перечитываем остаток из базы.
+      // Перечитываем бесплатные остатки непосредственно из базы.
       let credits;
 
       try {
