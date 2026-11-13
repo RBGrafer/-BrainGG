@@ -159,6 +159,23 @@ export default function App() {
   const [topupMessage, setTopupMessage] = useState("");
 
   const initData = () => window.Telegram?.WebApp?.initData;
+  const telegramIdentity = window.Telegram?.WebApp?.initDataUnsafe?.user || {};
+  const greetingLabel = telegramIdentity.username
+    ? `@${telegramIdentity.username}`
+    : (telegramIdentity.first_name || player?.username || "друг");
+
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+    try {
+      tg.ready?.();
+      tg.expand?.();
+      tg.setHeaderColor?.("#071827");
+      tg.setBackgroundColor?.("#071827");
+    } catch (error) {
+      console.warn("Telegram WebApp viewport setup failed:", error);
+    }
+  }, []);
 
   function getAudioContext() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -1285,7 +1302,7 @@ export default function App() {
             <main className="content home-welcome">
               <div className="home-welcome-inner">
                 <div className="home-welcome-emblem">❄</div>
-                <p className="home-greeting">Привет, <b>@{player?.username || "игрок"}!</b></p>
+                <p className="home-greeting">Привет, <b>{greetingLabel}!</b></p>
                 <h2>Добро пожаловать в BrainGG!</h2>
                 <p>Открывай кейсы, собирай персонажей и улучшай свою коллекцию.</p>
                 <p className="home-luck">Удачи!</p>
