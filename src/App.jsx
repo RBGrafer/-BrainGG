@@ -654,10 +654,10 @@ export default function App() {
 
   async function searchAdminPlayer(event) {
     event?.preventDefault();
-    const username = adminGameId.trim().replace(/^@/, "");
+    const gameId = adminGameId.trim();
 
-    if (!username) {
-      setAdminMessage("Введи Telegram username игрока.");
+    if (!gameId) {
+      setAdminMessage("Введи игровой ID игрока.");
       setAdminMessageError(true);
       return;
     }
@@ -675,14 +675,14 @@ export default function App() {
           body: {
             initData: initData(),
             action: "admin_find_player",
-            username,
+            gameId,
           },
         }
       );
 
       if (error) throw error;
       if (!data?.success || !data?.player) {
-        throw new Error(data?.error || "Игрок с таким Telegram username не найден.");
+        throw new Error(data?.error || "Игрок с таким Game ID не найден.");
       }
 
       setAdminPlayer(data.player);
@@ -696,7 +696,7 @@ export default function App() {
     } catch (error) {
       console.error("Ошибка поиска игрока:", error);
       setAdminMessage(
-        error?.message || "Не удалось найти игрока. Проверь Telegram username."
+        error?.message || "Не удалось найти игрока. Проверь Game ID."
       );
       setAdminMessageError(true);
     } finally {
@@ -708,7 +708,7 @@ export default function App() {
     event?.preventDefault();
 
     if (!adminPlayer?.game_id) {
-      setAdminMessage("Сначала найди игрока по Telegram username.");
+      setAdminMessage("Сначала найди игрока по Game ID.");
       setAdminMessageError(true);
       return;
     }
@@ -743,7 +743,7 @@ export default function App() {
           body: {
             initData: initData(),
             action: adminGrantType === "xp" ? "admin_adjust_xp" : "admin_grant",
-            username: String(adminPlayer.username || "").replace(/^@/, ""),
+            gameId: String(adminPlayer.game_id),
             grantType: adminGrantType,
             amount,
             itemName: adminGrantType === "brainrot" ? adminItemName : null,
@@ -775,7 +775,7 @@ export default function App() {
         body: {
           initData: initData(),
           action: "admin_find_player",
-          username: String(adminPlayer.username || "").replace(/^@/, ""),
+          gameId: String(adminPlayer.game_id),
         },
       });
 
@@ -927,7 +927,7 @@ export default function App() {
       // Ask the server for every result first. The animation never chooses or changes a reward.
       for (let i = 0; i < openCount; i++) {
         const { data, error } = await supabase.functions.invoke("braingg-api", {
-          body: { initData: initData(), action: "open_case", caseName: selectedCase.name },
+          body: { initData: initData(), action: "open_case", caseName: selectedCase.caseName },
         });
         if (error || !data?.success || !data?.result?.success) {
           const message = await friendlyActionError(error, data, "Не удалось открыть кейс. Попробуй ещё раз.");
@@ -1391,7 +1391,7 @@ export default function App() {
                   {opening && skipAvailable && <button className="case-skip-button" onClick={() => { skipRequestedRef.current = true; setSkipAvailable(false); }}>Пропустить анимацию ❯❯</button>}
 
                   {(() => {
-                    const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.name)?.amount || 0);
+                    const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
                     const freeToUse = Math.min(freeCount, openCount);
                     const paidCount = Math.max(0, openCount - freeToUse);
                     return (
@@ -1409,7 +1409,7 @@ export default function App() {
                     onClick={openSelectedCase}
                   >
                     {opening ? "Открываем..." : (() => {
-                      const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.name)?.amount || 0);
+                      const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
                       const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
                       return `Крутить · ${(selectedCase.price * paidCount).toLocaleString("ru-RU")} GG`;
                     })()}
@@ -1958,7 +1958,7 @@ export default function App() {
                   <span className="admin-section-icon">⌕</span>
                   <div>
                     <h3>Найти игрока</h3>
-                    <p>Введи Telegram username игрока.</p>
+                    <p>Введи точный Game ID игрока.</p>
                   </div>
                 </div>
 
@@ -1967,7 +1967,7 @@ export default function App() {
                     className="admin-input"
                     value={adminGameId}
                     onChange={(event) => setAdminGameId(event.target.value)}
-                    placeholder="Например: @username"
+                    placeholder="Например: 102938"
                     autoComplete="off"
                   />
                   <button
@@ -1991,7 +1991,7 @@ export default function App() {
                           ? `@${adminPlayer.username}`
                           : "Игрок BrainGG"}
                       </h3>
-                      <p>Telegram: <b>@{adminPlayer.username || "username не указан"}</b></p>
+                      <p>Game ID: <b>{adminPlayer.game_id}</b></p>
                     </div>
                     <div className="admin-player-stats">
                       <div>
@@ -2020,7 +2020,7 @@ export default function App() {
                         <div className="admin-free-case-list">
                           {adminPlayer.free_case_credits.map((credit) => (
                             <div className="admin-free-case-row" key={credit.case_name}>
-                              <span className="admin-free-case-label">{cases.find((item) => item.name === credit.case_name) && <img src={caseImageSrc(cases.find((item) => item.name === credit.case_name))} alt="" />} {credit.case_name}</span>
+                              <span className="admin-free-case-label">{cases.find((item) => item.caseName === credit.case_name) && <img src={caseImageSrc(cases.find((item) => item.caseName === credit.case_name))} alt="" />} {cases.find((item) => item.caseName === credit.case_name)?.name || credit.case_name}</span>
                               <strong>×{credit.amount}</strong>
                             </div>
                           ))}
@@ -2064,7 +2064,7 @@ export default function App() {
                             onChange={(event) => setAdminCaseName(event.target.value)}
                           >
                             {cases.map((item) => (
-                              <option key={item.id} value={item.name}>
+                              <option key={item.id} value={item.caseName}>
                                 {item.name}
                               </option>
                             ))}
