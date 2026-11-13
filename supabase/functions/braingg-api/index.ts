@@ -255,39 +255,7 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
-
     const isAdmin = adminIds.includes(String(telegramUser.id));
-
-    // Admin lookup accepts public Player ID (100..100000), BG-Game ID,
-    // @username/username, or a Telegram ID. Telegram ID remains the
-    // immutable internal key used by inventory and all existing RPCs.
-    const findAdminPlayer = async (rawValue: unknown) => {
-      const value = String(rawValue ?? "").trim();
-      if (!value || value.length > 100) {
-        return { data: null, error: null, invalid: true };
-      }
-
-      const columns = "player_id, telegram_id, game_id, username, balance, free_cases";
-      if (/^\d+$/.test(value)) {
-        const numeric = Number(value);
-        if (Number.isSafeInteger(numeric) && numeric >= 100 && numeric <= 100000) {
-          return await supabase.from("players").select(columns).eq("player_id", numeric).maybeSingle();
-        }
-        return await supabase.from("players").select(columns).eq("telegram_id", numeric).maybeSingle();
-      }
-
-      if (value.startsWith("@")) {
-        return await supabase.from("players").select(columns)
-          .ilike("username", value.slice(1)).maybeSingle();
-      }
-
-      const byGameId = await supabase.from("players").select(columns)
-        .ilike("game_id", value).maybeSingle();
-      if (byGameId.data || byGameId.error) return byGameId;
-
-      return await supabase.from("players").select(columns)
-        .ilike("username", value.replace(/^@/, "")).maybeSingle();
-    };
 
     // Create a Telegram Stars invoice. The client never credits its own balance.
     if (body.action === "create_stars_invoice") {
@@ -382,13 +350,13 @@ Deno.serve(async (req) => {
       if (rankingError) console.error("Leaderboard loading failed:", rankingError.message);
       const rankIds = (rankingRows || []).map((row: any) => row.telegram_id);
       const { data: rankPlayers } = rankIds.length
-        ? await supabase.from("players").select("telegram_id, username, game_id, player_id").in("telegram_id", rankIds)
+        ? await supabase.from("players").select("telegram_id, username, game_id").in("telegram_id", rankIds)
         : { data: [] };
       const rankMap = new Map((rankPlayers || []).map((p: any) => [String(p.telegram_id), p]));
       const leaderboard = (rankingRows || []).map((row: any) => {
         const p: any = rankMap.get(String(row.telegram_id)) || {};
         const xp = Number(row.xp || 0);
-        return { username: p.username || "Игрок", player_id: p.player_id, game_id: p.player_id == null ? null : String(p.player_id), xp, level: Math.floor(Math.sqrt(xp / 100)) + 1,
+        return { username: p.username || "Игрок", game_id: p.game_id, xp, level: Math.floor(Math.sqrt(xp / 100)) + 1,
           total_cases_opened: Number(row.total_cases_opened || 0) };
       });
 
@@ -454,10 +422,10 @@ Deno.serve(async (req) => {
 
     if (body.action === "admin_adjust_xp") {
       if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
-      const lookupValue = body.playerId ?? body.gameId ?? body.query ?? body.search;
+      const gameId = String(body.gameId || "").trim();
       const amount = Number(body.amount);
-      if (!String(lookupValue ?? "").trim() || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return respond({ error: "Некорректный ID игрока или количество XP" }, 400);
-      const { data: targetPlayer, error: targetError } = await findAdminPlayer(lookupValue);
+      if (!gameId || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return respond({ error: "Некорректное количество XP" }, 400);
+      const { data: targetPlayer, error: targetError } = await supabase.from("players").select("telegram_id").eq("game_id", gameId).maybeSingle();
       if (targetError || !targetPlayer) return respond({ error: "Игрок не найден" }, 404);
       const { data: xp, error } = await supabase.rpc("admin_adjust_player_xp", { p_player_telegram_id: targetPlayer.telegram_id, p_amount: amount });
       if (error) { console.error("Admin XP adjustment failed:", error.message); return respond({ error: "Не удалось начислить XP. Применена ли миграция Season 2?" }, 400); }
@@ -480,12 +448,17 @@ Deno.serve(async (req) => {
         return respond({ error: "Доступ запрещён" }, 403);
       }
 
-      const lookupValue = body.playerId ?? body.gameId ?? body.query ?? body.search ?? body.username ?? body.telegramId;
-      const { data: player, error, invalid } = await findAdminPlayer(lookupValue);
+      const gameId = String(body.gameId ?? "").trim();
 
-      if (invalid) {
-        return respond({ error: "Укажи Player ID (100–100000), Game ID, Telegram ID или username" }, 400);
+      if (!gameId || gameId.length > 100) {
+        return respond({ error: "Укажи корректный Game ID" }, 400);
       }
+
+      const { data: player, error } = await supabase
+        .from("players")
+        .select("telegram_id, game_id, username, balance, free_cases")
+        .eq("game_id", gameId)
+        .maybeSingle();
 
       if (error) {
         console.error("Admin player lookup failed:", error.message);
@@ -494,7 +467,7 @@ Deno.serve(async (req) => {
 
       if (!player) {
         return respond(
-          { error: "Игрок с таким ID или username не найден" },
+          { error: "Игрок с таким Game ID не найден" },
           404,
         );
       }
@@ -537,11 +510,6 @@ Deno.serve(async (req) => {
         success: true,
         player: {
           ...player,
-          // Public-facing Game ID is the sequential Player ID (100..100000).
-          // Keep the original generated BG-... value only for internal compatibility.
-          player_id: player.player_id,
-          game_id: String(player.player_id),
-          internal_game_id: player.game_id,
           ...credits,
           progress: playerProgress || null,
         },
@@ -556,7 +524,7 @@ Deno.serve(async (req) => {
         return respond({ error: "Доступ запрещён" }, 403);
       }
 
-      const lookupValue = body.playerId ?? body.gameId ?? body.query ?? body.search;
+      const gameId = String(body.gameId ?? "").trim();
       const grantType = String(body.grantType ?? "").trim();
       const amount = Number(body.amount);
 
@@ -574,8 +542,8 @@ Deno.serve(async (req) => {
         (name) => name.toLowerCase() === rawCaseName.toLowerCase(),
       ) ?? "";
 
-      if (!String(lookupValue ?? "").trim() || String(lookupValue).length > 100) {
-        return respond({ error: "Укажи Player ID, Game ID, Telegram ID или username" }, 400);
+      if (!gameId || gameId.length > 100) {
+        return respond({ error: "Укажи корректный Game ID" }, 400);
       }
 
       if (
@@ -607,7 +575,11 @@ Deno.serve(async (req) => {
         return respond({ error: "Выбери брейнрота" }, 400);
       }
 
-      const { data: player, error: playerError } = await findAdminPlayer(lookupValue);
+      const { data: player, error: playerError } = await supabase
+        .from("players")
+        .select("telegram_id, game_id")
+        .eq("game_id", gameId)
+        .maybeSingle();
 
       if (playerError) {
         console.error(
@@ -619,7 +591,7 @@ Deno.serve(async (req) => {
 
       if (!player) {
         return respond(
-          { error: "Игрок с таким ID или username не найден" },
+          { error: "Игрок с таким Game ID не найден" },
           404,
         );
       }
@@ -739,7 +711,10 @@ Deno.serve(async (req) => {
         return respond({ error: "Could not load inventory" }, 500);
       }
 
-      return respond({ success: true, items: items ?? [] });
+      const uniqueItems = Array.from(
+        new Map((items ?? []).map((item) => [item.item_name, item])).values(),
+      );
+      return respond({ success: true, items: uniqueItems });
     }
 
     // ПРОДАЖА ПРЕДМЕТА
@@ -901,7 +876,7 @@ Deno.serve(async (req) => {
         },
         { onConflict: "telegram_id" },
       )
-      .select("player_id, telegram_id, game_id, username, balance, free_cases")
+      .select("telegram_id, game_id, username, balance, free_cases")
       .single();
 
     if (error) {
@@ -930,10 +905,6 @@ Deno.serve(async (req) => {
       success: true,
       player: {
         ...player,
-        // Show sequential public ID everywhere as "Game ID".
-        player_id: player.player_id,
-        game_id: String(player.player_id),
-        internal_game_id: player.game_id,
         ...credits,
       },
     });
