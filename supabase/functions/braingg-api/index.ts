@@ -8,6 +8,21 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const QUIZ_QUESTIONS = [
+  { id: "sab_01", question: "Как называется игра, по мотивам которой создана коллекция BrainGG?", options: ["Steal a Brainrot", "Pet Simulator", "Brookhaven", "Doors"], answer: 0, explanation: "BrainGG вдохновлён коллекцией персонажей Steal a Brainrot." },
+  { id: "sab_02", question: "Какой персонаж известен как акула в кроссовках?", options: ["John Pork", "Tralalero Tralala", "Meowl", "Skibidi Toilet"], answer: 1, explanation: "Tralalero Tralala — знаменитый акулий персонаж." },
+  { id: "sab_03", question: "Как зовут персонажа-свинью с человеческим лицом?", options: ["Meowl", "John Pork", "Strawberry Elephant", "Dragon Cannelloni"], answer: 1, explanation: "Это John Pork." },
+  { id: "sab_04", question: "Какой из этих персонажей сочетает кота и сову?", options: ["Meowl", "Bombardiro Crocodilo", "Ballerina Cappuccina", "Los Tralaleritos"], answer: 0, explanation: "Meowl — гибрид кота и совы." },
+  { id: "sab_05", question: "Какой персонаж является огромным слоном с клубничной тематикой?", options: ["Dragon Cannelloni", "Strawberry Elephant", "Headless Horseman", "Lirili Larila"], answer: 1, explanation: "Это Strawberry Elephant." },
+  { id: "sab_06", question: "Как называется персонаж-дракон из коллекции?", options: ["Dragon Cannelloni", "Cappuccino Assassino", "Noobini Pizzanini", "Trippi Troppi"], answer: 0, explanation: "Его имя — Dragon Cannelloni." },
+  { id: "sab_07", question: "Какой персонаж связан с легендой о всаднике без головы?", options: ["Headless Horseman", "John Pork", "Meowl", "Bombardiro Crocodilo"], answer: 0, explanation: "Это Headless Horseman." },
+  { id: "sab_08", question: "Как называется валюта баланса в BrainGG?", options: ["Robux", "Stars", "GG", "Gems"], answer: 2, explanation: "Внутренняя валюта BrainGG — GG." },
+  { id: "sab_09", question: "Сколько бесплатных попыток викторины доступно каждый день?", options: ["1", "2", "3", "5"], answer: 2, explanation: "Каждому игроку доступно три ответа в день." },
+  { id: "sab_10", question: "Что происходит с предметом после успешного открытия кейса?", options: ["Он удаляется", "Он попадает в инвентарь", "Он превращается в XP", "Он отправляется другому игроку"], answer: 1, explanation: "Выигранный предмет сохраняется в инвентаре." },
+  { id: "sab_11", question: "Как называется персонаж с туалетной тематикой?", options: ["Skibidi Toilet", "Meowl", "La Grande Combinasion", "Trippi Troppi"], answer: 0, explanation: "Это Skibidi Toilet." },
+  { id: "sab_12", question: "Как называется персонаж La Grande...?", options: ["La Grande Combinasion", "La Grande Pizza", "La Grande Meowl", "La Grande Dragon"], answer: 0, explanation: "Полное имя — La Grande Combinasion." },
+];
+
 const ALLOWED_CASES = [
   "Truckini Case",
   "Summer Case",
@@ -372,6 +387,37 @@ Deno.serve(async (req) => {
       if (error) { console.error("Task reward claim failed:", error.message); return respond({ error: "Не удалось получить награду" }, 400); }
       const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
       return respond({ success: true, result: data, balance: player?.balance });
+    }
+
+    if (body.action === "get_quiz_status") {
+      const { data, error } = await supabase.from("brainrot_quiz_attempts").select("is_correct").eq("telegram_id", telegramUser.id).eq("attempt_date", new Date().toISOString().slice(0, 10));
+      if (error) return respond({ error: "Викторина пока не настроена. Примени SQL-миграцию BrainGG Quiz." }, 503);
+      const rows = data || [];
+      return respond({ success: true, status: { used: rows.length, remaining: Math.max(0, 3 - rows.length), correct: rows.filter((row: any) => row.is_correct).length } });
+    }
+
+    if (body.action === "get_quiz_question") {
+      const { data: usedRows, error } = await supabase.from("brainrot_quiz_attempts").select("question_id, is_correct").eq("telegram_id", telegramUser.id).eq("attempt_date", new Date().toISOString().slice(0, 10));
+      if (error) return respond({ error: "Викторина пока не настроена. Примени SQL-миграцию BrainGG Quiz." }, 503);
+      const used = new Set((usedRows || []).map((row: any) => row.question_id));
+      const remaining = QUIZ_QUESTIONS.filter((question) => !used.has(question.id));
+      const status = { used: (usedRows || []).length, remaining: Math.max(0, 3 - (usedRows || []).length), correct: (usedRows || []).filter((row: any) => row.is_correct).length };
+      if (status.remaining <= 0 || !remaining.length) return respond({ success: true, question: null, status });
+      const question = remaining[Math.floor(Math.random() * remaining.length)];
+      return respond({ success: true, status, question: { id: question.id, question: question.question, options: question.options } });
+    }
+
+    if (body.action === "submit_quiz_answer") {
+      const questionId = String(body.questionId || "");
+      const optionIndex = Number(body.optionIndex);
+      const question = QUIZ_QUESTIONS.find((item) => item.id === questionId);
+      if (!question || !Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= question.options.length) return respond({ error: "Некорректный ответ" }, 400);
+      const correct = optionIndex === question.answer;
+      const { data, error } = await supabase.rpc("submit_brainrot_quiz_answer", { p_telegram_id: telegramUser.id, p_question_id: question.id, p_is_correct: correct });
+      if (error) { console.error("Quiz answer submit failed:", error.message); return respond({ error: error.message.includes("QUIZ_DAILY_LIMIT") ? "Все три попытки на сегодня использованы." : "Не удалось сохранить ответ. Проверь SQL-миграцию викторины." }, 400); }
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      return respond({ success: true, correct, reward_gg: correct ? 5 : 0, correct_answer: question.options[question.answer], correct_index: question.answer, explanation: question.explanation, balance: player?.balance, status: { used: result.used, remaining: Math.max(0, 3 - Number(result.used || 0)), correct: result.correct_count } });
     }
 
     if (body.action === "admin_adjust_xp") {
