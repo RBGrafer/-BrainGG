@@ -50,6 +50,8 @@ export default function App() {
   const [opening, setOpening] = useState(false);
   const [authError, setAuthError] = useState("");
   const [lastRewards, setLastRewards] = useState([]);
+  // Live Drops показывает только награды, подтверждённые сервером в этой сессии.
+  const [liveDrops, setLiveDrops] = useState([]);
   const [reelItems, setReelItems] = useState([]);
   const [reelPosition, setReelPosition] = useState(0);
   const [reelWinnerIndex, setReelWinnerIndex] = useState(-1);
@@ -604,6 +606,15 @@ export default function App() {
 
         const reward = data.result;
         rewards.push(reward);
+        setLiveDrops((previous) => [{
+          id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
+          item_name: reward.item_name || reward.name || "Brainrot",
+          rarity: reward.rarity || "Награда",
+          value_gg: Number(reward.value_gg || reward.sold_price || 0),
+          image: reward.image || reward.image_url || reward.photo_url,
+          case_name: selectedCase.name,
+          created_at: new Date().toISOString(),
+        }, ...previous].slice(0, 8));
         setPlayer((previous) => {
           if (!previous) return previous;
           return {
@@ -909,6 +920,19 @@ export default function App() {
               </button>
             ))}
           </nav>
+
+          <section className="live-drops-bar" aria-label="Live Drops">
+            <div className="live-drops-heading"><span className="live-pulse" /> <b>LIVE DROPS</b><small>ПОСЛЕДНИЕ ВЫПАДЕНИЯ</small></div>
+            <div className="live-drops-track">
+              {liveDrops.length ? liveDrops.map((drop) => (
+                <article className="live-drop-chip" key={drop.id}>
+                  <div className="live-drop-art">{brainrotImage(drop) ? <img src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>❄</span>}</div>
+                  <div><b>{drop.item_name}</b><small>{drop.case_name} · {drop.rarity}</small></div>
+                  {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
+                </article>
+              )) : <div className="live-drops-empty">Здесь появятся реальные выигрыши после открытия кейса</div>}
+            </div>
+          </section>
 
           {page === "Главная" && (
             <main className="content home-welcome">
