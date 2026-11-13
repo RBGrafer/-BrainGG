@@ -3,6 +3,22 @@ import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 
+// Human-readable case titles. Backend identifiers intentionally stay unchanged.
+const CASE_DISPLAY_NAMES = {
+  "Truckini Case": "Frostbite Case",
+  "Summer Case": "Aurora Case",
+  "Bloody Case": "Crimson Blizzard",
+  "Crafting Case": "Iceforge Case",
+  "Legend Case": "Glacial Legend",
+  "Elite Case": "Arctic Elite",
+  "All In Strawberry Elephant": "All In Strawberry Elephant",
+  "All In Headless Horseman": "All In Headless Horseman",
+};
+function displayCaseName(value) {
+  const key = String(value || "");
+  return CASE_DISPLAY_NAMES[key] || key || "Кейс";
+}
+
 // Official/game-style reference artwork for the named Steal a Brainrot characters.
 const BRAINROT_ART = [
   { match: ["skibidi toilet"], image: "https://img.g4mmo.com/images/class/steal%20a%20brainrot%20Skibidi%20Toilet-095404.png" },
@@ -1291,7 +1307,7 @@ export default function App() {
               {liveDrops.length ? liveDrops.map((drop) => (
                 <article className="live-drop-chip" key={drop.id}>
                   <div className="live-drop-art">{brainrotImage(drop) ? <img src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>❄</span>}</div>
-                  <div><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {drop.case_name || "Кейс"} · {drop.rarity || "Награда"}</small></div>
+                  <div><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
                   {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
                 </article>
               )) : <div className="live-drops-empty">Здесь появятся реальные выигрыши после открытия кейса</div>}
@@ -1941,7 +1957,7 @@ export default function App() {
                       <div className="admin-history-list">{adminLogs.slice(0, 5).map((log) => (
                         <div className="admin-history-row" key={log.id}>
                           <div className="admin-history-symbol">{log.action === "coins" ? "🪙" : log.action === "cases" ? "🎁" : "🧠"}</div>
-                          <div className="admin-history-main"><b>{log.action === "coins" ? `+${log.amount} GG` : log.action === "cases" ? `+${log.amount} ${log.case_name || "кейсов"}` : `+${log.amount} ${log.item_name || "брейнрот"}`}</b><small>Game ID: {log.game_id}</small></div>
+                          <div className="admin-history-main"><b>{log.action === "coins" ? `+${log.amount} GG` : log.action === "cases" ? `+${log.amount} ${displayCaseName(log.case_name) || "кейсов"}` : `+${log.amount} ${log.item_name || "брейнрот"}`}</b><small>Game ID: {log.game_id}</small></div>
                           <time>{log.created_at ? new Date(log.created_at).toLocaleString("ru-RU") : "—"}</time>
                         </div>
                       ))}</div>
@@ -2020,7 +2036,7 @@ export default function App() {
                         <div className="admin-free-case-list">
                           {adminPlayer.free_case_credits.map((credit) => (
                             <div className="admin-free-case-row" key={credit.case_name}>
-                              <span className="admin-free-case-label">{cases.find((item) => item.caseName === credit.case_name) && <img src={caseImageSrc(cases.find((item) => item.caseName === credit.case_name))} alt="" />} {cases.find((item) => item.caseName === credit.case_name)?.name || credit.case_name}</span>
+                              <span className="admin-free-case-label">{cases.find((item) => item.caseName === credit.case_name) && <img src={caseImageSrc(cases.find((item) => item.caseName === credit.case_name))} alt="" />} {cases.find((item) => item.caseName === credit.case_name)?.name || displayCaseName(credit.case_name)}</span>
                               <strong>×{credit.amount}</strong>
                             </div>
                           ))}
@@ -2188,7 +2204,7 @@ export default function App() {
                             {log.action === "coins"
                               ? `+${log.amount} GG`
                               : log.action === "cases"
-                              ? `+${log.amount} бесплатных ${log.case_name || "кейсов"}`
+                              ? `+${log.amount} бесплатных ${displayCaseName(log.case_name) || "кейсов"}`
                               : `+${log.amount} ${log.item_name || "брейнрот"}`}
                           </b>
                           <small>Game ID: {log.game_id}</small>
