@@ -162,22 +162,50 @@ export default function App() {
     }
     const ctx = getAudioContext();
     if (!ctx) return;
-    // Original, quiet winter ambience generated locally (no copyrighted recording).
-    const notes = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880, 698.46];
-    let step = 0;
-    const playBell = () => {
 
-      const start = ctx.currentTime;
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.type = "sine"; osc.frequency.value = notes[step % notes.length];
-      gain.gain.setValueAtTime(0.0001, start); gain.gain.exponentialRampToValueAtTime(0.012, start + 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 1.8);
-      osc.connect(gain); gain.connect(ctx.destination); osc.start(start); osc.stop(start + 1.85);
-      step += 1;
+    // Original, royalty-free synthesized winter/Christmas ambience:
+    // soft warm pad chords, gentle bell arpeggios and a quiet bass pulse.
+    // It evokes the calm festive mood of the reference video without copying its recording or melody.
+    const bars = [
+      { chord: [196.00, 246.94, 293.66], bass: 98.00, bells: [783.99, 659.25, 587.33, 659.25] },
+      { chord: [174.61, 220.00, 261.63], bass: 87.31, bells: [698.46, 587.33, 523.25, 587.33] },
+      { chord: [146.83, 185.00, 220.00], bass: 73.42, bells: [587.33, 659.25, 698.46, 659.25] },
+      { chord: [164.81, 207.65, 246.94], bass: 82.41, bells: [659.25, 783.99, 880.00, 783.99] },
+    ];
+    let barIndex = 0;
+    const playTone = (frequency, when, duration, volume, type = "sine", attack = 0.18) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const lowpass = ctx.createBiquadFilter();
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = type === "triangle" ? 1500 : 2600;
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, when);
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), when + attack);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      osc.connect(lowpass); lowpass.connect(gain); gain.connect(ctx.destination);
+      osc.start(when); osc.stop(when + duration + 0.04);
     };
-    playBell();
+    const playBar = () => {
+      if (ctx.state !== "running") return;
+      const now = ctx.currentTime + 0.04;
+      const bar = bars[barIndex % bars.length];
+      // Slow sustained chord bed.
+      bar.chord.forEach((frequency, index) => playTone(frequency, now, 3.7, 0.0065, "sine", 0.7 + index * 0.08));
+      // A gentle bass note keeps the music warm, not distracting.
+      playTone(bar.bass, now, 2.8, 0.009, "sine", 0.45);
+      // Four soft celesta-like notes across the bar.
+      bar.bells.forEach((frequency, index) => {
+        const at = now + index * 0.82;
+        playTone(frequency, at, 1.05, 0.012, "sine", 0.025);
+        playTone(frequency * 2, at + 0.015, 0.62, 0.0028, "sine", 0.02);
+      });
+      barIndex += 1;
+    };
+    playBar();
     if (musicTimerRef.current) window.clearInterval(musicTimerRef.current);
-    musicTimerRef.current = window.setInterval(playBell, 1450);
+    musicTimerRef.current = window.setInterval(playBar, 3300);
   }
 
   useEffect(() => () => { if (musicTimerRef.current) window.clearInterval(musicTimerRef.current); }, []);
@@ -1198,7 +1226,7 @@ export default function App() {
                   <div className={`case-detail-visual case-theme-${selectedCase.color}`}>
                     <div className="case-detail-art-frame">
                       {selectedCase.image ? (
-                        <img src={selectedCase.image} alt={selectedCase.name} onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.nextElementSibling.style.display = "grid"; }} />
+                        <img src={selectedCase.image} alt={selectedCase.name} loading="eager" decoding="async" onError={(event) => { const img = event.currentTarget; const key = ({"Truckini Case":"truckini","Summer Case":"summer","Bloody Case":"bloody","Crafting Case":"crafting","Legend Case":"legend","Elite Case":"elite","All In Strawberry Elephant":"all-in-strawberry","All In Headless Horseman":"all-in-horseman"})[selectedCase.name]; const fallback = key ? `/cases/${key}.webp` : ""; if (fallback && !img.dataset.fallbackTried) { img.dataset.fallbackTried = "1"; img.src = fallback; } else { img.style.display = "none"; img.nextElementSibling.style.display = "grid"; } }} />
                       ) : null}
                       <span className="case-detail-art-fallback" style={{ display: selectedCase.image ? "none" : "grid" }}>{selectedCase.emoji}</span>
                     </div>
@@ -1344,7 +1372,7 @@ export default function App() {
                               }}
                             >
                               <div className="case-card-art">
-                                {item.image ? <img src={item.image} alt={item.name} onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement.classList.add("has-image-error"); }} /> : <span>{item.emoji}</span>}
+                                {item.image ? <img src={item.image} alt={item.name} loading="eager" decoding="async" onError={(event) => { const img = event.currentTarget; const fallback = `/cases/${({"Truckini Case":"truckini","Summer Case":"summer","Bloody Case":"bloody","Crafting Case":"crafting","Legend Case":"legend","Elite Case":"elite","All In Strawberry Elephant":"all-in-strawberry","All In Headless Horseman":"all-in-horseman"}[item.name] || "")}.webp`; if (!img.dataset.fallbackTried && fallback !== "/cases/.webp") { img.dataset.fallbackTried = "1"; img.src = fallback; } else { img.style.display = "none"; img.parentElement.classList.add("has-image-error"); } }} /> : <span>{item.emoji}</span>}
                               </div>
                               <div className="case-card-details">
                                 <h4>{item.name}</h4>
