@@ -50,6 +50,7 @@ export default function App() {
   const [upgradeRotation, setUpgradeRotation] = useState(0);
 
   const [sellingId, setSellingId] = useState(null);
+  const [sellingAll, setSellingAll] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
 
   const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
@@ -616,13 +617,8 @@ export default function App() {
   }
 
   async function sellItem(item) {
-    if (sellingId || upgradeLoading) return;
+    if (sellingId || sellingAll || upgradeLoading) return;
 
-    const price = Number(item.value_gg) || 0;
-
-    if (!window.confirm(`Продать ${item.item_name} за ${price} GG?`)) {
-      return;
-    }
 
     setSellingId(item.id);
     setActionMessage("");
@@ -669,6 +665,36 @@ export default function App() {
       );
     } finally {
       setSellingId(null);
+    }
+  }
+
+  async function sellAllItems() {
+    if (sellingAll || sellingId || upgradeLoading || inventory.length === 0) return;
+    setSellingAll(true);
+    setActionMessage("");
+    let soldCount = 0;
+    let earned = 0;
+    const failed = [];
+    try {
+      for (const item of [...inventory]) {
+        try {
+          const { data, error } = await supabase.functions.invoke("braingg-api", {
+            body: { initData: initData(), action: "sell_item", inventoryId: item.id },
+          });
+          if (error) throw error;
+          if (!data?.success || !data?.result?.success) throw new Error(data?.error || "Не удалось продать предмет");
+          soldCount += 1;
+          earned += Number(data.result.sold_price) || 0;
+          setPlayer((previous) => ({ ...previous, balance: data.result.balance }));
+          setInventory((previous) => previous.filter((entry) => entry.id !== item.id));
+        } catch (error) {
+          console.error("Ошибка массовой продажи:", item.id, error);
+          failed.push(item.item_name || "Предмет");
+        }
+      }
+      setActionMessage(soldCount ? `Продано предметов: ${soldCount}. Получено ${earned.toLocaleString("ru-RU")} GG.${failed.length ? ` Не удалось продать: ${failed.length}.` : ""}` : "Не удалось продать предметы. Попробуй ещё раз.");
+    } finally {
+      setSellingAll(false);
     }
   }
 
@@ -824,7 +850,7 @@ export default function App() {
         ))}
       </div>
       <header className="header">
-        <div className="logo">💜 BrainGG</div>
+        <div className="logo"><span className="logo-heart">💜</span> BrainGG</div>
         <div className="balance">
           🪙 {player ? player.balance : 0} GG
         </div>
@@ -857,32 +883,15 @@ export default function App() {
           </nav>
 
           {page === "Главная" && (
-            <main className="content">
-              <h2>Добро пожаловать в BrainGG!</h2>
-              <p>
-                Открывай кейсы, собирай персонажей и улучшай свою коллекцию.
-              </p>
-
-              {player && (
-                <>
-                  <p>
-                    Привет,{" "}
-                    <b>
-                      {player.username ? `@${player.username}` : "игрок"}!
-                    </b>
-                  </p>
-                  <p>
-                    Твой игровой ID: <b>{player.game_id}</b>
-                  </p>
-                </>
-              )}
-
-              <button
-                className="main-button"
-                onClick={() => changePage("Кейсы")}
-              >
-                Смотреть кейсы 🎁
-              </button>
+            <main className="content home-welcome">
+              <div className="home-welcome-inner">
+                <div className="home-welcome-emblem">❄</div>
+                <p className="home-greeting">Привет, <b>@{player?.username || "игрок"}!</b></p>
+                <h2>Добро пожаловать в BrainGG!</h2>
+                <p>Открывай кейсы, собирай персонажей и улучшай свою коллекцию.</p>
+                <p className="home-luck">Удачи!</p>
+                <button className="main-button" onClick={() => changePage("Кейсы")}>Смотреть кейсы 🎁</button>
+              </div>
             </main>
           )}
 
@@ -1369,10 +1378,10 @@ export default function App() {
               {inventoryLoading && <div className="inventory-state"><div className="inventory-loader">❄</div><b>Собираем коллекцию...</b></div>}
               {inventoryError && <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div>}
               {!inventoryLoading && !inventoryError && inventory.length > 0 && (<>
-                <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select></div>
+                <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select><button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button></div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className="inventory-rarity">{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><span>🧠</span><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className="inventory-rarity">{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><span>🧠</span><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
