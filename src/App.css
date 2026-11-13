@@ -930,3 +930,9 @@ body {
   .case-roulette-strip { transition-duration: .01ms !important; }
   .case-roulette-viewport.is-rolling .case-roulette-pointer { animation: none !important; }
 }
+
+/* Brainrot character artwork */
+.case-content-item .brainrot-thumb { width:48px;height:48px;flex:0 0 48px;object-fit:contain;border-radius:10px;background:radial-gradient(circle,#8adfff24,transparent 72%);filter:drop-shadow(0 4px 9px #0008); }
+.inventory-art .brainrot-inventory-image { position:relative;z-index:1;width:100%;height:100%;max-width:150px;max-height:142px;object-fit:contain;padding:8px;filter:drop-shadow(0 8px 14px #53cfff55); }
+.upgrade-item-emoji-image { width:48px;height:48px;flex:0 0 48px;object-fit:contain;filter:drop-shadow(0 4px 8px #55cfff44); }
+.case-roulette-item > img { object-fit:contain;padding:2px;border-radius:8px;background:radial-gradient(circle,#7bdcff20,transparent 72%); }
