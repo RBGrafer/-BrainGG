@@ -3,6 +3,24 @@ import React, { useEffect, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 
+// Official/game-style reference artwork for the named Steal a Brainrot characters.
+const BRAINROT_ART = [
+  { match: ["skibidi toilet"], image: "https://img.g4mmo.com/images/class/steal%20a%20brainrot%20Skibidi%20Toilet-095404.png" },
+  { match: ["john pork"], image: "https://nmomkdgujymyytwdbgsf.supabase.co/storage/v1/object/public/brainrot-assets/images/0.37983365394187085.webp" },
+  { match: ["headless horseman"], image: "https://www.bloxah.com/uploads/images/goods/steal-a-brainrot/all-server-headless-horseman.png?v=1" },
+  { match: ["meowl"], image: "https://gamebox.biz/wp-content/uploads/2025/10/meowl-myaovl-v-ukradi-breynrot-steal-a-brainrot-kak-poluchit-i-ego-harakteristiki.webp" },
+  { match: ["strawberry elephant"], image: "https://sabapi.voxelvalues.com/uploads/compressed_1758353786097_52w553.png" },
+  { match: ["dragon cannelloni", "dragon canneloni"], image: "https://bloxskins.com/cdn/shop/files/New_Dragon_Canneloni.png?v=1774435470" },
+  { match: ["la grande combinasion"], image: "https://cdn.shopify.com/s/files/1/0815/2068/9482/files/2E5Nv3x.png?v=1754504186" },
+];
+
+function brainrotImage(item) {
+  const supplied = item?.image || item?.image_url || item?.photo_url || item?.avatar_url;
+  if (supplied) return supplied;
+  const name = String(item?.item_name || item?.name || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  return BRAINROT_ART.find((entry) => entry.match.some((key) => name.includes(key)))?.image || "";
+}
+
 function calculateUpgradeChance(source, target) {
   const sourcePrice = Number(source?.value_gg);
   const targetPrice = Number(target?.value_gg);
@@ -963,7 +981,7 @@ export default function App() {
                         image: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.image || upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.image_url,
                       }))).map((reward, index) => (
                         <div className={`case-roulette-item ${index === reelWinnerIndex ? "is-winner" : ""}`} key={`${reward.item_name}-${index}`}>
-                          {reward.image ? <img src={reward.image} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
+                          {brainrotImage(reward) ? <img src={brainrotImage(reward)} alt={reward.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement.classList.add("has-image-error"); }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
                           <b>{reward.item_name}</b>
                           {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
                         </div>
@@ -1018,7 +1036,7 @@ export default function App() {
                     <div className="case-contents-grid">
                       {(upgradeTargets.length ? upgradeTargets.slice(0, 12) : []).map((item, index) => (
                         <div className="case-content-item" key={`${item.item_name}-${index}`}>
-                          <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>
+                          {brainrotImage(item) ? <img className="brainrot-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
                           <div><b>{item.item_name}</b><small>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small></div>
                         </div>
                       ))}
@@ -1135,7 +1153,7 @@ export default function App() {
                             disabled={upgradeLoading}
                             onClick={() => chooseSource(item)}
                           >
-                            <span className="upgrade-item-emoji">🧠</span>
+                            {brainrotImage(item) ? <img className="upgrade-item-emoji-image" src={brainrotImage(item)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="upgrade-item-emoji">🧠</span>}
 
                             <span className="upgrade-item-info">
                               <b>{item.item_name}</b>
@@ -1277,7 +1295,7 @@ export default function App() {
                               setActionMessage("");
                             }}
                           >
-                            <span className="upgrade-item-emoji">🧠</span>
+                            {brainrotImage(item) ? <img className="upgrade-item-emoji-image" src={brainrotImage(item)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="upgrade-item-emoji">🧠</span>}
 
                             <span className="upgrade-item-info">
                               <b>{item.item_name}</b>
@@ -1397,7 +1415,7 @@ export default function App() {
                 <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select><button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button></div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className="inventory-rarity">{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><span>🧠</span><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className="inventory-rarity">{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className="brainrot-inventory-image" src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
