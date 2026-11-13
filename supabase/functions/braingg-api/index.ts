@@ -382,13 +382,13 @@ Deno.serve(async (req) => {
       if (rankingError) console.error("Leaderboard loading failed:", rankingError.message);
       const rankIds = (rankingRows || []).map((row: any) => row.telegram_id);
       const { data: rankPlayers } = rankIds.length
-        ? await supabase.from("players").select("telegram_id, username, game_id").in("telegram_id", rankIds)
+        ? await supabase.from("players").select("telegram_id, username, game_id, player_id").in("telegram_id", rankIds)
         : { data: [] };
       const rankMap = new Map((rankPlayers || []).map((p: any) => [String(p.telegram_id), p]));
       const leaderboard = (rankingRows || []).map((row: any) => {
         const p: any = rankMap.get(String(row.telegram_id)) || {};
         const xp = Number(row.xp || 0);
-        return { username: p.username || "Игрок", game_id: p.game_id, xp, level: Math.floor(Math.sqrt(xp / 100)) + 1,
+        return { username: p.username || "Игрок", player_id: p.player_id, game_id: p.player_id == null ? null : String(p.player_id), xp, level: Math.floor(Math.sqrt(xp / 100)) + 1,
           total_cases_opened: Number(row.total_cases_opened || 0) };
       });
 
@@ -537,6 +537,11 @@ Deno.serve(async (req) => {
         success: true,
         player: {
           ...player,
+          // Public-facing Game ID is the sequential Player ID (100..100000).
+          // Keep the original generated BG-... value only for internal compatibility.
+          player_id: player.player_id,
+          game_id: String(player.player_id),
+          internal_game_id: player.game_id,
           ...credits,
           progress: playerProgress || null,
         },
@@ -896,7 +901,7 @@ Deno.serve(async (req) => {
         },
         { onConflict: "telegram_id" },
       )
-      .select("telegram_id, game_id, username, balance, free_cases")
+      .select("player_id, telegram_id, game_id, username, balance, free_cases")
       .single();
 
     if (error) {
@@ -925,6 +930,10 @@ Deno.serve(async (req) => {
       success: true,
       player: {
         ...player,
+        // Show sequential public ID everywhere as "Game ID".
+        player_id: player.player_id,
+        game_id: String(player.player_id),
+        internal_game_id: player.game_id,
         ...credits,
       },
     });
