@@ -794,3 +794,139 @@ body {
 .inventory-sell-all:hover:not(:disabled) { transform:translateY(-2px);filter:brightness(1.15); }
 .inventory-sell-all:disabled { opacity:.5;cursor:wait; }
 @media(max-width:760px){.inventory-toolbar{grid-template-columns:1fr 1fr}.inventory-search{grid-column:1/-1}.inventory-sell-all{grid-column:1/-1}}
+
+/* Winter case opening: dedicated artwork stage and centered animated reel */
+.case-detail-visual {
+  width: min(100%, 620px);
+  height: 320px;
+  padding: 18px;
+  border: 1px solid rgba(117, 218, 255, .42);
+  border-radius: 24px;
+  background: radial-gradient(ellipse at 50% 45%, #1c5b7c 0%, #102d45 48%, #071522 100%);
+  box-shadow: inset 0 0 55px #54c9ff20, 0 18px 55px #0008, 0 0 28px #49caff18;
+}
+.case-detail-visual::before {
+  display: block;
+  opacity: .55;
+  background: repeating-conic-gradient(from 5deg, #c9f4ff16 0deg 7deg, transparent 7deg 23deg);
+}
+.case-detail-art-frame {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: min(100%, 490px);
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid #9be7ff55;
+  border-radius: 18px;
+  background: radial-gradient(ellipse, #24658a 0%, #102e49 56%, #071522 100%);
+  box-shadow: 0 0 35px #64d7ff28, inset 0 0 35px #8ce5ff18;
+}
+.case-detail-art-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  object-fit: contain;
+  background: transparent;
+  filter: drop-shadow(0 12px 24px #0009);
+}
+.case-detail-art-fallback { display: grid; place-items: center; font-size: 120px; }
+.case-roulette-viewport {
+  position: relative;
+  height: 154px;
+  margin: 20px 0;
+  overflow: hidden;
+  border: 1px solid #62cfff55;
+  border-radius: 17px;
+  background: linear-gradient(180deg, #102b40, #081724);
+  box-shadow: inset 0 0 32px #42bfff1c;
+}
+.case-roulette-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: max-content;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  transform: translateX(calc(50% - (var(--reel-index, 0) * 132px + 66px)));
+  transition: transform 5.2s cubic-bezier(.08,.72,.08,1);
+  will-change: transform;
+}
+.case-roulette-item {
+  position: relative;
+  flex: 0 0 132px;
+  width: 132px;
+  min-width: 132px;
+  height: 100%;
+  padding: 10px 8px;
+  border-right: 1px solid #78d8ff20;
+  background: linear-gradient(180deg, #ffffff08, #ffffff02);
+  transition: background .25s, box-shadow .25s, transform .25s;
+}
+.case-roulette-item > span,
+.case-roulette-item > img {
+  display: block;
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  font-size: 38px;
+  filter: drop-shadow(0 5px 9px #0009);
+}
+.case-roulette-item b { max-width: 116px; color: #e7f8ff; font-size: 10px; line-height: 1.25; }
+.case-roulette-item small { color: #a8eaff; font-size: 10px; }
+.case-roulette-item.is-winner {
+  background: linear-gradient(180deg, #5acfff38, #1b6d9638);
+  box-shadow: inset 0 0 0 2px #a9edff, inset 0 0 26px #58caff44, 0 0 25px #56caff66;
+  transform: scale(.96);
+}
+.case-roulette-pointer {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 3px;
+  background: #e8fbff;
+  box-shadow: 0 0 10px #fff, 0 0 24px #63d7ff, 0 0 42px #48bfff;
+  pointer-events: none;
+}
+.case-roulette-pointer::before,
+.case-roulette-pointer::after {
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  content: "";
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+}
+.case-roulette-pointer::before { top: 0; border-top: 11px solid #eafaff; }
+.case-roulette-pointer::after { bottom: 0; border-bottom: 11px solid #eafaff; }
+.case-roulette-edge { position: absolute; z-index: 3; top: 0; bottom: 0; width: 56px; pointer-events: none; }
+.case-roulette-edge-left { left: 0; background: linear-gradient(90deg, #091725, transparent); }
+.case-roulette-edge-right { right: 0; background: linear-gradient(270deg, #091725, transparent); }
+.case-roulette-viewport.is-rolling { border-color: #9ae8ff; box-shadow: inset 0 0 36px #56caff36, 0 0 24px #56caff30; }
+.case-roulette-viewport.is-rolling .case-roulette-pointer { animation: winterPointerPulse .55s ease-in-out infinite alternate; }
+.case-card-art { background: radial-gradient(ellipse at 50% 45%, #1c5778, #081725 78%) !important; }
+.case-card-art img { padding: 8px; object-fit: contain; background: transparent !important; }
+.case-card-art.has-image-error::after { content: "❄️"; position: absolute; font-size: 64px; filter: drop-shadow(0 0 18px #7edfff); }
+@keyframes winterPointerPulse { from { opacity: .75; filter: brightness(.9); } to { opacity: 1; filter: brightness(1.5); } }
+@media (max-width: 620px) {
+  .case-detail-visual { height: 230px; padding: 10px; }
+  .case-roulette-viewport { height: 140px; }
+  .case-roulette-item { flex-basis: 118px; width: 118px; min-width: 118px; }
+  .case-roulette-strip { transform: translateX(calc(50% - (var(--reel-index, 0) * 118px + 59px))); transition-duration: 4.8s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .case-roulette-strip { transition-duration: .01ms !important; }
+  .case-roulette-viewport.is-rolling .case-roulette-pointer { animation: none !important; }
+}
