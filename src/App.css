@@ -1110,3 +1110,13 @@ body {
 .quiz-crystal{display:grid;place-items:center;width:70px;height:70px;margin:auto;border:1px solid #75d6ff55;border-radius:22px;background:radial-gradient(circle,#4bc7ff3b,transparent 70%);color:#b9efff;font-size:38px;box-shadow:0 0 32px #42baff22}
 .quiz-footnote{margin:-8px 0 0;color:#8eafc2;font-size:11px;text-align:center}
 @media(max-width:600px){.quiz-status-grid{gap:7px}.quiz-status-grid article{padding:12px 10px}.quiz-status-grid small{font-size:10px}.quiz-status-grid b{font-size:20px}.quiz-options{grid-template-columns:1fr}.quiz-option{min-height:52px}}
+
+
+/* Exclusive OG rarity treatment */
+.rarity-og {
+  color: #ffe9a3 !important;
+  border: 1px solid rgba(255, 218, 112, .78) !important;
+  background: linear-gradient(120deg, rgba(111, 76, 18, .48), rgba(255, 218, 112, .16)) !important;
+  box-shadow: 0 0 14px rgba(255, 205, 83, .22), inset 0 0 10px rgba(255, 230, 150, .08);
+  text-shadow: 0 0 8px rgba(255, 220, 120, .38);
+}
