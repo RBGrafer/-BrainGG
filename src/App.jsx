@@ -774,8 +774,35 @@ export default function App() {
 
   const wheelAngle = actualChance * 3.6;
 
+  const snowflakes = Array.from({ length: 34 }, (_, index) => ({
+    id: index,
+    left: `${(index * 37 + 11) % 100}%`,
+    delay: `${-((index * 13) % 24)}s`,
+    duration: `${18 + ((index * 7) % 19)}s`,
+    size: `${3 + ((index * 5) % 5)}px`,
+    opacity: 0.28 + ((index * 11) % 55) / 100,
+    drift: `${((index * 17) % 100) - 50}px`,
+  }));
+
   return (
     <div className="app">
+      <div className="winter-snow" aria-hidden="true">
+        {snowflakes.map((flake) => (
+          <i
+            className="snowflake"
+            key={flake.id}
+            style={{
+              left: flake.left,
+              animationDelay: flake.delay,
+              animationDuration: flake.duration,
+              width: flake.size,
+              height: flake.size,
+              opacity: flake.opacity,
+              "--snow-drift": flake.drift,
+            }}
+          />
+        ))}
+      </div>
       <header className="header">
         <div className="logo">💜 BrainGG</div>
         <div className="balance">
