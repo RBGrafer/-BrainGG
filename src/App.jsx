@@ -119,7 +119,7 @@ export default function App() {
   const [sellingAll, setSellingAll] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
 
-  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь", "Рейтинг", "Задания", "Профиль"];
+  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь", "Рейтинг", "Задания", "Викторина", "Профиль"];
   const [customError, setCustomError] = useState("");
 
   // Состояние защищённой админ-панели BrainGG
@@ -146,6 +146,12 @@ export default function App() {
   const [dailyClaimLoading, setDailyClaimLoading] = useState(false);
   const [taskClaimLoading, setTaskClaimLoading] = useState("");
   const [hubMessage, setHubMessage] = useState("");
+  const [quizStatus, setQuizStatus] = useState({ used: 0, remaining: 3, correct: 0 });
+  const [quizQuestion, setQuizQuestion] = useState(null);
+  const [quizSelected, setQuizSelected] = useState(null);
+  const [quizFeedback, setQuizFeedback] = useState("");
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizAnswered, setQuizAnswered] = useState(false);
   const [adminGameStats, setAdminGameStats] = useState(null);
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupStars, setTopupStars] = useState(100);
@@ -443,6 +449,50 @@ export default function App() {
       console.error("Game hub loading failed:", error);
       setHubMessage("Игровой центр пока недоступен. Проверь миграцию Season 2 в Supabase.");
     } finally { setHubLoading(false); }
+  }
+
+  async function loadQuizStatus() {
+    if (!initData()) return;
+    const { data, error } = await supabase.functions.invoke("braingg-api", {
+      body: { initData: initData(), action: "get_quiz_status" },
+    });
+    if (error || !data?.success) throw new Error(data?.error || "Не удалось загрузить викторину");
+    setQuizStatus(data.status);
+    return data.status;
+  }
+
+  async function startQuizQuestion() {
+    if (quizLoading) return;
+    setQuizLoading(true); setQuizFeedback(""); setQuizSelected(null); setQuizAnswered(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "get_quiz_question" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось загрузить вопрос");
+      setQuizQuestion(data.question || null);
+      if (!data.question) setQuizFeedback("На сегодня вопросы закончились. Загляни завтра!");
+      if (data.status) setQuizStatus(data.status);
+    } catch (error) { setQuizFeedback(error.message || "Викторина временно недоступна."); }
+    finally { setQuizLoading(false); }
+  }
+
+  async function submitQuizAnswer() {
+    if (quizLoading || quizAnswered || quizSelected === null || !quizQuestion) return;
+    setQuizLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "submit_quiz_answer", questionId: quizQuestion.id, optionIndex: quizSelected },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось проверить ответ");
+      setQuizAnswered(true);
+      setQuizStatus(data.status);
+      setQuizFeedback(data.correct ? `Верно! +${data.reward_gg} GG 🎉` : `Неверно. Правильный ответ: ${data.correct_answer}`);
+      if (data.balance !== undefined) setPlayer(current => current ? { ...current, balance: data.balance } : current);
+      setQuizQuestion(current => current ? { ...current, explanation: data.explanation || "", correctIndex: data.correct_index } : current);
+    } catch (error) { setQuizFeedback(error.message || "Не удалось проверить ответ."); }
+    finally { setQuizLoading(false); }
   }
 
   async function claimDailyReward() {
@@ -810,6 +860,10 @@ export default function App() {
     }
 
     if (["Рейтинг", "Задания", "Профиль"].includes(nextPage)) await loadGameHub();
+    if (nextPage === "Викторина") {
+      try { await loadQuizStatus(); await startQuizQuestion(); }
+      catch (error) { setQuizFeedback(error.message || "Викторина временно недоступна."); }
+    }
 
     if (nextPage === "Админка" && isAdmin) {
       await loadAdminGameStats();
@@ -1762,6 +1816,28 @@ export default function App() {
               {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
               <section className="season-panel"><h3>Текущие задания</h3>{(gameHub.tasks||[]).map((task)=><article className="mission-card" key={task.id}><div className="mission-icon">✦</div><div className="mission-info"><b>{task.title}</b><p>{task.description}</p><div className="mission-progress"><span style={{width:`${Math.min(100,Number(task.progress||0)/task.goal*100)}%`}}/></div><small>{Math.min(Number(task.progress||0),task.goal)} / {task.goal}</small></div><div className="mission-reward"><b>+{task.reward} GG</b><small>+{task.xp} XP</small><button className="case-button" disabled={!task.progress||task.progress<task.goal||task.claimed||taskClaimLoading===task.id} onClick={()=>claimTaskReward(task.id)}>{task.claimed?"Получено":taskClaimLoading===task.id?"...":"Забрать"}</button></div></article>)}</section>
               <section className="season-panel"><h3>Достижения</h3><div className="achievement-grid">{[{name:"Первый шаг",desc:"Открой первый кейс",ok:Number(gameHub.progress?.total_cases_opened||0)>=1},{name:"Коллекционер",desc:"Открой 10 кейсов",ok:Number(gameHub.progress?.total_cases_opened||0)>=10},{name:"Торговец",desc:"Продай первый предмет",ok:Number(gameHub.progress?.total_sales||0)>=1},{name:"Мастер улучшений",desc:"Улучши первый предмет",ok:Number(gameHub.progress?.total_upgrades||0)>=1}].map((a)=><article className={`achievement-card ${a.ok?"unlocked":""}`} key={a.name}><span>{a.ok?"🏆":"🔒"}</span><b>{a.name}</b><small>{a.desc}</small></article>)}</div></section>
+            </main>
+          )}
+
+          {page === "Викторина" && (
+            <main className="content season-page quiz-page">
+              <header className="season-page-heading"><span className="season-kicker">BRAIN GG DAILY QUIZ</span><h2>❄ Викторина BrainGG</h2><p>Отвечай на вопросы, проверяй знания и получай монеты.</p></header>
+              <section className="quiz-status-grid">
+                <article><small>Попыток сегодня</small><b>{quizStatus.used || 0} / 3</b></article>
+                <article><small>Осталось попыток</small><b>{quizStatus.remaining ?? 3}</b></article>
+                <article><small>Правильных ответов</small><b>{quizStatus.correct || 0}</b></article>
+              </section>
+              <section className="season-panel quiz-card">
+                <div className="quiz-reward-pill">✦ +5 GG за правильный ответ</div>
+                {quizQuestion ? <>
+                  <span className="season-kicker">ВОПРОС {Math.min((quizStatus.used || 0) + 1, 3)} ИЗ 3</span>
+                  <h3 className="quiz-question-title">{quizQuestion.question}</h3>
+                  <div className="quiz-options">{quizQuestion.options.map((option,index)=><button key={`${quizQuestion.id}-${index}`} className={`quiz-option ${quizSelected===index?"selected":""} ${quizAnswered&&index===quizQuestion.correctIndex?"correct":""} ${quizAnswered&&quizSelected===index&&index!==quizQuestion.correctIndex?"incorrect":""}`} disabled={quizAnswered||quizLoading} onClick={()=>setQuizSelected(index)}><span>{String.fromCharCode(65+index)}</span>{option}</button>)}</div>
+                  {quizFeedback && <div className={`quiz-feedback ${quizFeedback.startsWith("Верно")?"success":""}`}>{quizFeedback}{quizQuestion.explanation&&quizAnswered?<small>{quizQuestion.explanation}</small>:null}</div>}
+                  {!quizAnswered ? <button className="main-button quiz-action" disabled={quizSelected===null||quizLoading} onClick={submitQuizAnswer}>{quizLoading?"Проверяем...":"Ответить"}</button> : <button className="main-button quiz-action" disabled={quizStatus.remaining<=0||quizLoading} onClick={startQuizQuestion}>{quizStatus.remaining>0?"Следующий вопрос":"Попытки закончились"}</button>}
+                </> : <div className="quiz-empty"><div className="quiz-crystal">❄</div><h3>{quizStatus.remaining<=0?"На сегодня всё!":"Готов проверить свои знания?"}</h3><p>{quizFeedback || "Каждый день доступны 3 попытки. За каждый правильный ответ начисляется 5 GG."}</p><button className="main-button quiz-action" disabled={quizLoading||quizStatus.remaining<=0} onClick={startQuizQuestion}>{quizLoading?"Загружаем...":quizStatus.remaining>0?"Начать викторину":"Возвращайся завтра"}</button></div>}
+              </section>
+              <p className="quiz-footnote">Попытка расходуется после отправки ответа. Награда начисляется сервером, максимум 15 GG в день.</p>
             </main>
           )}
 
