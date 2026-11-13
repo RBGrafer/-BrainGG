@@ -257,20 +257,6 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
     const isAdmin = adminIds.includes(String(telegramUser.id));
 
-    // Admin player actions now identify players by their Telegram username.
-    // Telegram ID remains the internal immutable key for balances/inventory.
-    const findPlayerByUsername = async (rawUsername: unknown) => {
-      const username = String(rawUsername ?? "").trim().replace(/^@/, "");
-      if (!username || username.length > 32 || !/^[A-Za-z0-9_]+$/.test(username)) {
-        return { data: null, error: null, invalid: true };
-      }
-      return await supabase
-        .from("players")
-        .select("telegram_id, game_id, username, balance, free_cases")
-        .ilike("username", username)
-        .maybeSingle();
-    };
-
     // Create a Telegram Stars invoice. The client never credits its own balance.
     if (body.action === "create_stars_invoice") {
       const stars = Number(body.stars);
@@ -436,12 +422,11 @@ Deno.serve(async (req) => {
 
     if (body.action === "admin_adjust_xp") {
       if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
-      const username = body.username ?? body.playerUsername;
+      const gameId = String(body.gameId || "").trim();
       const amount = Number(body.amount);
-      if (!String(username ?? "").trim() || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return respond({ error: "Укажи Telegram username и корректное количество XP" }, 400);
-      const { data: targetPlayer, error: targetError, invalid } = await findPlayerByUsername(username);
-      if (invalid) return respond({ error: "Некорректный Telegram username" }, 400);
-      if (targetError || !targetPlayer) return respond({ error: "Игрок с таким Telegram username не найден" }, 404);
+      if (!gameId || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return respond({ error: "Некорректное количество XP" }, 400);
+      const { data: targetPlayer, error: targetError } = await supabase.from("players").select("telegram_id").eq("game_id", gameId).maybeSingle();
+      if (targetError || !targetPlayer) return respond({ error: "Игрок не найден" }, 404);
       const { data: xp, error } = await supabase.rpc("admin_adjust_player_xp", { p_player_telegram_id: targetPlayer.telegram_id, p_amount: amount });
       if (error) { console.error("Admin XP adjustment failed:", error.message); return respond({ error: "Не удалось начислить XP. Применена ли миграция Season 2?" }, 400); }
       return respond({ success: true, xp });
@@ -463,12 +448,17 @@ Deno.serve(async (req) => {
         return respond({ error: "Доступ запрещён" }, 403);
       }
 
-      const username = body.username ?? body.playerUsername;
-      const { data: player, error, invalid } = await findPlayerByUsername(username);
+      const gameId = String(body.gameId ?? "").trim();
 
-      if (invalid) {
-        return respond({ error: "Введи корректный Telegram username без пробелов" }, 400);
+      if (!gameId || gameId.length > 100) {
+        return respond({ error: "Укажи корректный Game ID" }, 400);
       }
+
+      const { data: player, error } = await supabase
+        .from("players")
+        .select("telegram_id, game_id, username, balance, free_cases")
+        .eq("game_id", gameId)
+        .maybeSingle();
 
       if (error) {
         console.error("Admin player lookup failed:", error.message);
@@ -477,7 +467,7 @@ Deno.serve(async (req) => {
 
       if (!player) {
         return respond(
-          { error: "Игрок с таким Telegram username не найден" },
+          { error: "Игрок с таким Game ID не найден" },
           404,
         );
       }
@@ -534,7 +524,7 @@ Deno.serve(async (req) => {
         return respond({ error: "Доступ запрещён" }, 403);
       }
 
-      const username = body.username ?? body.playerUsername;
+      const gameId = String(body.gameId ?? "").trim();
       const grantType = String(body.grantType ?? "").trim();
       const amount = Number(body.amount);
 
@@ -552,8 +542,8 @@ Deno.serve(async (req) => {
         (name) => name.toLowerCase() === rawCaseName.toLowerCase(),
       ) ?? "";
 
-      if (!String(username ?? "").trim()) {
-        return respond({ error: "Укажи Telegram username игрока" }, 400);
+      if (!gameId || gameId.length > 100) {
+        return respond({ error: "Укажи корректный Game ID" }, 400);
       }
 
       if (
@@ -585,8 +575,11 @@ Deno.serve(async (req) => {
         return respond({ error: "Выбери брейнрота" }, 400);
       }
 
-      const { data: player, error: playerError, invalid } = await findPlayerByUsername(username);
-      if (invalid) return respond({ error: "Некорректный Telegram username" }, 400);
+      const { data: player, error: playerError } = await supabase
+        .from("players")
+        .select("telegram_id, game_id")
+        .eq("game_id", gameId)
+        .maybeSingle();
 
       if (playerError) {
         console.error(
@@ -598,7 +591,7 @@ Deno.serve(async (req) => {
 
       if (!player) {
         return respond(
-          { error: "Игрок с таким Telegram username не найден" },
+          { error: "Игрок с таким Game ID не найден" },
           404,
         );
       }
