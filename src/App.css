@@ -1086,3 +1086,27 @@ body {
 .admin-free-case-label { display:flex; align-items:center; gap:8px; min-width:0; }
 .admin-free-case-label img { width:38px; height:30px; object-fit:contain; border-radius:6px; background:#071522; }
 @media(max-width:600px) { .case-card-art.case-artwork { height:115px; } }
+
+/* BrainGG Daily Quiz — Arctic glass quiz module */
+.quiz-page{max-width:1040px;margin-left:auto;margin-right:auto}
+.quiz-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.quiz-status-grid article{padding:17px;border:1px solid rgba(116,207,255,.2);border-radius:16px;background:linear-gradient(145deg,rgba(17,49,72,.94),rgba(7,22,36,.96));box-shadow:inset 0 1px #ffffff08}
+.quiz-status-grid small,.quiz-status-grid b{display:block}.quiz-status-grid small{color:#9fc5d9;font-size:11px}.quiz-status-grid b{margin-top:7px;color:#e7f8ff;font-size:24px}
+.quiz-card{position:relative;overflow:hidden;padding:clamp(18px,4vw,30px);background:radial-gradient(ellipse at 50% 0%,rgba(80,195,244,.16),transparent 55%),linear-gradient(145deg,#102d43,#071827)}
+.quiz-reward-pill{display:inline-flex;align-items:center;gap:7px;margin-bottom:20px;padding:8px 12px;border:1px solid rgba(255,215,125,.34);border-radius:999px;background:rgba(125,88,27,.18);color:#ffe3a1;font-size:12px;font-weight:900}
+.quiz-question-title{max-width:760px;margin:10px 0 22px;color:#effaff;font-size:clamp(20px,3.5vw,28px);line-height:1.3}
+.quiz-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.quiz-option{display:flex;align-items:center;gap:12px;min-height:58px;padding:12px 14px;border:1px solid rgba(124,203,237,.22);border-radius:14px;background:rgba(255,255,255,.035);color:#dff5ff;text-align:left;font:700 13px Inter,sans-serif;transition:transform .18s,border-color .18s,background .18s,box-shadow .18s}
+.quiz-option:not(:disabled):hover{transform:translateY(-2px);border-color:#82dcff;background:rgba(64,165,207,.13)}
+.quiz-option>span{display:grid;place-items:center;flex:0 0 29px;height:29px;border-radius:9px;background:#173e57;color:#a8e8ff;font-weight:950}
+.quiz-option.selected{border-color:#80ddff;background:linear-gradient(100deg,rgba(52,150,195,.28),rgba(35,92,123,.18));box-shadow:0 0 18px #55c9ff20}
+.quiz-option.correct{border-color:#72e4bd;background:rgba(37,154,112,.18);box-shadow:0 0 18px #5ce6b522}
+.quiz-option.incorrect{border-color:#ff8b98;background:rgba(172,54,75,.17)}
+.quiz-feedback{margin-top:17px;padding:13px 15px;border:1px solid rgba(255,165,120,.25);border-radius:12px;background:rgba(128,65,37,.13);color:#ffd4c0;font-size:13px;line-height:1.5}
+.quiz-feedback.success{border-color:rgba(105,230,183,.3);background:rgba(34,139,101,.14);color:#aaf4d8}
+.quiz-feedback small{display:block;margin-top:5px;opacity:.8}
+.quiz-action{width:100%;min-height:49px;margin-top:18px}
+.quiz-empty{text-align:center;padding:18px 0 6px}.quiz-empty h3{margin:12px 0 7px;color:#e8f8ff}.quiz-empty p{max-width:480px;margin:0 auto;color:#a7c8d9;font-size:13px;line-height:1.6}
+.quiz-crystal{display:grid;place-items:center;width:70px;height:70px;margin:auto;border:1px solid #75d6ff55;border-radius:22px;background:radial-gradient(circle,#4bc7ff3b,transparent 70%);color:#b9efff;font-size:38px;box-shadow:0 0 32px #42baff22}
+.quiz-footnote{margin:-8px 0 0;color:#8eafc2;font-size:11px;text-align:center}
+@media(max-width:600px){.quiz-status-grid{gap:7px}.quiz-status-grid article{padding:12px 10px}.quiz-status-grid small{font-size:10px}.quiz-status-grid b{font-size:20px}.quiz-options{grid-template-columns:1fr}.quiz-option{min-height:52px}}
