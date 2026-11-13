@@ -1023,3 +1023,13 @@ body {
   .content,.live-drop-chip,.live-pulse { animation:none !important; }
   .navigation button,.case-card-art img { transition:none !important; }
 }
+
+/* Multi-case roulette: one independent, aligned reel per purchased case. */
+.case-roulette-stack { display:flex; flex-direction:column; gap:12px; margin:20px 0; }
+.case-roulette-stack .case-roulette-viewport { margin:0; height:132px; }
+.case-roulette-stack .case-roulette-strip { transition-duration:var(--reel-duration,5.2s); }
+.case-roulette-stack .case-roulette-row-label { position:absolute; z-index:5; left:10px; top:7px; padding:3px 7px; border:1px solid rgba(151,225,255,.24); border-radius:999px; background:rgba(4,19,31,.72); color:#bceeff; font-size:9px; letter-spacing:.04em; pointer-events:none; }
+.case-roulette-stack.is-rolling .case-roulette-viewport { border-color:#a4edff; box-shadow:inset 0 0 28px #56caff24,0 0 16px #56caff20; }
+.case-roulette-stack .case-roulette-item.is-winner { animation:reelWinnerReveal .65s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes reelWinnerReveal { 0%{filter:brightness(1);transform:scale(.94)} 45%{filter:brightness(1.8);transform:scale(1.035)} 100%{filter:brightness(1.2);transform:scale(1)} }
+@media(max-width:620px){.case-roulette-stack{gap:9px}.case-roulette-stack .case-roulette-viewport{height:118px}.case-roulette-stack .case-roulette-item{flex-basis:118px;width:118px;min-width:118px}.case-roulette-stack .case-roulette-strip{transform:translateX(calc(50% - (var(--reel-index,0) * 118px + 59px)));transition-duration:var(--reel-duration,4.8s)}}
