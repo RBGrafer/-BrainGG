@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 
@@ -56,6 +56,15 @@ export default function App() {
   const [reelPosition, setReelPosition] = useState(0);
   const [reelWinnerIndex, setReelWinnerIndex] = useState(-1);
   const [reelRows, setReelRows] = useState([]);
+  const [rareDropIndex, setRareDropIndex] = useState(-1);
+  const [skipAvailable, setSkipAvailable] = useState(false);
+  const [showRewardModal, setShowRewardModal] = useState(false);
+  const [rewardInventoryRows, setRewardInventoryRows] = useState([]);
+  const skipRequestedRef = useRef(false);
+  const audioContextRef = useRef(null);
+  const musicTimerRef = useRef(null);
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -105,8 +114,108 @@ export default function App() {
   const [taskClaimLoading, setTaskClaimLoading] = useState("");
   const [hubMessage, setHubMessage] = useState("");
   const [adminGameStats, setAdminGameStats] = useState(null);
+  const [topupOpen, setTopupOpen] = useState(false);
+  const [topupStars, setTopupStars] = useState(100);
+  const [topupBusy, setTopupBusy] = useState(false);
+  const [topupMessage, setTopupMessage] = useState("");
 
   const initData = () => window.Telegram?.WebApp?.initData;
+
+  function getAudioContext() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+    if (audioContextRef.current.state === "suspended") audioContextRef.current.resume();
+    return audioContextRef.current;
+  }
+
+  function playUiSound(kind = "tab") {
+    if (!soundEnabled) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const presets = {
+      tab: [660, 880, 0.055], spin: [220, 330, 0.16], reveal: [660, 990, 0.2], rare: [523, 784, 1175],
+      upgrade: [330, 494, 0.14], win: [659, 880, 1318], lose: [260, 196, 0.16],
+    };
+    const values = presets[kind] || presets.tab;
+    values.forEach((frequency, index) => {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = kind === "spin" ? "triangle" : "sine";
+      oscillator.frequency.setValueAtTime(frequency, now + index * 0.075);
+      gain.gain.setValueAtTime(0.0001, now + index * 0.075);
+      gain.gain.exponentialRampToValueAtTime(kind === "rare" ? 0.075 : 0.035, now + index * 0.075 + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.075 + (kind === "spin" ? 0.32 : 0.42));
+      oscillator.connect(gain); gain.connect(ctx.destination);
+      oscillator.start(now + index * 0.075); oscillator.stop(now + index * 0.075 + 0.45);
+    });
+  }
+
+  function toggleWinterMusic() {
+    const next = !musicEnabled;
+    setMusicEnabled(next);
+    if (!next) {
+      if (musicTimerRef.current) window.clearInterval(musicTimerRef.current);
+      musicTimerRef.current = null;
+      return;
+    }
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    // Original, quiet winter ambience generated locally (no copyrighted recording).
+    const notes = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880, 698.46];
+    let step = 0;
+    const playBell = () => {
+
+      const start = ctx.currentTime;
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = "sine"; osc.frequency.value = notes[step % notes.length];
+      gain.gain.setValueAtTime(0.0001, start); gain.gain.exponentialRampToValueAtTime(0.012, start + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 1.8);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(start); osc.stop(start + 1.85);
+      step += 1;
+    };
+    playBell();
+    if (musicTimerRef.current) window.clearInterval(musicTimerRef.current);
+    musicTimerRef.current = window.setInterval(playBell, 1450);
+  }
+
+  useEffect(() => () => { if (musicTimerRef.current) window.clearInterval(musicTimerRef.current); }, []);
+
+  async function startStarsTopup() {
+    if (topupBusy) return;
+    if (!initData()) { setTopupMessage("Открой BrainGG через Telegram, чтобы оплатить Stars."); return; }
+    const stars = Number(topupStars);
+    if (!Number.isSafeInteger(stars) || stars < 25 || stars > 10000) { setTopupMessage("Укажи от 25 до 10000 Stars."); return; }
+    setTopupBusy(true); setTopupMessage("Создаём счёт Telegram Stars...");
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", { body: { initData: initData(), action: "create_stars_invoice", stars } });
+      if (error || !data?.success || !data.invoiceUrl) throw new Error(data?.error || error?.message || "Не удалось создать счёт");
+      const tg = window.Telegram?.WebApp;
+      if (!tg?.openInvoice) {
+        tg?.openLink?.(data.invoiceUrl);
+        setTopupMessage("Счёт открыт. После оплаты вернись в BrainGG — баланс обновится автоматически.");
+      } else {
+        tg.openInvoice(data.invoiceUrl, async (status) => {
+          if (status === "paid") {
+            setTopupMessage("Оплата принята Telegram. Проверяем зачисление GG...");
+            for (let attempt = 0; attempt < 10; attempt++) {
+              await new Promise(resolve => setTimeout(resolve, 1200));
+              const checked = await supabase.functions.invoke("braingg-api", { body: { initData: initData(), action: "check_stars_payment", orderId: data.orderId } });
+              if (checked.data?.status === "paid") {
+                setPlayer(current => current ? { ...current, balance: checked.data.balance } : current);
+                setTopupMessage(`Успешно! Начислено ${Number(data.gg).toLocaleString("ru-RU")} GG.`);
+                return;
+              }
+            }
+            setTopupMessage("Платёж получен. Зачисление обрабатывается — обнови баланс через несколько секунд.");
+          } else if (status === "cancelled") setTopupMessage("Оплата отменена. Деньги не списаны.");
+          else if (status === "failed") setTopupMessage("Telegram не смог обработать платёж. Попробуй ещё раз.");
+        });
+      }
+    } catch (error) { console.error("Stars top-up error:", error); setTopupMessage(error?.message || "Не удалось создать платёж."); }
+    finally { setTopupBusy(false); }
+  }
 
   // Перехватываем стандартные браузерные alert(), чтобы они не показывались
   // поверх приложения в системном стиле WebView.
@@ -343,11 +452,13 @@ export default function App() {
       }
 
       setInventory(data.items || []);
+      return data.items || [];
     } catch (error) {
       console.error("Ошибка инвентаря:", error);
       setInventoryError(
         "Не удалось загрузить инвентарь. Попробуй ещё раз."
       );
+      return [];
     } finally {
       setInventoryLoading(false);
     }
@@ -625,6 +736,7 @@ export default function App() {
   }
 
   async function changePage(nextPage) {
+    if (nextPage !== page) playUiSound("tab");
     setPage(nextPage);
     setActionMessage("");
 
@@ -654,7 +766,11 @@ export default function App() {
     setLastRewards([]);
     setReelWinnerIndex(-1);
     setReelRows([]);
+    setRareDropIndex(-1);
     setActionMessage("");
+    setShowRewardModal(false);
+    setSkipAvailable(false);
+    skipRequestedRef.current = false;
     const rewards = [];
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -704,31 +820,48 @@ export default function App() {
         } : previous);
       }
 
+      playUiSound("spin");
       const rows = fastOpen
         ? rewards.map((reward, index) => ({ id: `reel-${index}`, cards: [reward], winnerIndex: 0, position: 0, revealed: true }))
         : rewards.map((reward, index) => makeReel(reward, index));
       setReelRows(rows);
 
       if (!fastOpen) {
+        setSkipAvailable(true);
         await nextFrame();
         setReelRows((current) => current.map((row) => ({ ...row, position: row.winnerIndex })));
-        await wait(5450);
+        for (let elapsed = 0; elapsed < 5600 && !skipRequestedRef.current; elapsed += 100) await wait(100);
         setReelRows((current) => current.map((row) => ({ ...row, revealed: true })));
       }
 
+      setSkipAvailable(false);
       setLastRewards(rewards);
-      await loadInventory();
+      const freshInventory = await loadInventory();
+      setRewardInventoryRows(freshInventory);
       setActionMessage(`Готово! Открыто кейсов: ${rewards.length}`);
+      const topValue = Math.max(...rewards.map((reward) => Number(reward.value_gg || reward.sold_price || 0)));
+      const topIndex = rewards.findIndex((reward) => Number(reward.value_gg || reward.sold_price || 0) === topValue);
+      const topReward = rewards[topIndex];
+      const topRarity = String(topReward?.rarity || "").toLowerCase();
+      const rareDrop = ["secret", "mythic", "секрет", "мифик", "легендар", "божествен"].some((word) => topRarity.includes(word)) || (Number(selectedCase.maxReward || 0) > 0 && topValue >= Number(selectedCase.maxReward) * 0.45);
+      if (rareDrop) setRareDropIndex(topIndex);
+      playUiSound(rareDrop ? "rare" : "reveal");
+      setShowRewardModal(true);
     } catch (error) {
       console.error("Ошибка открытия:", error);
       const message = error.message || "Не удалось открыть кейс. Попробуй ещё раз.";
       setActionMessage(rewards.length > 0 ? `Открыто кейсов: ${rewards.length}. ${message}` : message);
+      setSkipAvailable(false);
       if (rewards.length) {
         setReelRows(rewards.map((reward, index) => ({ id: `reel-${index}`, cards: [reward], winnerIndex: 0, position: 0, revealed: true })));
         setLastRewards(rewards);
+        const freshInventory = await loadInventory();
+        setRewardInventoryRows(freshInventory);
+        setShowRewardModal(true);
       }
     } finally {
       setOpening(false);
+      setSkipAvailable(false);
     }
   }
 
@@ -826,6 +959,7 @@ export default function App() {
     }
 
     setUpgradeLoading(true);
+    playUiSound("upgrade");
     setUpgradeResult(null);
     setActionMessage("Отправляем запрос на улучшение...");
 
@@ -883,6 +1017,7 @@ export default function App() {
       await new Promise((resolve) => setTimeout(resolve, 4200));
 
       setUpgradeResult(result);
+      playUiSound(result.won ? "win" : "lose");
 
       setPlayer((previous) => ({
         ...previous,
@@ -967,8 +1102,11 @@ export default function App() {
       </div>
       <header className="header">
         <div className="logo"><span className="logo-heart">💜</span> BrainGG</div>
-        <div className="balance">
-          🪙 {player ? player.balance : 0} GG
+        <div className="header-wallet">
+          <button className={`winter-audio-toggle ${musicEnabled ? "is-on" : ""}`} onClick={toggleWinterMusic} title="Фоновая новогодняя музыка">{musicEnabled ? "♫ Музыка вкл." : "♫ Музыка"}</button>
+          <button className={`winter-audio-toggle ${soundEnabled ? "is-on" : ""}`} onClick={() => setSoundEnabled((value) => !value)} title="Звуковые эффекты">{soundEnabled ? "🔊 Звуки" : "🔇 Звуки"}</button>
+          <div className="balance">🪙 {player ? player.balance : 0} GG</div>
+          <button className="topup-trigger" onClick={() => { setTopupMessage(""); setTopupOpen(true); }}>＋ Пополнить</button>
         </div>
       </header>
 
@@ -997,6 +1135,22 @@ export default function App() {
               </button>
             ))}
           </nav>
+
+          {topupOpen && <div className="stars-modal-backdrop" onClick={() => !topupBusy && setTopupOpen(false)}>
+            <section className="stars-modal" role="dialog" aria-modal="true" aria-labelledby="stars-modal-title" onClick={event => event.stopPropagation()}>
+              <button className="stars-modal-close" onClick={() => setTopupOpen(false)} aria-label="Закрыть">×</button>
+              <span className="stars-modal-kicker">BRAIN GG WALLET</span><h2 id="stars-modal-title">Пополнение баланса</h2>
+              <div className="stars-method-card"><span className="stars-symbol">★</span><div><b>Telegram Stars</b><small>Безопасная оплата внутри Telegram</small></div><span className="stars-method-check">✓</span></div>
+              <p className="stars-rate-note">Курс: 1 ⭐ = 1,25 GG. Минимальное пополнение — 25 ⭐.</p>
+              <label className="stars-field-label" htmlFor="stars-amount">Количество Stars</label>
+              <input id="stars-amount" className="stars-amount-input" type="number" min="25" max="10000" step="1" value={topupStars} onChange={event => setTopupStars(event.target.value)} />
+              <div className="stars-presets">{[25,50,100,250,500,1000].map(value => <button key={value} className={Number(topupStars)===value?"selected":""} onClick={() => setTopupStars(value)}>{value} ⭐</button>)}</div>
+              <div className="stars-conversion"><span>Ты получишь</span><b>🪙 {Number.isFinite(Number(topupStars)) ? (Math.round(Number(topupStars)*1.25*100)/100).toLocaleString("ru-RU") : 0} GG</b></div>
+              <p className="stars-wager-note">GG будут зачислены автоматически после подтверждения платежа Telegram.</p>
+              {topupMessage && <div className="stars-status" role="status">{topupMessage}</div>}
+              <button className="stars-pay-button" disabled={topupBusy || Number(topupStars)<25 || Number(topupStars)>10000 || !Number.isSafeInteger(Number(topupStars))} onClick={startStarsTopup}>{topupBusy?"Создаём счёт...":`Оплатить ${topupStars || 0} ⭐`}</button>
+            </section>
+          </div>}
 
           <section className="live-drops-bar" aria-label="Live Drops">
             <div className="live-drops-heading"><span className="live-pulse" /> <b>LIVE DROPS</b><small>ПОСЛЕДНИЕ ВЫПАДЕНИЯ</small></div>
@@ -1089,7 +1243,7 @@ export default function App() {
                       }),
                       winnerIndex: -1, position: 0, revealed: false,
                     }))).map((row, rowIndex) => (
-                      <div className={`case-roulette-viewport ${opening && !fastOpen ? "is-rolling" : ""}`} key={row.id} aria-label={`Рулетка ${rowIndex + 1}`}>
+                      <div className={`case-roulette-viewport ${opening && !fastOpen ? "is-rolling" : ""} ${row.revealed && rowIndex === rareDropIndex ? "is-rare-winner" : ""}`} key={row.id} aria-label={`Рулетка ${rowIndex + 1}`}>
                         <div className="case-roulette-strip" style={{ "--reel-index": row.position, "--reel-duration": `${5.0 + rowIndex * 0.18}s` }}>
                           {row.cards.map((reward, index) => (
                             <div className={`case-roulette-item ${row.revealed && index === row.winnerIndex ? "is-winner" : ""}`} key={`${reward.item_name}-${rowIndex}-${index}`}>
@@ -1106,6 +1260,7 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                  {opening && skipAvailable && <button className="case-skip-button" onClick={() => { skipRequestedRef.current = true; setSkipAvailable(false); }}>Пропустить анимацию ❯❯</button>}
 
                   {(() => {
                     const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.name)?.amount || 0);
@@ -1904,6 +2059,37 @@ export default function App() {
             </main>
           )}
         </>
+      )}
+
+      {showRewardModal && lastRewards.length > 0 && (
+        <div className="reward-modal-backdrop" role="presentation" onClick={() => setShowRewardModal(false)}>
+          <section className="reward-modal" role="dialog" aria-modal="true" aria-labelledby="case-reward-title" onClick={(event) => event.stopPropagation()}>
+            <div className="reward-modal-sparkle" aria-hidden="true">✦ ❄ ✦</div>
+            <span className="reward-modal-kicker">BRAIN GG · DROP CONFIRMED</span>
+            <h2 id="case-reward-title">Твой выигрыш!</h2>
+            <div className={`reward-modal-grid ${lastRewards.length > 1 ? "multi" : ""}`}>
+              {lastRewards.map((reward, index) => (
+                <article className="reward-modal-item" key={`${reward.item_name}-${index}`}>
+                  <div className="reward-modal-art">{brainrotImage(reward) ? <img src={brainrotImage(reward)} alt={reward.item_name} /> : <span>🧠</span>}</div>
+                  <h3>{reward.item_name || reward.name}</h3>
+                  <span className="reward-modal-rarity">{reward.rarity || "Brainrot"}</span>
+                  <strong>{Number(reward.value_gg || reward.sold_price || 0).toLocaleString("ru-RU")} GG</strong>
+                </article>
+              ))}
+            </div>
+            <p className="reward-modal-note">Предмет уже сохранён на сервере. Выбери, что делать дальше.</p>
+            <div className="reward-modal-actions">
+              <button className="main-button" onClick={() => { setShowRewardModal(false); setActionMessage("Награда сохранена в инвентаре!"); }}>✓ Забрать</button>
+              <button className="case-button reward-upgrade-button" onClick={() => {
+                const reward = lastRewards[0];
+                const owned = rewardInventoryRows.find((item) => String(item.item_name).toLowerCase() === String(reward.item_name || reward.name).toLowerCase());
+                if (!owned) { setShowRewardModal(false); setActionMessage("Награда уже сохранена в инвентаре. Обнови инвентарь, чтобы выбрать её для апгрейда."); changePage("Инвентарь"); return; }
+                setShowRewardModal(false); chooseSource(owned); changePage("Апгрейдер");
+              }}>⚡ Апгрейд {lastRewards.length > 1 ? "первого предмета" : "предмета"}</button>
+            </div>
+            {lastRewards.length > 1 && <button className="reward-upgrade-all-note" onClick={() => { setShowRewardModal(false); changePage("Инвентарь"); }}>Посмотреть все предметы в инвентаре</button>}
+          </section>
+        </div>
       )}
 
       {customError && (
