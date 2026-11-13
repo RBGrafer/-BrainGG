@@ -181,6 +181,115 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
     const isAdmin = adminIds.includes(String(telegramUser.id));
 
+    const recordProgress = async (action: string, amount = 1) => {
+      const { error } = await supabase.rpc("record_player_action", {
+        p_telegram_id: telegramUser.id,
+        p_action: action,
+        p_amount: amount,
+      });
+      if (error) console.error("Player progress update failed:", error.message);
+    };
+
+    const GAME_TASKS = [
+      { id: "open_3", title: "Открой 3 кейса", description: "Попробуй удачу трижды", goal: 3, metric: "total_cases_opened", reward: 75, xp: 40 },
+      { id: "open_10", title: "Открой 10 кейсов", description: "Стань ближе к редкой коллекции", goal: 10, metric: "total_cases_opened", reward: 200, xp: 100 },
+      { id: "sell_1", title: "Продай предмет", description: "Освободи место в коллекции", goal: 1, metric: "total_sales", reward: 50, xp: 30 },
+      { id: "upgrade_1", title: "Улучши предмет", description: "Попробуй улучшить брейнрота", goal: 1, metric: "total_upgrades", reward: 100, xp: 50 },
+    ];
+
+    // Игровой центр: публичная лента, прогресс, задания и рейтинг.
+    if (body.action === "get_game_hub") {
+      const { error: ensureProgressError } = await supabase.from("player_progress").upsert({ telegram_id: telegramUser.id }, { onConflict: "telegram_id", ignoreDuplicates: true });
+      if (ensureProgressError) return respond({ error: "Не удалось инициализировать игровой профиль" }, 500);
+      const { data: progress, error: progressError } = await supabase
+        .from("player_progress")
+        .select("xp, total_cases_opened, total_sales, total_upgrades, daily_streak, last_daily_claim")
+        .eq("telegram_id", telegramUser.id).maybeSingle();
+      if (progressError) return respond({ error: "Не удалось загрузить прогресс" }, 500);
+
+      const { data: latestItems, error: dropsError } = await supabase
+        .from("game_live_drops")
+        .select("id, telegram_id, item_name, rarity, value_gg, case_name, created_at")
+        .order("created_at", { ascending: false }).limit(25);
+      if (dropsError) console.error("Live drops loading failed:", dropsError.message);
+      const dropIds = [...new Set((latestItems || []).map((item: any) => item.telegram_id))];
+      const { data: dropPlayers } = dropIds.length
+        ? await supabase.from("players").select("telegram_id, username").in("telegram_id", dropIds)
+        : { data: [] };
+      const usernames = new Map((dropPlayers || []).map((p: any) => [String(p.telegram_id), p.username]));
+      const liveDrops = (latestItems || []).map((item: any) => ({
+        id: item.id, item_name: item.item_name, rarity: item.rarity, value_gg: Number(item.value_gg || 0),
+        created_at: item.created_at, case_name: item.case_name, username: usernames.get(String(item.telegram_id)) || "Игрок",
+      }));
+
+      const { data: rankingRows, error: rankingError } = await supabase
+        .from("player_progress")
+        .select("telegram_id, xp, total_cases_opened, total_sales, total_upgrades")
+        .order("xp", { ascending: false }).limit(50);
+      if (rankingError) console.error("Leaderboard loading failed:", rankingError.message);
+      const rankIds = (rankingRows || []).map((row: any) => row.telegram_id);
+      const { data: rankPlayers } = rankIds.length
+        ? await supabase.from("players").select("telegram_id, username, game_id").in("telegram_id", rankIds)
+        : { data: [] };
+      const rankMap = new Map((rankPlayers || []).map((p: any) => [String(p.telegram_id), p]));
+      const leaderboard = (rankingRows || []).map((row: any) => {
+        const p: any = rankMap.get(String(row.telegram_id)) || {};
+        const xp = Number(row.xp || 0);
+        return { username: p.username || "Игрок", game_id: p.game_id, xp, level: Math.floor(Math.sqrt(xp / 100)) + 1,
+          total_cases_opened: Number(row.total_cases_opened || 0) };
+      });
+
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: dailyClaim } = await supabase.from("daily_reward_claims")
+        .select("claim_date, streak_day, reward_gg").eq("telegram_id", telegramUser.id).eq("claim_date", today).maybeSingle();
+      const { data: taskClaims } = await supabase.from("task_reward_claims")
+        .select("task_id").eq("telegram_id", telegramUser.id).eq("claim_date", today);
+      const xp = Number(progress?.xp || 0);
+      const level = Math.floor(Math.sqrt(xp / 100)) + 1;
+      const nextLevelXp = level * level * 100;
+      const tasks = GAME_TASKS.map((task) => ({ ...task, progress: Number((progress as any)?.[task.metric] || 0), claimed: (taskClaims || []).some((c: any) => c.task_id === task.id) }));
+      return respond({ success: true, progress: { ...(progress || {}), xp, level, next_level_xp: nextLevelXp },
+        liveDrops, leaderboard, tasks, dailyClaimed: Boolean(dailyClaim), dailyClaim });
+    }
+
+    if (body.action === "claim_daily_reward") {
+      const { data, error } = await supabase.rpc("claim_daily_reward", { p_telegram_id: telegramUser.id });
+      if (error) { console.error("Daily reward claim failed:", error.message); return respond({ error: "Не удалось получить ежедневную награду" }, 400); }
+      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      return respond({ success: true, result: data, balance: player?.balance });
+    }
+
+    if (body.action === "claim_task_reward") {
+      const taskId = String(body.taskId || "");
+      if (!GAME_TASKS.some((task) => task.id === taskId)) return respond({ error: "Неизвестное задание" }, 400);
+      const { data, error } = await supabase.rpc("claim_task_reward", { p_telegram_id: telegramUser.id, p_task_id: taskId });
+      if (error) { console.error("Task reward claim failed:", error.message); return respond({ error: "Не удалось получить награду" }, 400); }
+      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      return respond({ success: true, result: data, balance: player?.balance });
+    }
+
+    if (body.action === "admin_adjust_xp") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const gameId = String(body.gameId || "").trim();
+      const amount = Number(body.amount);
+      if (!gameId || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return respond({ error: "Некорректное количество XP" }, 400);
+      const { data: targetPlayer, error: targetError } = await supabase.from("players").select("telegram_id").eq("game_id", gameId).maybeSingle();
+      if (targetError || !targetPlayer) return respond({ error: "Игрок не найден" }, 404);
+      const { data: xp, error } = await supabase.rpc("admin_adjust_player_xp", { p_player_telegram_id: targetPlayer.telegram_id, p_amount: amount });
+      if (error) { console.error("Admin XP adjustment failed:", error.message); return respond({ error: "Не удалось начислить XP. Применена ли миграция Season 2?" }, 400); }
+      return respond({ success: true, xp });
+    }
+
+    if (body.action === "admin_get_game_stats") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const [playersCount, inventoryCount, progressCount] = await Promise.all([
+        supabase.from("players").select("telegram_id", { count: "exact", head: true }),
+        supabase.from("inventory").select("id", { count: "exact", head: true }),
+        supabase.from("player_progress").select("telegram_id", { count: "exact", head: true }),
+      ]);
+      return respond({ success: true, stats: { players: playersCount.count || 0, inventory_items: inventoryCount.count || 0, active_profiles: progressCount.count || 0 } });
+    }
+
     // АДМИН: ПОИСК ИГРОКА
     if (body.action === "admin_find_player") {
       if (!isAdmin) {
@@ -243,11 +352,14 @@ Deno.serve(async (req) => {
         );
       }
 
+      const { data: playerProgress } = await supabase.from("player_progress").select("xp, total_cases_opened, total_sales, total_upgrades, daily_streak").eq("telegram_id", player.telegram_id).maybeSingle();
+
       return respond({
         success: true,
         player: {
           ...player,
           ...credits,
+          progress: playerProgress || null,
         },
         inventory: inventory ?? [],
         freeCaseCredits: credits.free_case_credits,
@@ -474,6 +586,7 @@ Deno.serve(async (req) => {
         return respond({ error: error.message }, 400);
       }
 
+      await recordProgress("sell_item", 1);
       return respond({ success: true, result: data });
     }
 
@@ -526,6 +639,7 @@ Deno.serve(async (req) => {
         return respond({ error: error.message }, 400);
       }
 
+      await recordProgress("upgrade_item", 1);
       return respond({ success: true, result: data });
     }
 
@@ -559,6 +673,20 @@ Deno.serve(async (req) => {
         });
 
         return respond({ error: error.message }, 400);
+      }
+
+      await recordProgress("open_case", 1);
+      const openedReward: any = data || {};
+      const dropItemName = String(openedReward.item_name || openedReward.name || "").trim();
+      if (dropItemName) {
+        const { error: dropInsertError } = await supabase.from("game_live_drops").insert({
+          telegram_id: telegramUser.id,
+          item_name: dropItemName,
+          rarity: openedReward.rarity || null,
+          value_gg: Number(openedReward.value_gg || openedReward.sold_price || 0),
+          case_name: caseName,
+        });
+        if (dropInsertError) console.error("Live drop event insert failed:", dropInsertError.message);
       }
 
       // После открытия обязательно перечитываем остаток из базы.
