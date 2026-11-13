@@ -36,6 +36,9 @@ export default function App() {
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState("");
+  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [inventoryRarity, setInventoryRarity] = useState("Все");
+  const [inventorySort, setInventorySort] = useState("newest");
 
   const [upgradeTargets, setUpgradeTargets] = useState([]);
   const [targetsLoading, setTargetsLoading] = useState(false);
@@ -932,7 +935,7 @@ export default function App() {
                     </label>
                   </div>
 
-                  <div className="case-roulette-strip">
+                  <div className={`case-roulette-strip ${opening ? "is-rolling" : ""}`}>
                     {(lastRewards.length ? lastRewards : Array.from({ length: 8 }, (_, i) => ({
                       item_name: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.item_name || ["Fishino Clownino", "Los Dragons", "Elefanto Frigo", "Antonio"][i % 4],
                       value_gg: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.value_gg || 0,
@@ -1360,110 +1363,20 @@ export default function App() {
           )}
 
           {page === "Инвентарь" && (
-            <main className="content">
-              <h2>🎒 Мой инвентарь</h2>
-              <p>Все твои полученные брейнроты в одном месте!</p>
-
-              {inventoryLoading && <p>Загружаем инвентарь...</p>}
-
-              {inventoryError && (
-                <>
-                  <p>{inventoryError}</p>
-
-                  <button className="main-button" onClick={loadInventory}>
-                    Повторить
-                  </button>
-                </>
-              )}
-
-              {!inventoryLoading && !inventoryError && (
-                <>
-                  <div className="inventory-count">
-                    Всего предметов: <b>{inventory.length}</b>
-                  </div>
-
-                  {inventory.length === 0 ? (
-                    <div className="opening-panel">
-                      <div className="case-emoji">🎁</div>
-                      <h3>Пока здесь пусто</h3>
-                      <p>Открой свой первый кейс!</p>
-
-                      <button
-                        className="main-button"
-                        onClick={() => changePage("Кейсы")}
-                      >
-                        Перейти к кейсам
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="case-grid">
-                      {inventory.map((item) => (
-                        <div className="case-card" key={item.id}>
-                          <div className="case-emoji">🧠</div>
-                          <h3>{item.item_name}</h3>
-
-                          <div
-                            className="case-price"
-                            style={{
-                              color: rarityColors[item.rarity] || "#fff",
-                            }}
-                          >
-                            {item.rarity}
-                          </div>
-
-                          <p>
-                            Получен:{" "}
-                            {new Date(item.created_at).toLocaleDateString(
-                              "ru-RU"
-                            )}
-                          </p>
-
-                          <div className="case-price">
-                            🪙 {item.value_gg} GG
-                          </div>
-
-                          <button
-                            className="main-button"
-                            disabled={
-                              sellingId === item.id || upgradeLoading
-                            }
-                            onClick={() => sellItem(item)}
-                          >
-                            {sellingId === item.id
-                              ? "Продаём..."
-                              : `Продать за ${item.value_gg} GG`}
-                          </button>
-
-                          <button
-                            className="case-button"
-                            disabled={
-                              sellingId === item.id || upgradeLoading
-                            }
-                            onClick={() => {
-                              setSelectedUpgrade(item);
-                              setTargetItem("");
-                              setUpgradeResult(null);
-                              changePage("Апгрейдер");
-                            }}
-                          >
-                            ⚡ Улучшить
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {actionMessage && <p>{actionMessage}</p>}
-
-                  <button
-                    className="main-button"
-                    onClick={loadInventory}
-                    disabled={sellingId !== null}
-                  >
-                    Обновить инвентарь ↻
-                  </button>
-                </>
-              )}
+            <main className="content inventory-page">
+              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Ледяное хранилище</h2><p>Все твои брейнроты — в одном месте</p></div><div className="inventory-hero-icon">❄️</div></div>
+              <div className="inventory-stats"><div><small>Предметов</small><b>{inventory.length}</b></div><div><small>Общая стоимость</small><b>{inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0).toLocaleString("ru-RU")} <i>GG</i></b></div><div><small>Средняя стоимость</small><b>{inventory.length?Math.round(inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0)/inventory.length).toLocaleString("ru-RU"):0} <i>GG</i></b></div></div>
+              {inventoryLoading && <div className="inventory-state"><div className="inventory-loader">❄</div><b>Собираем коллекцию...</b></div>}
+              {inventoryError && <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div>}
+              {!inventoryLoading && !inventoryError && inventory.length > 0 && (<>
+                <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select></div>
+                <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
+                <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className="inventory-rarity">{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><span>🧠</span><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
+                ))}</div>
+                {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
+              </>)}
+              {!inventoryLoading&&!inventoryError&&inventory.length===0&&<div className="inventory-state"><div className="inventory-empty-icon">❄️</div><h3>Хранилище пока пустое</h3><p>Открой первый кейс — и здесь появится твоя коллекция.</p><button className="main-button" onClick={()=>changePage("Кейсы")}>Перейти к кейсам</button></div>}
             </main>
           )}
 
