@@ -651,3 +651,73 @@ body {
   .snowflake { animation-duration: 60s !important; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* WINTER ADMIN CONTROL CENTER */
+.admin-content {
+  border-color: rgba(117, 205, 246, .25);
+  background: radial-gradient(ellipse at 92% 0%, rgba(48, 150, 202, .19), transparent 42%), linear-gradient(150deg, rgba(8, 27, 44, .97), rgba(5, 17, 30, .98));
+  box-shadow: 0 18px 65px rgba(0, 0, 0, .32), inset 0 1px rgba(225, 247, 255, .035);
+}
+.admin-kicker { color: #7bdcff; }
+.admin-secure-badge { border-color: rgba(91, 213, 177, .3); background: rgba(13, 66, 62, .52); color: #8ff2d1; }
+.admin-panel-card, .admin-player-card {
+  border-color: rgba(119, 194, 231, .2);
+  background: linear-gradient(145deg, rgba(17, 45, 66, .82), rgba(8, 26, 43, .9));
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .17), inset 0 1px rgba(230, 248, 255, .035);
+}
+.admin-section-icon, .admin-player-avatar, .admin-history-symbol {
+  border-color: rgba(117, 204, 242, .3);
+  background: linear-gradient(145deg, #1b5475, #102c46);
+  color: #d9f5ff;
+}
+.admin-input { border-color: rgba(121, 193, 228, .25); background: rgba(4, 18, 31, .85); }
+.admin-input:focus { border-color: #70d7ff; box-shadow: 0 0 0 3px rgba(87, 195, 239, .13); }
+.admin-input::placeholder { color: #7398ad; }
+.admin-search-button { background: linear-gradient(135deg, #35b9eb, #176da5); box-shadow: 0 7px 22px rgba(40, 169, 222, .2); }
+.admin-grant-button { background: linear-gradient(135deg, #38bde9, #176caa); box-shadow: 0 7px 22px rgba(40, 169, 222, .2); }
+.admin-player-card { background: linear-gradient(120deg, rgba(24, 75, 105, .76), rgba(9, 29, 47, .94) 75%); }
+.admin-player-stats > div, .admin-inventory-row, .admin-history-row, .admin-free-cases, .admin-free-case-row {
+  border-color: rgba(117, 194, 231, .18);
+  background: rgba(5, 22, 37, .65);
+}
+.admin-player-stats b, .admin-inventory-row strong, .admin-free-case-row strong { color: #a8eaff; }
+.admin-free-cases > b { color: #c7efff; }
+.admin-refresh-button { border-color: rgba(120, 199, 235, .28); background: #12334b; color: #c7eaff; }
+.admin-tabs { display: flex; gap: 9px; margin: 22px 0 18px; padding: 6px; border: 1px solid rgba(117, 194, 231, .17); border-radius: 14px; background: rgba(4, 17, 29, .68); }
+.admin-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 18px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #8eafc2; font: inherit; font-size: 13px; font-weight: 800; transition: .2s; }
+.admin-tabs button:hover { color: #e7f8ff; background: rgba(68, 149, 190, .12); }
+.admin-tabs button.active { border-color: rgba(113, 210, 249, .35); background: linear-gradient(135deg, rgba(42, 143, 190, .42), rgba(20, 74, 111, .5)); color: #eafaff; box-shadow: 0 5px 20px rgba(35, 151, 202, .12), inset 0 1px rgba(255,255,255,.07); }
+.admin-tabs button span { color: #83dcff; font-size: 17px; }
+.admin-metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.admin-metric-card { position: relative; min-width: 0; overflow: hidden; padding: 18px; border: 1px solid rgba(119, 194, 231, .2); border-radius: 16px; background: linear-gradient(145deg, rgba(18, 54, 78, .83), rgba(7, 25, 42, .92)); }
+.admin-metric-card::after { content: ""; position: absolute; width: 105px; height: 105px; right: -35px; top: -45px; border-radius: 50%; background: rgba(97, 203, 246, .09); filter: blur(2px); }
+.admin-metric-icon { display: grid; place-items: center; width: 34px; height: 34px; margin-bottom: 13px; border: 1px solid rgba(115, 210, 247, .25); border-radius: 10px; background: rgba(58, 159, 205, .16); color: #8ce2ff; font-size: 20px; }
+.admin-metric-card small, .admin-metric-card strong, .admin-metric-card em { display: block; }
+.admin-metric-card small { color: #8fb5c9; font-size: 9px; font-weight: 900; letter-spacing: .8px; }
+.admin-metric-card strong { overflow-wrap: anywhere; margin-top: 8px; color: #effaff; font-size: clamp(23px, 2.4vw, 31px); font-weight: 900; letter-spacing: -.8px; }
+.admin-metric-card em { margin-top: 5px; color: #7195aa; font-size: 10px; font-style: normal; }
+.admin-metric-info strong { color: #8ff2d1; font-size: 20px; }
+.admin-overview-card { margin-bottom: 16px; }
+.admin-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.admin-quick-actions button { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px; border: 1px solid rgba(117, 194, 231, .17); border-radius: 13px; background: rgba(5, 22, 37, .58); color: #e8f8ff; text-align: left; transition: .2s; }
+.admin-quick-actions button:hover { transform: translateY(-2px); border-color: rgba(111, 213, 251, .4); background: rgba(23, 71, 99, .6); }
+.admin-quick-actions button > b { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border-radius: 11px; background: rgba(58, 159, 205, .18); color: #8ce2ff; font-size: 21px; }
+.admin-quick-actions button span { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.admin-quick-actions button strong { font-size: 12px; }
+.admin-quick-actions button small { color: #83a9bd; font-size: 10px; }
+.admin-quick-actions button i { color: #83dcff; font-size: 20px; font-style: normal; }
+.admin-data-note { margin: 14px 2px 0; color: #7698ab; font-size: 11px; line-height: 1.6; }
+.admin-log-filters { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(180px, .7fr); gap: 10px; margin-bottom: 15px; }
+.admin-history-main small { color: #8eb1c4; }
+.admin-history-row time { color: #7899ad; }
+.admin-feedback.success { border-color: rgba(91, 213, 177, .35); background: rgba(13, 66, 62, .45); color: #a5f3d9; }
+.admin-feedback.error { border-color: rgba(255, 130, 153, .3); background: rgba(80, 25, 43, .5); color: #ffc0ce; }
+@media (max-width: 900px) { .admin-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .admin-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .admin-tabs button { gap: 5px; padding: 0 6px; font-size: 11px; }
+  .admin-metrics-grid { gap: 8px; }
+  .admin-metric-card { padding: 13px; }
+  .admin-metric-card strong { font-size: 23px; }
+  .admin-quick-actions, .admin-log-filters { grid-template-columns: 1fr; }
+}
