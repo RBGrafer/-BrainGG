@@ -654,10 +654,10 @@ export default function App() {
 
   async function searchAdminPlayer(event) {
     event?.preventDefault();
-    const gameId = adminGameId.trim();
+    const username = adminGameId.trim().replace(/^@/, "");
 
-    if (!gameId) {
-      setAdminMessage("Введи игровой ID игрока.");
+    if (!username) {
+      setAdminMessage("Введи Telegram username игрока.");
       setAdminMessageError(true);
       return;
     }
@@ -675,14 +675,14 @@ export default function App() {
           body: {
             initData: initData(),
             action: "admin_find_player",
-            gameId,
+            username,
           },
         }
       );
 
       if (error) throw error;
       if (!data?.success || !data?.player) {
-        throw new Error(data?.error || "Игрок с таким Game ID не найден.");
+        throw new Error(data?.error || "Игрок с таким Telegram username не найден.");
       }
 
       setAdminPlayer(data.player);
@@ -696,7 +696,7 @@ export default function App() {
     } catch (error) {
       console.error("Ошибка поиска игрока:", error);
       setAdminMessage(
-        error?.message || "Не удалось найти игрока. Проверь Game ID."
+        error?.message || "Не удалось найти игрока. Проверь Telegram username."
       );
       setAdminMessageError(true);
     } finally {
@@ -708,7 +708,7 @@ export default function App() {
     event?.preventDefault();
 
     if (!adminPlayer?.game_id) {
-      setAdminMessage("Сначала найди игрока по Game ID.");
+      setAdminMessage("Сначала найди игрока по Telegram username.");
       setAdminMessageError(true);
       return;
     }
@@ -743,7 +743,7 @@ export default function App() {
           body: {
             initData: initData(),
             action: adminGrantType === "xp" ? "admin_adjust_xp" : "admin_grant",
-            gameId: String(adminPlayer.game_id),
+            username: String(adminPlayer.username || "").replace(/^@/, ""),
             grantType: adminGrantType,
             amount,
             itemName: adminGrantType === "brainrot" ? adminItemName : null,
@@ -775,7 +775,7 @@ export default function App() {
         body: {
           initData: initData(),
           action: "admin_find_player",
-          gameId: String(adminPlayer.game_id),
+          username: String(adminPlayer.username || "").replace(/^@/, ""),
         },
       });
 
@@ -1958,7 +1958,7 @@ export default function App() {
                   <span className="admin-section-icon">⌕</span>
                   <div>
                     <h3>Найти игрока</h3>
-                    <p>Введи точный Game ID игрока.</p>
+                    <p>Введи Telegram username игрока.</p>
                   </div>
                 </div>
 
@@ -1967,7 +1967,7 @@ export default function App() {
                     className="admin-input"
                     value={adminGameId}
                     onChange={(event) => setAdminGameId(event.target.value)}
-                    placeholder="Например: 102938"
+                    placeholder="Например: @username"
                     autoComplete="off"
                   />
                   <button
@@ -1991,7 +1991,7 @@ export default function App() {
                           ? `@${adminPlayer.username}`
                           : "Игрок BrainGG"}
                       </h3>
-                      <p>Game ID: <b>{adminPlayer.game_id}</b></p>
+                      <p>Telegram: <b>@{adminPlayer.username || "username не указан"}</b></p>
                     </div>
                     <div className="admin-player-stats">
                       <div>
