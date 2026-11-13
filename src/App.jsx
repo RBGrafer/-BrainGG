@@ -21,6 +21,39 @@ function brainrotImage(item) {
   return BRAINROT_ART.find((entry) => entry.match.some((key) => name.includes(key)))?.image || "";
 }
 
+function caseImageSrc(item, fallback = false) {
+  const filename = String(item?.image || "").split("/").pop();
+  if (!filename) return "";
+  const stem = filename.replace(/\.(webp|png|jpe?g|svg)$/i, "");
+  const asset = fallback ? `${stem.replace(/-arctic$/, "")}-arctic.svg` : filename;
+  return `${import.meta.env.BASE_URL}cases/${asset}`;
+}
+
+function CaseArtwork({ item, className = "", alt }) {
+  const [failed, setFailed] = useState(false);
+  const [fallbackFailed, setFallbackFailed] = useState(false);
+  const primary = caseImageSrc(item);
+  const fallback = caseImageSrc(item, true);
+  return (
+    <div className={`${className} case-artwork ${failed && fallbackFailed ? "case-artwork-missing" : ""}`}>
+      {!fallbackFailed ? (
+        <img
+          src={failed ? fallback : primary}
+          alt={alt || item?.name || "Изображение кейса"}
+          loading="eager"
+          decoding="async"
+          onError={() => {
+            if (!failed && fallback && fallback !== primary) setFailed(true);
+            else setFallbackFailed(true);
+          }}
+        />
+      ) : (
+        <span className="case-artwork-placeholder">Изображение кейса</span>
+      )}
+    </div>
+  );
+}
+
 function calculateUpgradeChance(source, target) {
   const sourcePrice = Number(source?.value_gg);
   const targetPrice = Number(target?.value_gg);
@@ -1224,12 +1257,7 @@ export default function App() {
                   </button>
 
                   <div className={`case-detail-visual case-theme-${selectedCase.color}`}>
-                    <div className="case-detail-art-frame">
-                      {selectedCase.image ? (
-                        <img src={selectedCase.image} alt={selectedCase.name} loading="eager" decoding="async" onError={(event) => { const img = event.currentTarget; const key = ({"Truckini Case":"truckini","Summer Case":"summer","Bloody Case":"bloody","Crafting Case":"crafting","Legend Case":"legend","Elite Case":"elite","All In Strawberry Elephant":"all-in-strawberry","All In Headless Horseman":"all-in-horseman"})[selectedCase.name]; const fallback = key ? `/cases/${key}.webp` : ""; if (fallback && !img.dataset.fallbackTried) { img.dataset.fallbackTried = "1"; img.src = fallback; } else { img.style.display = "none"; img.nextElementSibling.style.display = "grid"; } }} />
-                      ) : null}
-                      <span className="case-detail-art-fallback" style={{ display: selectedCase.image ? "none" : "grid" }}>{selectedCase.emoji}</span>
-                    </div>
+                    <CaseArtwork item={selectedCase} className="case-detail-art-frame" alt={selectedCase.name} />
                     {selectedCase.maxReward && (
                       <span className="case-detail-max">До {selectedCase.maxReward.toLocaleString("ru-RU")} GG</span>
                     )}
@@ -1371,9 +1399,7 @@ export default function App() {
                                 if (upgradeTargets.length === 0) loadUpgradeTargets();
                               }}
                             >
-                              <div className="case-card-art">
-                                {item.image ? <img src={item.image} alt={item.name} loading="eager" decoding="async" onError={(event) => { const img = event.currentTarget; const fallback = `/cases/${({"Truckini Case":"truckini","Summer Case":"summer","Bloody Case":"bloody","Crafting Case":"crafting","Legend Case":"legend","Elite Case":"elite","All In Strawberry Elephant":"all-in-strawberry","All In Headless Horseman":"all-in-horseman"}[item.name] || "")}.webp`; if (!img.dataset.fallbackTried && fallback !== "/cases/.webp") { img.dataset.fallbackTried = "1"; img.src = fallback; } else { img.style.display = "none"; img.parentElement.classList.add("has-image-error"); } }} /> : <span>{item.emoji}</span>}
-                              </div>
+                              <CaseArtwork item={item} className="case-card-art" alt={item.name} />
                               <div className="case-card-details">
                                 <h4>{item.name}</h4>
                                 <p>{item.description}</p>
@@ -1900,7 +1926,7 @@ export default function App() {
                         <div className="admin-free-case-list">
                           {adminPlayer.free_case_credits.map((credit) => (
                             <div className="admin-free-case-row" key={credit.case_name}>
-                              <span>{cases.find((item) => item.name === credit.case_name)?.emoji || "🎁"} {credit.case_name}</span>
+                              <span className="admin-free-case-label">{cases.find((item) => item.name === credit.case_name) && <img src={caseImageSrc(cases.find((item) => item.name === credit.case_name))} alt="" />} {credit.case_name}</span>
                               <strong>×{credit.amount}</strong>
                             </div>
                           ))}
@@ -1945,7 +1971,7 @@ export default function App() {
                           >
                             {cases.map((item) => (
                               <option key={item.id} value={item.name}>
-                                {item.emoji} {item.name}
+                                {item.name}
                               </option>
                             ))}
                           </select>
