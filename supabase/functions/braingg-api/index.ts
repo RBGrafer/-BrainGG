@@ -145,6 +145,67 @@ Deno.serve(async (req) => {
     return respond({ error: "Method not allowed" }, 405);
   }
 
+  // Telegram webhook: pre-checkout and successful Stars payment.
+  const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
+  if (req.headers.get("x-telegram-bot-api-secret-token") && webhookSecret) {
+    if (req.headers.get("x-telegram-bot-api-secret-token") !== webhookSecret) {
+      return respond({ error: "Webhook unauthorized" }, 401);
+    }
+    try {
+      const update = await req.json();
+      const token = Deno.env.get("BOT_TOKEN");
+      const url = Deno.env.get("SUPABASE_URL");
+      const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!token || !url || !service) return respond({ error: "Server configuration is incomplete" }, 500);
+      const db = createClient(url, service);
+      const telegramCall = async (method: string, payload: unknown) => {
+        const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!result.ok) throw new Error(result.description || `Telegram ${method} failed`);
+        return result.result;
+      };
+      if (update.pre_checkout_query) {
+        const query = update.pre_checkout_query;
+        const orderId = String(query.invoice_payload || "");
+        const { data: order } = await db.from("telegram_star_orders")
+          .select("id, telegram_id, stars, status").eq("id", orderId).maybeSingle();
+        const valid = Boolean(order && order.status === "pending" &&
+          String(order.telegram_id) === String(query.from?.id) &&
+          query.currency === "XTR" && Number(order.stars) === Number(query.total_amount));
+        await telegramCall("answerPreCheckoutQuery", {
+          pre_checkout_query_id: query.id,
+          ok: valid,
+          ...(valid ? {} : { error_message: "Счёт недействителен или уже обработан. Создайте новый." }),
+        });
+        return respond({ ok: true });
+      }
+      const payment = update.message?.successful_payment;
+      if (payment) {
+        const payload = String(payment.invoice_payload || "");
+        const chargeId = String(payment.telegram_payment_charge_id || "");
+        const stars = Number(payment.total_amount || 0);
+        if (!payload || !chargeId || payment.currency !== "XTR" || !Number.isSafeInteger(stars) || stars < 1) {
+          return respond({ error: "Invalid successful payment payload" }, 400);
+        }
+        const { error } = await db.rpc("credit_stars_payment", {
+          p_order_id: payload, p_telegram_charge_id: chargeId,
+          p_provider_charge_id: payment.provider_payment_charge_id || null,
+          p_stars: stars, p_telegram_id: update.message?.from?.id,
+        });
+        if (error) {
+          console.error("Stars credit failed:", error.message);
+          return respond({ error: "Could not credit Stars payment" }, 500);
+        }
+      }
+      return respond({ ok: true });
+    } catch (error) {
+      console.error("Telegram webhook error:", error);
+      return respond({ error: "Webhook processing failed" }, 500);
+    }
+  }
+
   try {
     const botToken = Deno.env.get("BOT_TOKEN");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -181,6 +242,51 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
     const isAdmin = adminIds.includes(String(telegramUser.id));
 
+    // Create a Telegram Stars invoice. The client never credits its own balance.
+    if (body.action === "create_stars_invoice") {
+      const stars = Number(body.stars);
+      if (!Number.isSafeInteger(stars) || stars < 25 || stars > 10000) {
+        return respond({ error: "Количество Stars должно быть от 25 до 10000" }, 400);
+      }
+      const orderId = crypto.randomUUID();
+      const gg = Math.round(stars * 1.25 * 100) / 100;
+      const { error: orderError } = await supabase.from("telegram_star_orders").insert({
+        id: orderId, telegram_id: telegramUser.id, stars, gg_amount: gg, status: "pending",
+      });
+      if (orderError) {
+        console.error("Stars order creation failed:", orderError.message);
+        return respond({ error: "Не удалось создать заказ на оплату" }, 500);
+      }
+      const invoiceResponse = await fetch(`https://api.telegram.org/bot${botToken}/createInvoiceLink`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `Пополнение BrainGG на ${gg} GG`,
+          description: `Покупка ${gg} игровых монет BrainGG за ${stars} Telegram Stars`,
+          payload: orderId, currency: "XTR", provider_token: "",
+          prices: [{ label: `${gg} GG`, amount: stars }],
+        }),
+      });
+      const invoice = await invoiceResponse.json();
+      if (!invoice.ok || !invoice.result) {
+        await supabase.from("telegram_star_orders").update({ status: "failed" }).eq("id", orderId);
+        console.error("Telegram invoice creation failed:", invoice.description);
+        return respond({ error: "Telegram не смог создать счёт. Попробуй позже." }, 502);
+      }
+      return respond({ success: true, orderId, invoiceUrl: invoice.result, stars, gg });
+    }
+
+    if (body.action === "check_stars_payment") {
+      const orderId = String(body.orderId || "");
+      const { data: order, error: orderError } = await supabase.from("telegram_star_orders")
+        .select("id, status, stars, gg_amount").eq("id", orderId)
+        .eq("telegram_id", telegramUser.id).maybeSingle();
+      if (orderError || !order) return respond({ error: "Заказ не найден" }, 404);
+      const { data: currentPlayer } = await supabase.from("players").select("balance")
+        .eq("telegram_id", telegramUser.id).maybeSingle();
+      return respond({ success: true, status: order.status, balance: currentPlayer?.balance ?? null,
+        stars: order.stars, gg: Number(order.gg_amount) });
+    }
+
     const recordProgress = async (action: string, amount = 1) => {
       const { error } = await supabase.rpc("record_player_action", {
         p_telegram_id: telegramUser.id,
@@ -191,10 +297,10 @@ Deno.serve(async (req) => {
     };
 
     const GAME_TASKS = [
-      { id: "open_3", title: "Открой 3 кейса", description: "Попробуй удачу трижды", goal: 3, metric: "total_cases_opened", reward: 75, xp: 40 },
-      { id: "open_10", title: "Открой 10 кейсов", description: "Стань ближе к редкой коллекции", goal: 10, metric: "total_cases_opened", reward: 200, xp: 100 },
-      { id: "sell_1", title: "Продай предмет", description: "Освободи место в коллекции", goal: 1, metric: "total_sales", reward: 50, xp: 30 },
-      { id: "upgrade_1", title: "Улучши предмет", description: "Попробуй улучшить брейнрота", goal: 1, metric: "total_upgrades", reward: 100, xp: 50 },
+      { id: "open_3", title: "Открой 3 кейса", description: "Попробуй удачу трижды", goal: 3, metric: "total_cases_opened", reward: 15, xp: 40 },
+      { id: "open_10", title: "Открой 10 кейсов", description: "Стань ближе к редкой коллекции", goal: 10, metric: "total_cases_opened", reward: 35, xp: 100 },
+      { id: "sell_1", title: "Продай предмет", description: "Освободи место в коллекции", goal: 1, metric: "total_sales", reward: 10, xp: 30 },
+      { id: "upgrade_1", title: "Улучши предмет", description: "Попробуй улучшить брейнрота", goal: 1, metric: "total_upgrades", reward: 20, xp: 50 },
     ];
 
     // Игровой центр: публичная лента, прогресс, задания и рейтинг.
