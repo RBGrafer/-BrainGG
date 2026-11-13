@@ -77,7 +77,7 @@ export default function App() {
   const [sellingAll, setSellingAll] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
 
-  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь"];
+  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь", "Рейтинг", "Задания", "Профиль"];
   const [customError, setCustomError] = useState("");
 
   // Состояние защищённой админ-панели BrainGG
@@ -99,6 +99,12 @@ export default function App() {
   const [adminSection, setAdminSection] = useState("overview");
   const [adminLogQuery, setAdminLogQuery] = useState("");
   const [adminLogAction, setAdminLogAction] = useState("all");
+  const [gameHub, setGameHub] = useState({ progress: null, tasks: [], leaderboard: [], liveDrops: [], dailyClaimed: false });
+  const [hubLoading, setHubLoading] = useState(false);
+  const [dailyClaimLoading, setDailyClaimLoading] = useState(false);
+  const [taskClaimLoading, setTaskClaimLoading] = useState("");
+  const [hubMessage, setHubMessage] = useState("");
+  const [adminGameStats, setAdminGameStats] = useState(null);
 
   const initData = () => window.Telegram?.WebApp?.initData;
 
@@ -219,6 +225,8 @@ export default function App() {
         }
 
         setPlayer(data.player);
+        // Игровой прогресс загружается отдельно, чтобы не затрагивать старую таблицу players.
+        loadGameHub();
 
         // Сервер сам проверяет Telegram ID по ADMIN_TELEGRAM_IDS.
         // Наличие вкладки в интерфейсе не даёт права выполнять админ-действия.
@@ -234,6 +242,7 @@ export default function App() {
           if (!adminError && adminData?.success) {
             setIsAdmin(true);
             setAdminLogs(adminData.logs || []);
+            loadAdminGameStats();
           }
         } catch (adminCheckError) {
           console.info("Админ-доступ не активирован для этого аккаунта.");
@@ -248,6 +257,69 @@ export default function App() {
 
     registerPlayer();
   }, []);
+
+  async function loadGameHub() {
+    if (!initData()) return;
+    setHubLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "get_game_hub" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось загрузить игровой центр");
+      setGameHub(data);
+      setLiveDrops(data.liveDrops || []);
+    } catch (error) {
+      console.error("Game hub loading failed:", error);
+      setHubMessage("Игровой центр пока недоступен. Проверь миграцию Season 2 в Supabase.");
+    } finally { setHubLoading(false); }
+  }
+
+  async function claimDailyReward() {
+    if (dailyClaimLoading || gameHub.dailyClaimed) return;
+    setDailyClaimLoading(true); setHubMessage("");
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "claim_daily_reward" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось получить награду");
+      if (data.result?.already_claimed) setHubMessage("Сегодняшняя награда уже получена.");
+      else {
+        setPlayer((current) => current ? { ...current, balance: data.balance ?? current.balance } : current);
+        setHubMessage(`Получено ${data.result.reward_gg} GG и ${data.result.reward_xp} XP!`);
+      }
+      await loadGameHub();
+    } catch (error) { setHubMessage(await friendlyActionError(error, null, "Не удалось получить ежедневную награду.")); }
+    finally { setDailyClaimLoading(false); }
+  }
+
+  async function claimTaskReward(taskId) {
+    if (taskClaimLoading) return;
+    setTaskClaimLoading(taskId); setHubMessage("");
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "claim_task_reward", taskId },
+      });
+      if (error) throw error;
+      if (!data?.success || data.result?.success === false) throw new Error(data?.result?.error || data?.error || "Задание пока не выполнено");
+      setPlayer((current) => current ? { ...current, balance: data.balance ?? current.balance } : current);
+      setHubMessage(`Награда получена: ${data.result.reward_gg} GG и ${data.result.reward_xp} XP!`);
+      await loadGameHub();
+    } catch (error) { setHubMessage(await friendlyActionError(error, null, "Пока нельзя забрать эту награду.")); }
+    finally { setTaskClaimLoading(""); }
+  }
+
+  async function loadAdminGameStats() {
+    const { data, error } = await supabase.functions.invoke("braingg-api", { body: { initData: initData(), action: "admin_get_game_stats" } });
+    if (!error && data?.success) setAdminGameStats(data.stats);
+  }
+
+  useEffect(() => {
+    if (!player?.telegram_id) return undefined;
+    const timer = window.setInterval(() => { loadGameHub(); }, 20000);
+    return () => window.clearInterval(timer);
+  }, [player?.telegram_id]);
 
   async function loadInventory() {
     setInventoryLoading(true);
@@ -430,7 +502,7 @@ export default function App() {
         {
           body: {
             initData: initData(),
-            action: "admin_grant",
+            action: adminGrantType === "xp" ? "admin_adjust_xp" : "admin_grant",
             gameId: String(adminPlayer.game_id),
             grantType: adminGrantType,
             amount,
@@ -449,6 +521,7 @@ export default function App() {
         coins: "GG",
         cases: "бесплатных кейсов",
         brainrot: "брейнротов",
+        xp: "XP",
       };
       setAdminMessage(
         `Успешно выдано: ${amount} ${
@@ -563,7 +636,10 @@ export default function App() {
       await loadUpgradeTargets();
     }
 
+    if (["Рейтинг", "Задания", "Профиль"].includes(nextPage)) await loadGameHub();
+
     if (nextPage === "Админка" && isAdmin) {
+      await loadAdminGameStats();
       if (upgradeTargets.length === 0) {
         await loadUpgradeTargets();
       }
@@ -928,7 +1004,7 @@ export default function App() {
               {liveDrops.length ? liveDrops.map((drop) => (
                 <article className="live-drop-chip" key={drop.id}>
                   <div className="live-drop-art">{brainrotImage(drop) ? <img src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>❄</span>}</div>
-                  <div><b>{drop.item_name}</b><small>{drop.case_name} · {drop.rarity}</small></div>
+                  <div><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {drop.case_name || "Кейс"} · {drop.rarity || "Награда"}</small></div>
                   {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
                 </article>
               )) : <div className="live-drops-empty">Здесь появятся реальные выигрыши после открытия кейса</div>}
@@ -944,6 +1020,12 @@ export default function App() {
                 <p>Открывай кейсы, собирай персонажей и улучшай свою коллекцию.</p>
                 <p className="home-luck">Удачи!</p>
                 <button className="main-button" onClick={() => changePage("Кейсы")}>Смотреть кейсы 🎁</button>
+                <section className="season-card daily-card">
+                  <div><span className="season-kicker">ARCTIC DAILY</span><h3>Ежедневная награда</h3><p>Заходи каждый день и увеличивай серию посещений.</p></div>
+                  <div className="daily-streak">❄ {gameHub.progress?.daily_streak || 0} дней подряд</div>
+                  <button className="main-button" disabled={dailyClaimLoading || gameHub.dailyClaimed} onClick={claimDailyReward}>{dailyClaimLoading ? "Получаем..." : gameHub.dailyClaimed ? "Уже получено сегодня" : "Забрать награду"}</button>
+                </section>
+                {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
               </div>
             </main>
           )}
@@ -1456,6 +1538,31 @@ export default function App() {
             </main>
           )}
 
+          {page === "Рейтинг" && (
+            <main className="content season-page">
+              <header className="season-page-heading"><span className="season-kicker">GLOBAL LEADERBOARD</span><h2>❄ Глобальный рейтинг</h2><p>Игроки с самым высоким опытом BrainGG.</p></header>
+              <section className="season-panel"><div className="season-panel-title"><h3>Таблица лидеров</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>↻ Обновить</button></div>
+                {hubLoading ? <p>Загружаем рейтинг...</p> : (gameHub.leaderboard || []).length ? <div className="leaderboard-list">{gameHub.leaderboard.map((entry,index)=><article className={`leaderboard-row ${index<3?"top-player":""}`} key={`${entry.game_id||entry.username}-${index}`}><b className="leaderboard-place">{index===0?"👑":`#${index+1}`}</b><div className="leaderboard-avatar">{index<3?"❄":"♙"}</div><div className="leaderboard-user"><b>@{entry.username}</b><small>Уровень {entry.level} · {Number(entry.total_cases_opened||0)} открытий</small></div><strong>{Number(entry.xp||0).toLocaleString("ru-RU")} XP</strong></article>)}</div> : <p className="season-empty">Рейтинг появится после накопления игрового опыта.</p>}
+              </section>
+            </main>
+          )}
+
+          {page === "Задания" && (
+            <main className="content season-page">
+              <header className="season-page-heading"><span className="season-kicker">ARCTIC MISSIONS</span><h2>❄ Задания и достижения</h2><p>Выполняй игровые цели, получай GG и опыт.</p></header>
+              {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
+              <section className="season-panel"><h3>Текущие задания</h3>{(gameHub.tasks||[]).map((task)=><article className="mission-card" key={task.id}><div className="mission-icon">✦</div><div className="mission-info"><b>{task.title}</b><p>{task.description}</p><div className="mission-progress"><span style={{width:`${Math.min(100,Number(task.progress||0)/task.goal*100)}%`}}/></div><small>{Math.min(Number(task.progress||0),task.goal)} / {task.goal}</small></div><div className="mission-reward"><b>+{task.reward} GG</b><small>+{task.xp} XP</small><button className="case-button" disabled={!task.progress||task.progress<task.goal||task.claimed||taskClaimLoading===task.id} onClick={()=>claimTaskReward(task.id)}>{task.claimed?"Получено":taskClaimLoading===task.id?"...":"Забрать"}</button></div></article>)}</section>
+              <section className="season-panel"><h3>Достижения</h3><div className="achievement-grid">{[{name:"Первый шаг",desc:"Открой первый кейс",ok:Number(gameHub.progress?.total_cases_opened||0)>=1},{name:"Коллекционер",desc:"Открой 10 кейсов",ok:Number(gameHub.progress?.total_cases_opened||0)>=10},{name:"Торговец",desc:"Продай первый предмет",ok:Number(gameHub.progress?.total_sales||0)>=1},{name:"Мастер улучшений",desc:"Улучши первый предмет",ok:Number(gameHub.progress?.total_upgrades||0)>=1}].map((a)=><article className={`achievement-card ${a.ok?"unlocked":""}`} key={a.name}><span>{a.ok?"🏆":"🔒"}</span><b>{a.name}</b><small>{a.desc}</small></article>)}</div></section>
+            </main>
+          )}
+
+          {page === "Профиль" && (
+            <main className="content season-page"><header className="season-page-heading"><span className="season-kicker">PLAYER IDENTITY</span><h2>❄ Профиль игрока</h2><p>Твой путь в мире BrainGG.</p></header>
+              <section className="season-profile-card"><div className="profile-avatar">❄</div><div className="profile-identity"><h2>@{player?.username||"игрок"}</h2><p>Game ID: {player?.game_id||"—"}</p><span>Уровень {gameHub.progress?.level||1}</span></div><div className="profile-xp"><b>{Number(gameHub.progress?.xp||0).toLocaleString("ru-RU")} XP</b><div className="mission-progress"><span style={{width:`${Math.min(100,Math.max(0,(Number(gameHub.progress?.xp||0)-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)/Math.max(1,Number(gameHub.progress?.level||1)*Number(gameHub.progress?.level||1)*100-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)*100))}%`}}/></div><small>До следующего уровня: {Math.max(0,Number(gameHub.progress?.next_level_xp||100)-Number(gameHub.progress?.xp||0))} XP</small></div></section>
+              <div className="profile-stat-grid"><article><small>ОТКРЫТО КЕЙСОВ</small><b>{gameHub.progress?.total_cases_opened||0}</b></article><article><small>ПРОДАНО ПРЕДМЕТОВ</small><b>{gameHub.progress?.total_sales||0}</b></article><article><small>АПГРЕЙДОВ</small><b>{gameHub.progress?.total_upgrades||0}</b></article><article><small>СЕРИЯ ВХОДОВ</small><b>{gameHub.progress?.daily_streak||0} дней</b></article></div>
+            </main>
+          )}
+
           {page === "Админка" && isAdmin && (
             <main className="content admin-content">
               <div className="admin-heading">
@@ -1513,6 +1620,7 @@ export default function App() {
                     </article>
                   </div>
 
+                  <section className="admin-panel-card"><div className="admin-section-title"><span className="admin-section-icon">❄</span><div><h3>Arctic Season 2</h3><p>Состояние новых игровых модулей.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminGameStats}>↻</button></div><div className="admin-metrics-grid"><article className="admin-metric-card"><small>ВСЕ ИГРОКИ</small><strong>{adminGameStats?.players ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРЕДМЕТОВ В ИНВЕНТАРЯХ</small><strong>{adminGameStats?.inventory_items ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРОФИЛЕЙ С XP</small><strong>{adminGameStats?.active_profiles ?? "—"}</strong></article></div><p className="admin-data-note">Новые показатели доступны после применения миграции migrations_arctic_season2.sql.</p></section>
                   <section className="admin-panel-card admin-overview-card">
                     <div className="admin-section-title">
                       <span className="admin-section-icon">⌁</span>
@@ -1595,6 +1703,10 @@ export default function App() {
                         <small>БРЕЙНРОТЫ</small>
                         <b>🧠 {adminInventory.length}</b>
                       </div>
+                      <div>
+                        <small>ОПЫТ ПРОФИЛЯ</small>
+                        <b>❄ {adminPlayer.progress?.xp ?? 0} XP</b>
+                      </div>
                     </div>
                   </section>
 
@@ -1636,6 +1748,7 @@ export default function App() {
                           <option value="coins">🪙 Монеты GG</option>
                           <option value="cases">🎁 Бесплатные кейсы</option>
                           <option value="brainrot">🧠 Брейнрот</option>
+                          <option value="xp">❄ Опыт профиля (XP)</option>
                         </select>
                       </label>
 
