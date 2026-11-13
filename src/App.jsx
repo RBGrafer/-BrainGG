@@ -32,6 +32,9 @@ export default function App() {
   const [opening, setOpening] = useState(false);
   const [authError, setAuthError] = useState("");
   const [lastRewards, setLastRewards] = useState([]);
+  const [reelItems, setReelItems] = useState([]);
+  const [reelPosition, setReelPosition] = useState(0);
+  const [reelWinnerIndex, setReelWinnerIndex] = useState(-1);
 
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -552,52 +555,64 @@ export default function App() {
 
     setOpening(true);
     setLastRewards([]);
+    setReelWinnerIndex(-1);
     setActionMessage("");
     const rewards = [];
 
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const makeReel = (winner) => {
+      const pool = upgradeTargets.length ? upgradeTargets : [];
+      const fallback = ["Noobini Pizzanini", "Lirili Larila", "Trippi Troppi", "Ballerina Cappuccina", "Cappuccino Assassino", "Bombardiro Crocodilo"];
+      const cards = Array.from({ length: 31 }, (_, index) => {
+        const source = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+        return source ? { item_name: source.item_name, value_gg: source.value_gg, image: source.image || source.image_url || source.photo_url } : { item_name: fallback[index % fallback.length], value_gg: 0 };
+      });
+      const winnerIndex = 27;
+      cards[winnerIndex] = { ...winner, image: winner.image || winner.image_url || winner.photo_url };
+      return { cards, winnerIndex };
+    };
+
     try {
       for (let i = 0; i < openCount; i++) {
-        const { data, error } = await supabase.functions.invoke(
-          "braingg-api",
-          {
-            body: {
-              initData: initData(),
-              action: "open_case",
-              caseName: selectedCase.name,
-            },
-          }
-        );
+        const { data, error } = await supabase.functions.invoke("braingg-api", {
+          body: { initData: initData(), action: "open_case", caseName: selectedCase.name },
+        });
 
         if (error || !data?.success || !data?.result?.success) {
-          const message = await friendlyActionError(
-            error,
-            data,
-            "Не удалось открыть кейс. Попробуй ещё раз."
-          );
+          const message = await friendlyActionError(error, data, "Не удалось открыть кейс. Попробуй ещё раз.");
           throw new Error(message);
         }
 
-        rewards.push(data.result);
-
+        const reward = data.result;
+        rewards.push(reward);
         setPlayer((previous) => {
           if (!previous) return previous;
           return {
             ...previous,
-            balance: data.result.balance,
-            // Источник истины — остаток, который Edge Function перечитала из Supabase.
-            ...(Array.isArray(data.free_case_credits)
-              ? { free_case_credits: data.free_case_credits }
-              : {}),
-            ...(Number.isFinite(Number(data.free_cases_total))
-              ? { free_cases_total: Number(data.free_cases_total) }
-              : {}),
+            balance: reward.balance,
+            ...(Array.isArray(data.free_case_credits) ? { free_case_credits: data.free_case_credits } : {}),
+            ...(Number.isFinite(Number(data.free_cases_total)) ? { free_cases_total: Number(data.free_cases_total) } : {}),
           };
         });
 
-        setLastRewards([...rewards]);
-        if (!fastOpen && i < openCount - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 650));
+        if (!fastOpen) {
+          const reel = makeReel(reward);
+          setReelItems(reel.cards);
+          setReelWinnerIndex(-1);
+          setReelPosition(0);
+          await nextFrame();
+          setReelPosition(reel.winnerIndex);
+          await wait(5200);
+          setReelWinnerIndex(reel.winnerIndex);
+        } else {
+          setReelItems([reward]);
+          setReelPosition(0);
+          setReelWinnerIndex(0);
         }
+
+        setLastRewards([...rewards]);
+        if (!fastOpen && i < openCount - 1) await wait(550);
       }
 
       await loadInventory();
@@ -605,12 +620,7 @@ export default function App() {
     } catch (error) {
       console.error("Ошибка открытия:", error);
       const message = error.message || "Не удалось открыть кейс. Попробуй ещё раз.";
-
-      setActionMessage(
-        rewards.length > 0
-          ? `Открыто кейсов: ${rewards.length}. ${message}`
-          : message
-      );
+      setActionMessage(rewards.length > 0 ? `Открыто кейсов: ${rewards.length}. ${message}` : message);
     } finally {
       setOpening(false);
     }
@@ -907,11 +917,12 @@ export default function App() {
                   </button>
 
                   <div className={`case-detail-visual case-theme-${selectedCase.color}`}>
-                    {selectedCase.image ? (
-                      <img src={selectedCase.image} alt={selectedCase.name} />
-                    ) : (
-                      <span>{selectedCase.emoji}</span>
-                    )}
+                    <div className="case-detail-art-frame">
+                      {selectedCase.image ? (
+                        <img src={selectedCase.image} alt={selectedCase.name} onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.nextElementSibling.style.display = "grid"; }} />
+                      ) : null}
+                      <span className="case-detail-art-fallback" style={{ display: selectedCase.image ? "none" : "grid" }}>{selectedCase.emoji}</span>
+                    </div>
                     {selectedCase.maxReward && (
                       <span className="case-detail-max">До {selectedCase.maxReward.toLocaleString("ru-RU")} GG</span>
                     )}
@@ -944,18 +955,23 @@ export default function App() {
                     </label>
                   </div>
 
-                  <div className={`case-roulette-strip ${opening ? "is-rolling" : ""}`}>
-                    {(lastRewards.length ? lastRewards : Array.from({ length: 8 }, (_, i) => ({
-                      item_name: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.item_name || ["Fishino Clownino", "Los Dragons", "Elefanto Frigo", "Antonio"][i % 4],
-                      value_gg: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.value_gg || 0,
-                    }))).map((reward, index) => (
-                      <div className="case-roulette-item" key={`${reward.item_name}-${index}`}>
-                        <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>
-                        <b>{reward.item_name}</b>
-                        {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
-                      </div>
-                    ))}
+                  <div className={`case-roulette-viewport ${opening ? "is-rolling" : ""}`}>
+                    <div className="case-roulette-strip" style={{ "--reel-index": reelPosition }}>
+                      {(reelItems.length ? reelItems : Array.from({ length: 13 }, (_, i) => ({
+                        item_name: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.item_name || ["Noobini Pizzanini", "Lirili Larila", "Trippi Troppi", "Ballerina Cappuccina"][i % 4],
+                        value_gg: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.value_gg || 0,
+                        image: upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.image || upgradeTargets[i % Math.max(upgradeTargets.length, 1)]?.image_url,
+                      }))).map((reward, index) => (
+                        <div className={`case-roulette-item ${index === reelWinnerIndex ? "is-winner" : ""}`} key={`${reward.item_name}-${index}`}>
+                          {reward.image ? <img src={reward.image} alt="" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
+                          <b>{reward.item_name}</b>
+                          {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
+                        </div>
+                      ))}
+                    </div>
                     <i className="case-roulette-pointer" />
+                    <div className="case-roulette-edge case-roulette-edge-left" />
+                    <div className="case-roulette-edge case-roulette-edge-right" />
                   </div>
 
                   {(() => {
@@ -1040,7 +1056,7 @@ export default function App() {
                               }}
                             >
                               <div className="case-card-art">
-                                {item.image ? <img src={item.image} alt={item.name} /> : <span>{item.emoji}</span>}
+                                {item.image ? <img src={item.image} alt={item.name} onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement.classList.add("has-image-error"); }} /> : <span>{item.emoji}</span>}
                               </div>
                               <div className="case-card-details">
                                 <h4>{item.name}</h4>
