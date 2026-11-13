@@ -711,7 +711,10 @@ Deno.serve(async (req) => {
         return respond({ error: "Could not load inventory" }, 500);
       }
 
-      return respond({ success: true, items: items ?? [] });
+      const uniqueItems = Array.from(
+        new Map((items ?? []).map((item) => [item.item_name, item])).values(),
+      );
+      return respond({ success: true, items: uniqueItems });
     }
 
     // ПРОДАЖА ПРЕДМЕТА
