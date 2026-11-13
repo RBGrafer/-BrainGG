@@ -68,6 +68,9 @@ export default function App() {
   const [adminMessageError, setAdminMessageError] = useState(false);
   const [adminLogs, setAdminLogs] = useState([]);
   const [adminLogsLoading, setAdminLogsLoading] = useState(false);
+  const [adminSection, setAdminSection] = useState("overview");
+  const [adminLogQuery, setAdminLogQuery] = useState("");
+  const [adminLogAction, setAdminLogAction] = useState("all");
 
   const initData = () => window.Telegram?.WebApp?.initData;
 
@@ -774,6 +777,20 @@ export default function App() {
 
   const wheelAngle = actualChance * 3.6;
 
+  // Показатели панели строятся только по реально доступному журналу выдач.
+  const adminTotalOperations = adminLogs.length;
+  const adminTotalCoins = adminLogs
+    .filter((log) => log.action === "coins")
+    .reduce((sum, log) => sum + Number(log.amount || 0), 0);
+  const adminUniquePlayers = new Set(adminLogs.map((log) => String(log.game_id))).size;
+  const filteredAdminLogs = adminLogs.filter((log) => {
+    const query = adminLogQuery.trim().toLowerCase();
+    const matchesQuery = !query || [log.game_id, log.item_name, log.case_name, log.admin_telegram_id]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+    const matchesAction = adminLogAction === "all" || log.action === adminLogAction;
+    return matchesQuery && matchesAction;
+  });
+
   const snowflakes = Array.from({ length: 34 }, (_, index) => ({
     id: index,
     left: `${(index * 37 + 11) % 100}%`,
@@ -1461,6 +1478,81 @@ export default function App() {
                 <div className="admin-secure-badge">● ЗАЩИЩЁННЫЙ ДОСТУП</div>
               </div>
 
+              <nav className="admin-tabs" aria-label="Разделы админ-панели">
+                {[
+                  ["overview", "Обзор", "▦"],
+                  ["players", "Игроки", "♙"],
+                  ["history", "Журнал", "◷"],
+                ].map(([key, label, icon]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={adminSection === key ? "active" : ""}
+                    onClick={() => setAdminSection(key)}
+                  >
+                    <span>{icon}</span>{label}
+                  </button>
+                ))}
+              </nav>
+
+              {adminSection === "overview" && (
+                <>
+                  <div className="admin-metrics-grid">
+                    <article className="admin-metric-card">
+                      <span className="admin-metric-icon">↗</span>
+                      <small>ОПЕРАЦИЙ В ЖУРНАЛЕ</small>
+                      <strong>{adminTotalOperations}</strong>
+                      <em>Последние 100 записей</em>
+                    </article>
+                    <article className="admin-metric-card">
+                      <span className="admin-metric-icon">◎</span>
+                      <small>УНИКАЛЬНЫХ ИГРОКОВ</small>
+                      <strong>{adminUniquePlayers}</strong>
+                      <em>По журналу выдач</em>
+                    </article>
+                    <article className="admin-metric-card">
+                      <span className="admin-metric-icon">◇</span>
+                      <small>ВЫДАНО GG</small>
+                      <strong>{adminTotalCoins.toLocaleString("ru-RU")}</strong>
+                      <em>Сумма записей coins</em>
+                    </article>
+                    <article className="admin-metric-card admin-metric-info">
+                      <span className="admin-metric-icon">❄</span>
+                      <small>СОСТОЯНИЕ ДОСТУПА</small>
+                      <strong>Активен</strong>
+                      <em>Проверка прав на сервере</em>
+                    </article>
+                  </div>
+
+                  <section className="admin-panel-card admin-overview-card">
+                    <div className="admin-section-title">
+                      <span className="admin-section-icon">⌁</span>
+                      <div><h3>Быстрые действия</h3><p>Переход к основным операциям администратора.</p></div>
+                    </div>
+                    <div className="admin-quick-actions">
+                      <button type="button" onClick={() => setAdminSection("players")}><b>♙</b><span><strong>Найти игрока</strong><small>Профиль, баланс и инвентарь</small></span><i>→</i></button>
+                      <button type="button" onClick={() => { setAdminSection("history"); loadAdminLogs(); }}><b>◷</b><span><strong>Журнал операций</strong><small>Проверить последние выдачи</small></span><i>→</i></button>
+                    </div>
+                  </section>
+
+                  <section className="admin-panel-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">◷</span><div><h3>Последние операции</h3><p>Недавние действия из серверного журнала.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminLogs} disabled={adminLogsLoading}>{adminLogsLoading ? "..." : "↻ Обновить"}</button></div>
+                    {adminLogs.slice(0, 5).length === 0 ? <p className="admin-muted">В журнале пока нет операций.</p> : (
+                      <div className="admin-history-list">{adminLogs.slice(0, 5).map((log) => (
+                        <div className="admin-history-row" key={log.id}>
+                          <div className="admin-history-symbol">{log.action === "coins" ? "🪙" : log.action === "cases" ? "🎁" : "🧠"}</div>
+                          <div className="admin-history-main"><b>{log.action === "coins" ? `+${log.amount} GG` : log.action === "cases" ? `+${log.amount} ${log.case_name || "кейсов"}` : `+${log.amount} ${log.item_name || "брейнрот"}`}</b><small>Game ID: {log.game_id}</small></div>
+                          <time>{log.created_at ? new Date(log.created_at).toLocaleString("ru-RU") : "—"}</time>
+                        </div>
+                      ))}</div>
+                    )}
+                  </section>
+                  <p className="admin-data-note">Статистика рассчитана по последним 100 административным выдачам. Данные платежей, оборота и всех игроков пока не подключены к API и здесь не имитируются.</p>
+                </>
+              )}
+
+              {adminSection === "players" && (
+                <>
               <section className="admin-panel-card">
                 <div className="admin-section-title">
                   <span className="admin-section-icon">⌕</span>
@@ -1648,7 +1740,10 @@ export default function App() {
                   {adminMessage}
                 </div>
               )}
+                </>
+              )}
 
+              {adminSection === "history" && (
               <section className="admin-panel-card admin-history-card">
                 <div className="admin-section-title admin-history-heading">
                   <span className="admin-section-icon">◷</span>
@@ -1666,13 +1761,19 @@ export default function App() {
                   </button>
                 </div>
 
+                <div className="admin-log-filters">
+                  <input className="admin-input" value={adminLogQuery} onChange={(event) => setAdminLogQuery(event.target.value)} placeholder="Поиск по Game ID, предмету или админу" />
+                  <select className="admin-input" value={adminLogAction} onChange={(event) => setAdminLogAction(event.target.value)}>
+                    <option value="all">Все операции</option><option value="coins">Монеты GG</option><option value="cases">Бесплатные кейсы</option><option value="brainrot">Брейнроты</option>
+                  </select>
+                </div>
                 {adminLogsLoading ? (
                   <p className="admin-muted">Загружаем историю...</p>
-                ) : adminLogs.length === 0 ? (
-                  <p className="admin-muted">Пока выдач не было.</p>
+                ) : filteredAdminLogs.length === 0 ? (
+                  <p className="admin-muted">По выбранным фильтрам операций нет.</p>
                 ) : (
                   <div className="admin-history-list">
-                    {adminLogs.map((log) => (
+                    {filteredAdminLogs.map((log) => (
                       <div className="admin-history-row" key={log.id}>
                         <div className="admin-history-symbol">
                           {log.action === "coins" ? "🪙" : log.action === "cases" ? "🎁" : "🧠"}
@@ -1697,6 +1798,7 @@ export default function App() {
                   </div>
                 )}
               </section>
+              )}
             </main>
           )}
         </>
