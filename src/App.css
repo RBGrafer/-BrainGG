@@ -777,3 +777,20 @@ body {
 @keyframes pointerFlash {from{box-shadow:0 0 8px #a9eaff}to{box-shadow:0 0 22px #a9eaff,0 0 38px #4dbde9}}
 @media(max-width:620px){.inventory-stats{gap:7px}.inventory-stats>div{padding:11px 9px}.inventory-stats small{font-size:9px}.inventory-toolbar{grid-template-columns:1fr 1fr}.inventory-search{grid-column:1/-1}.inventory-toolbar select{width:100%;min-width:0}.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.inventory-card{padding:9px}.inventory-art{height:100px}.inventory-art>span{font-size:45px}.inventory-card-actions{grid-template-columns:1fr}.inventory-card-actions button{padding:9px 4px}.inventory-hero-icon{width:54px;height:54px;border-radius:17px;font-size:26px}}
 @media(prefers-reduced-motion:reduce){.content,.inventory-card,.inventory-art>span,.case-roulette-strip.is-rolling *{animation:none!important;transition:none!important}}
+
+/* Winter home greeting and inventory bulk actions */
+.logo { display:flex; align-items:center; gap:8px; color:#dff8ff; text-shadow:0 0 24px #67d9ff88; }
+.logo-heart { display:inline-block; filter:hue-rotate(250deg) saturate(1.25); color:#8de8ff; text-shadow:0 0 12px #74dfff,0 0 28px #42bfffaa; }
+.home-welcome { min-height: min(560px, 65vh); display:grid; place-items:center; text-align:center; position:relative; overflow:hidden; background:radial-gradient(ellipse at 50% 35%,#164a6c88 0%,transparent 58%),linear-gradient(145deg,#0d2032,#081522 72%); border-color:#73cfff38; }
+.home-welcome-inner { width:min(100%,680px); margin:auto; display:flex; align-items:center; flex-direction:column; position:relative; z-index:1; }
+.home-welcome-emblem { width:64px;height:64px;display:grid;place-items:center;border:1px solid #a4eaff55;border-radius:22px;background:linear-gradient(145deg,#b5efff30,#4ba9df12);color:#c8f4ff;font-size:30px;box-shadow:0 0 35px #58cfff2c,inset 0 0 20px #a8edff1a;margin-bottom:22px; }
+.home-greeting { color:#b8eaff!important; font-size:clamp(18px,3vw,24px); margin:0 0 10px!important; }
+.home-welcome h2 { color:#f0fbff; font-size:clamp(25px,4vw,36px)!important; margin:0 0 14px!important; }
+.home-welcome-inner>p:not(.home-greeting) { color:#b2cddd; line-height:1.7; margin:5px 0; }
+.home-welcome .home-luck { color:#dff8ff!important; font-weight:800; margin:12px 0 24px!important; }
+.home-welcome .main-button { max-width:260px; background:linear-gradient(135deg,#39bce9,#176ba8); box-shadow:0 8px 28px #27aee833; }
+.inventory-toolbar { grid-template-columns:minmax(160px,1fr) auto auto auto; }
+.inventory-sell-all { min-height:43px;padding:0 17px;border:1px solid #72d9ff65;border-radius:12px;background:linear-gradient(135deg,#176b96,#12486c);color:#e8faff;font:inherit;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 0 18px #38bff022;transition:transform .2s,filter .2s; }
+.inventory-sell-all:hover:not(:disabled) { transform:translateY(-2px);filter:brightness(1.15); }
+.inventory-sell-all:disabled { opacity:.5;cursor:wait; }
+@media(max-width:760px){.inventory-toolbar{grid-template-columns:1fr 1fr}.inventory-search{grid-column:1/-1}.inventory-sell-all{grid-column:1/-1}}
