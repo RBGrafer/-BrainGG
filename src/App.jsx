@@ -32,11 +32,9 @@ function normalizeUpgradeChance(value, fallback = 0.1) {
   return Math.min(90, Math.max(0.1, safeValue));
 }
 
-function getUpgradeSectorCenter(won, chancePercent) {
-  const chance = normalizeUpgradeChance(chancePercent);
-  const greenSweep = chance * 3.6;
-  if (won) return greenSweep / 2;
-  return greenSweep + (360 - greenSweep) / 2;
+function formatUpgradeChance(value) {
+  const rounded = Math.round(Number(value || 0) * 10) / 10;
+  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
 }
 
 // Official/game-style reference artwork for the named Steal a Brainrot characters.
@@ -163,9 +161,10 @@ export default function App() {
   const [upgradeChance, setUpgradeChance] = useState(50);
   const [upgradeResult, setUpgradeResult] = useState(null);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
-  const [upgradeRotation, setUpgradeRotation] = useState(0);
   const [upgradeWheelAnimating, setUpgradeWheelAnimating] = useState(false);
-  const [upgradeVisualChance, setUpgradeVisualChance] = useState(null);
+  const [upgradeAnimatedChance, setUpgradeAnimatedChance] = useState(0);
+  const [upgradeSpinWon, setUpgradeSpinWon] = useState(null);
+  const upgradeChanceAnimationRef = useRef(null);
 
   const [sellingId, setSellingId] = useState(null);
   const [sellingAll, setSellingAll] = useState(false);
@@ -1154,8 +1153,7 @@ export default function App() {
 
   function chooseChance(preset) {
     setUpgradeChance(preset);
-    setUpgradeVisualChance(null);
-    setUpgradeRotation(0);
+    setUpgradeSpinWon(null);
     setUpgradeWheelAnimating(false);
     setUpgradeResult(null);
     setActionMessage("");
@@ -1170,9 +1168,9 @@ export default function App() {
   }
 
   function chooseSource(item) {
+    if (selectedUpgrade?.id !== item.id) setUpgradeAnimatedChance(0);
     setSelectedUpgrade(item);
-    setUpgradeVisualChance(null);
-    setUpgradeRotation(0);
+    setUpgradeSpinWon(null);
     setUpgradeWheelAnimating(false);
     setMobileUpgradeList("target");
     setUpgradeResult(null);
@@ -1413,8 +1411,7 @@ export default function App() {
 
     setUpgradeLoading(true);
     setUpgradeWheelAnimating(false);
-    setUpgradeVisualChance(null);
-    setUpgradeRotation(0);
+    setUpgradeSpinWon(null);
     playUiSound("upgrade");
     setUpgradeResult(null);
     setActionMessage("Отправляем запрос на улучшение...");
@@ -1465,7 +1462,6 @@ export default function App() {
       // Use the chance returned by the database transaction, not a client-side
       // estimate, so the visible green sector is exactly the one used by the roll.
       const serverChance = normalizeUpgradeChance(result.chance, actualChance);
-      const sectorCenter = getUpgradeSectorCenter(won, serverChance);
       const confirmedResult = {
         ...result,
         won,
@@ -1473,13 +1469,14 @@ export default function App() {
         target_item: result.target_item || targetItem,
       };
 
-      setUpgradeVisualChance(serverChance);
-      setUpgradeRotation(sectorCenter);
+      // Snap the displayed percentage to the authoritative server value, then orbit once.
+      setUpgradeAnimatedChance(serverChance);
+      setUpgradeSpinWon(won);
       setUpgradeWheelAnimating(true);
 
-      setActionMessage("Результат подтверждён сервером. Стрелка показывает итог.");
+      setActionMessage("Результат подтверждён сервером. Стрелка делает один оборот и показывает итог.");
 
-      await new Promise((resolve) => setTimeout(resolve, 4200));
+      await new Promise((resolve) => setTimeout(resolve, 2850));
       setUpgradeWheelAnimating(false);
 
       setUpgradeResult(confirmedResult);
@@ -1514,6 +1511,47 @@ export default function App() {
     ? calculateUpgradeChance(selectedUpgrade, selectedTarget, globalEvent?.event_name === "lucky" ? 2 : 1)
     : 0;
 
+  useEffect(() => {
+    if (upgradeChanceAnimationRef.current !== null) {
+      cancelAnimationFrame(upgradeChanceAnimationRef.current);
+      upgradeChanceAnimationRef.current = null;
+    }
+
+    if (!selectedUpgrade || !selectedTarget || actualChance <= 0) {
+      setUpgradeAnimatedChance(0);
+      setUpgradeSpinWon(null);
+      return undefined;
+    }
+
+    setUpgradeAnimatedChance(0);
+    setUpgradeSpinWon(null);
+
+    const startTime = performance.now();
+    const duration = 560;
+    const animateChance = (now) => {
+      const progress = Math.min(1, (now - startTime) / duration);
+      // Fast ease-out: the sector fills quickly, then settles softly on the exact chance.
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setUpgradeAnimatedChance(actualChance * eased);
+
+      if (progress < 1) {
+        upgradeChanceAnimationRef.current = requestAnimationFrame(animateChance);
+      } else {
+        setUpgradeAnimatedChance(actualChance);
+        upgradeChanceAnimationRef.current = null;
+      }
+    };
+
+    upgradeChanceAnimationRef.current = requestAnimationFrame(animateChance);
+
+    return () => {
+      if (upgradeChanceAnimationRef.current !== null) {
+        cancelAnimationFrame(upgradeChanceAnimationRef.current);
+        upgradeChanceAnimationRef.current = null;
+      }
+    };
+  }, [selectedUpgrade?.id, targetItem, actualChance]);
+
   const availableTargets = upgradeTargets
     .filter((item) => item.item_name !== selectedUpgrade?.item_name)
     .map((item) => ({
@@ -1523,8 +1561,22 @@ export default function App() {
         : null,
     }));
 
-  const wheelChance = upgradeVisualChance ?? actualChance;
+  const wheelChance = selectedTarget
+    ? Math.min(90, Math.max(0, upgradeAnimatedChance))
+    : 0;
   const wheelAngle = wheelChance * 3.6;
+  // Keep the sector selected for the outcome centered under the pointer at 12 o'clock.
+  // On a loss the dark sector is centered there; on a win the green sector is centered there.
+  const wheelGradientStart = upgradeSpinWon === false
+    ? (360 - wheelAngle) / 2
+    : 360 - wheelAngle / 2;
+  const wheelChanceLabel = !selectedTarget
+    ? "—"
+    : upgradeSpinWon !== null || wheelChance >= actualChance - 0.001
+      ? formatUpgradeChance(wheelChance)
+      : actualChance >= 1
+        ? `${Math.min(Math.ceil(actualChance), Math.max(1, Math.floor(wheelChance)))}%`
+        : `${Math.max(0.1, Math.floor(wheelChance * 10) / 10).toFixed(1)}%`;
 
   // Показатели панели строятся только по реально доступному журналу выдач.
   const adminTotalOperations = adminLogs.length;
@@ -1950,14 +2002,12 @@ export default function App() {
                         <div
                           className="upgrade-wheel-rotor"
                           style={{
-                            background: `conic-gradient(#39e58b 0deg ${wheelAngle}deg, #292438 ${wheelAngle}deg 360deg)`,
+                            background: `conic-gradient(from ${wheelGradientStart}deg, #39e58b 0deg ${wheelAngle}deg, #292438 ${wheelAngle}deg 360deg)`,
                           }}
                         >
                           <div className="wheel-inner">
                             <span className="wheel-chance">
-                              {selectedTarget
-                                ? `${wheelChance.toFixed(1)}%`
-                                : "—"}
+                              {wheelChanceLabel}
                             </span>
 
                             <span className="wheel-label">
@@ -1968,14 +2018,10 @@ export default function App() {
 
                         <div
                           className={`upgrade-pointer-rotator${upgradeWheelAnimating ? " is-spinning" : ""}`}
-                          style={{
-                            "--upgrade-pointer-final-angle": `${upgradeRotation + 1800}deg`,
-                            transform: `rotate(${upgradeRotation}deg)`,
-                          }}
                           aria-hidden="true"
                         >
-                          <svg className="upgrade-pointer-head" viewBox="0 0 270 270" focusable="false" aria-hidden="true">
-                            <path d="M135 31 L120 5 Q135 -2 150 5 Z" fill="#f5fdff" stroke="#245c78" strokeWidth="2.5" strokeLinejoin="round" />
+                          <svg className="upgrade-pointer-head" viewBox="0 0 36 44" focusable="false" aria-hidden="true">
+                            <path d="M18 41 L3 5 Q18 -2 33 5 Z" fill="#f5fdff" stroke="#245c78" strokeWidth="2.5" strokeLinejoin="round" />
                           </svg>
                         </div>
                       </div>
@@ -2058,9 +2104,9 @@ export default function App() {
                             }
                             disabled={upgradeLoading}
                             onClick={() => {
+                              if (targetItem !== item.item_name) setUpgradeAnimatedChance(0);
                               setTargetItem(item.item_name);
-                              setUpgradeVisualChance(null);
-                              setUpgradeRotation(0);
+                              setUpgradeSpinWon(null);
                               setUpgradeWheelAnimating(false);
                               setUpgradeResult(null);
                               setActionMessage("");
@@ -2186,7 +2232,7 @@ export default function App() {
                 <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select><button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button></div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная ×2.5</span> : null}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeVisualChance(null);setUpgradeRotation(0);setUpgradeWheelAnimating(false);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная ×2.5</span> : null}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
