@@ -1,7 +1,7 @@
 /**
  * Geometry helpers for the upgrade roulette.
  * The conic-gradient green sector starts at 12 o'clock and grows clockwise.
- * The orbit wrapper rotates the inward-pointing fixed pointer clockwise around the wheel.
+ * The pointer orbit is animated in CSS; this helper returns the exact final sector angle.
  */
 export function normalizeUpgradeChance(value, fallback = 0.1) {
   const parsed = Number(value);
@@ -23,16 +23,4 @@ export function getUpgradeSectorCenter(won, chancePercent) {
 
   // The losing sector is the clockwise arc immediately after the green arc.
   return greenSweep + (360 - greenSweep) / 2;
-}
-
-export function getNextUpgradeRotation(currentRotation, targetAngle, fullSpins = 5) {
-  const current = Number.isFinite(Number(currentRotation))
-    ? Number(currentRotation)
-    : 0;
-  const normalizedCurrent = ((current % 360) + 360) % 360;
-  const normalizedTarget = ((Number(targetAngle) % 360) + 360) % 360;
-  const alignment = (normalizedTarget - normalizedCurrent + 360) % 360;
-  const spins = Math.max(1, Math.floor(Number(fullSpins) || 5));
-
-  return current + spins * 360 + alignment;
 }
