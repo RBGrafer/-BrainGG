@@ -70,7 +70,7 @@ function CaseArtwork({ item, className = "", alt }) {
   );
 }
 
-function calculateUpgradeChance(source, target) {
+function calculateUpgradeChance(source, target, luckMultiplier = 1) {
   const sourcePrice = Number(source?.value_gg);
   const targetPrice = Number(target?.value_gg);
 
@@ -85,7 +85,7 @@ function calculateUpgradeChance(source, target) {
 
   return Math.min(
     90,
-    Math.max(0.1, (sourcePrice / targetPrice) * 100)
+    Math.max(0.1, (sourcePrice / targetPrice) * 100 * Math.max(1, Number(luckMultiplier) || 1))
   );
 }
 
@@ -112,8 +112,22 @@ export default function App() {
   const skipRequestedRef = useRef(false);
   const audioContextRef = useRef(null);
   const musicTimerRef = useRef(null);
+  const eventMusicTimerRef = useRef(null);
+  const eventAudioRef = useRef(null);
+  const caseRewardsRequestRef = useRef(0);
+  const winterMusicWasEnabledRef = useRef(false);
+  const eventWasActiveRef = useRef(false);
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [musicNotice, setMusicNotice] = useState("");
+
+  const [globalEvent, setGlobalEvent] = useState(null);
+  const [globalMessage, setGlobalMessage] = useState(null);
+  const [eventClock, setEventClock] = useState(Date.now());
+  const [caseRewards, setCaseRewards] = useState([]);
+  const [caseRewardsFor, setCaseRewardsFor] = useState("");
+  const [caseRewardsLoading, setCaseRewardsLoading] = useState(false);
+  const [mobileUpgradeList, setMobileUpgradeList] = useState("source");
 
   const [inventory, setInventory] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -140,6 +154,12 @@ export default function App() {
 
   // Состояние защищённой админ-панели BrainGG
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [globalMessageDraft, setGlobalMessageDraft] = useState("");
+  const [globalMessageSending, setGlobalMessageSending] = useState(false);
+  const [adminEventLoading, setAdminEventLoading] = useState(false);
+  const [adminEventFeedback, setAdminEventFeedback] = useState("");
+  const [adminEventFeedbackError, setAdminEventFeedbackError] = useState(false);
   const visiblePages = isAdmin ? [...pages, "Админка"] : pages;
   const [adminGameId, setAdminGameId] = useState("");
   const [adminPlayer, setAdminPlayer] = useState(null);
@@ -224,20 +244,26 @@ export default function App() {
     });
   }
 
-  function toggleWinterMusic() {
-    const next = !musicEnabled;
-    setMusicEnabled(next);
-    if (!next) {
-      if (musicTimerRef.current) window.clearInterval(musicTimerRef.current);
-      musicTimerRef.current = null;
-      return;
+  function stopWinterMusic() {
+    if (musicTimerRef.current) window.clearInterval(musicTimerRef.current);
+    musicTimerRef.current = null;
+  }
+
+  function stopEventMusic() {
+    if (eventMusicTimerRef.current) window.clearInterval(eventMusicTimerRef.current);
+    eventMusicTimerRef.current = null;
+    if (eventAudioRef.current) {
+      eventAudioRef.current.pause();
+      eventAudioRef.current.currentTime = 0;
+      eventAudioRef.current = null;
     }
+  }
+
+  function startWinterMusic() {
+    stopEventMusic();
+    stopWinterMusic();
     const ctx = getAudioContext();
     if (!ctx) return;
-
-    // Original, royalty-free synthesized winter/Christmas ambience:
-    // soft warm pad chords, gentle bell arpeggios and a quiet bass pulse.
-    // It evokes the calm festive mood of the reference video without copying its recording or melody.
     const bars = [
       { chord: [196.00, 246.94, 293.66], bass: 98.00, bells: [783.99, 659.25, 587.33, 659.25] },
       { chord: [174.61, 220.00, 261.63], bass: 87.31, bells: [698.46, 587.33, 523.25, 587.33] },
@@ -263,11 +289,8 @@ export default function App() {
       if (ctx.state !== "running") return;
       const now = ctx.currentTime + 0.04;
       const bar = bars[barIndex % bars.length];
-      // Slow sustained chord bed.
       bar.chord.forEach((frequency, index) => playTone(frequency, now, 3.7, 0.0065, "sine", 0.7 + index * 0.08));
-      // A gentle bass note keeps the music warm, not distracting.
       playTone(bar.bass, now, 2.8, 0.009, "sine", 0.45);
-      // Four soft celesta-like notes across the bar.
       bar.bells.forEach((frequency, index) => {
         const at = now + index * 0.82;
         playTone(frequency, at, 1.05, 0.012, "sine", 0.025);
@@ -275,12 +298,91 @@ export default function App() {
       });
       barIndex += 1;
     };
-    playBar();
-    if (musicTimerRef.current) window.clearInterval(musicTimerRef.current);
+    ctx.resume().then(playBar).catch(() => setMusicNotice("Нажми кнопку музыки, чтобы разрешить воспроизведение."));
     musicTimerRef.current = window.setInterval(playBar, 3300);
   }
 
-  useEffect(() => () => { if (musicTimerRef.current) window.clearInterval(musicTimerRef.current); }, []);
+  function startEventMusic(eventName) {
+    stopWinterMusic();
+    stopEventMusic();
+    setMusicNotice("");
+
+    if (eventName === "tacos") {
+      // A licensed copy of the requested recording can be added at this public asset path.
+      const audio = new Audio(`${import.meta.env.BASE_URL}audio/its-raining-tacos.mp3`);
+      audio.loop = true;
+      audio.volume = 0.48;
+      audio.addEventListener("error", () => {
+        setMusicNotice("Добавь лицензированный трек в public/audio/its-raining-tacos.mp3, чтобы включить оригинальную песню.");
+      }, { once: true });
+      eventAudioRef.current = audio;
+      audio.play().then(() => setMusicNotice("")).catch(() => {
+        setMusicNotice("Если музыка не запустилась, нажми «♫ Музыка». Для оригинальной песни нужен файл public/audio/its-raining-tacos.mp3.");
+      });
+      return;
+    }
+
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const tracks = {
+      lucky: {
+        notes: [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.00, 698.46, 523.25, 659.25, 783.99, 1046.5],
+        bass: [130.81, 164.81, 196.00, 164.81], stepMs: 330, volume: 0.022, bassVolume: 0.009, wave: "triangle",
+      },
+      strawberry: {
+        notes: [392.00, 493.88, 587.33, 493.88, 440.00, 523.25, 587.33, 440.00],
+        bass: [98.00, 123.47, 146.83, 123.47], stepMs: 560, volume: 0.009, bassVolume: 0.004, wave: "sine",
+      },
+    };
+    const track = tracks[eventName];
+    if (!track) return;
+    let step = 0;
+    const playTone = (frequency, when, duration, volume, wave) => {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = eventName === "strawberry" ? 1150 : 2200;
+      oscillator.type = wave;
+      oscillator.frequency.setValueAtTime(frequency, when);
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.00015, volume), when + 0.035);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      oscillator.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+      oscillator.start(when); oscillator.stop(when + duration + 0.025);
+    };
+    const playStep = () => {
+      if (ctx.state !== "running") return;
+      const now = ctx.currentTime + 0.02;
+      const note = track.notes[step % track.notes.length];
+      playTone(note, now, eventName === "strawberry" ? 0.48 : 0.26, track.volume, track.wave);
+      if (step % 2 === 0) playTone(note * 2, now + 0.018, eventName === "strawberry" ? 0.28 : 0.16, track.volume * 0.22, "sine");
+      if (step % 3 === 0) playTone(track.bass[Math.floor(step / 3) % track.bass.length], now, 0.55, track.bassVolume, "sine");
+      step += 1;
+    };
+    ctx.resume().then(playStep).catch(() => setMusicNotice("Нажми кнопку музыки, чтобы разрешить воспроизведение."));
+    eventMusicTimerRef.current = window.setInterval(playStep, track.stepMs);
+  }
+
+  function toggleWinterMusic() {
+    const next = !musicEnabled;
+    setMusicEnabled(next);
+    if (!next) {
+      if (globalEvent?.event_name) winterMusicWasEnabledRef.current = false;
+      stopWinterMusic();
+      stopEventMusic();
+      setMusicNotice("");
+      return;
+    }
+    if (globalEvent?.event_name) startEventMusic(globalEvent.event_name);
+    else startWinterMusic();
+  }
+
+  useEffect(() => () => {
+    stopWinterMusic();
+    stopEventMusic();
+  }, []);
+
 
   async function startStarsTopup() {
     if (topupBusy) return;
@@ -438,7 +540,7 @@ export default function App() {
         // Игровой прогресс загружается отдельно, чтобы не затрагивать старую таблицу players.
         loadGameHub();
 
-        // Сервер сам проверяет Telegram ID по ADMIN_TELEGRAM_IDS.
+        // Сервер сам проверяет Telegram ID в ADMIN_TELEGRAM_IDS и отдельно подтверждает владельца.
         // Наличие вкладки в интерфейсе не даёт права выполнять админ-действия.
         try {
           const { data: adminData, error: adminError } =
@@ -451,6 +553,7 @@ export default function App() {
 
           if (!adminError && adminData?.success) {
             setIsAdmin(true);
+            setIsOwner(Boolean(adminData.isOwner));
             setAdminLogs(adminData.logs || []);
             loadAdminGameStats();
           }
@@ -571,9 +674,172 @@ export default function App() {
 
   useEffect(() => {
     if (!player?.telegram_id) return undefined;
+    let mounted = true;
+    const channel = supabase.channel("braingg-global-live")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "game_global_state", filter: "id=eq.1" }, (payload) => {
+        if (!mounted) return;
+        const nextEvent = payload.new;
+        const active = nextEvent?.event_name && nextEvent?.event_ends_at && Date.parse(nextEvent.event_ends_at) > Date.now();
+        setGlobalEvent(active ? nextEvent : null);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "game_global_messages" }, (payload) => {
+        if (mounted && payload.new?.message) setGlobalMessage(payload.new);
+      })
+      .subscribe();
+    loadGlobalState().catch((error) => console.warn("Global BrainGG state unavailable:", error));
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [player?.telegram_id]);
+
+  useEffect(() => {
+    if (!globalEvent?.event_ends_at) return undefined;
+    const remaining = Math.max(0, Date.parse(globalEvent.event_ends_at) - Date.now());
+    const timer = window.setTimeout(() => setGlobalEvent(null), remaining);
+    return () => window.clearTimeout(timer);
+  }, [globalEvent?.event_ends_at]);
+
+  useEffect(() => {
+    if (!globalEvent?.event_name) return undefined;
+    const timer = window.setInterval(() => setEventClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [globalEvent?.event_name]);
+
+  useEffect(() => {
+    if (!globalMessage?.id) return undefined;
+    const timer = window.setTimeout(() => setGlobalMessage(null), 12000);
+    return () => window.clearTimeout(timer);
+  }, [globalMessage?.id]);
+
+  useEffect(() => {
+    const eventName = globalEvent?.event_name || "";
+    if (eventName) {
+      if (!eventWasActiveRef.current) winterMusicWasEnabledRef.current = musicEnabled;
+      eventWasActiveRef.current = true;
+      setMusicEnabled(true);
+      startEventMusic(eventName);
+    } else if (eventWasActiveRef.current) {
+      stopEventMusic();
+      eventWasActiveRef.current = false;
+      const resumeWinter = winterMusicWasEnabledRef.current;
+      setMusicEnabled(resumeWinter);
+      if (resumeWinter) startWinterMusic();
+      else stopWinterMusic();
+    }
+  }, [globalEvent?.event_name]);
+
+  useEffect(() => {
+    const eventName = globalEvent?.event_name || "";
+    const colors = { tacos: "#3b1b0c", lucky: "#102a16", strawberry: "#3b1020" };
+    if (eventName) {
+      document.body.dataset.brainggEvent = eventName;
+      try { window.Telegram?.WebApp?.setBackgroundColor?.(colors[eventName]); } catch { /* Telegram theme is optional. */ }
+    } else {
+      delete document.body.dataset.brainggEvent;
+      try { window.Telegram?.WebApp?.setBackgroundColor?.("#071827"); } catch { /* Telegram theme is optional. */ }
+    }
+    return () => { delete document.body.dataset.brainggEvent; };
+  }, [globalEvent?.event_name]);
+
+  useEffect(() => {
+    if (selectedCase?.caseName) loadCaseRewards(selectedCase.caseName);
+  }, [globalEvent?.event_name, selectedCase?.caseName]);
+
+  useEffect(() => {
+    if (!player?.telegram_id) return undefined;
     const timer = window.setInterval(() => { loadGameHub(); }, 20000);
     return () => window.clearInterval(timer);
   }, [player?.telegram_id]);
+
+  async function loadGlobalState() {
+    const { data, error } = await supabase.functions.invoke("braingg-api", {
+      body: { initData: initData(), action: "get_global_state" },
+    });
+    if (error) throw error;
+    if (!data?.success) throw new Error(data?.error || "Не удалось загрузить состояние событий");
+    setGlobalEvent(data.event || null);
+    return data.event || null;
+  }
+
+  async function loadCaseRewards(caseName) {
+    if (!caseName) return [];
+    const requestId = ++caseRewardsRequestRef.current;
+    setCaseRewardsLoading(true);
+    setCaseRewardsFor(caseName);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "get_case_rewards", caseName },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось загрузить награды кейса");
+      if (requestId !== caseRewardsRequestRef.current) return [];
+      setCaseRewards(data.items || []);
+      return data.items || [];
+    } catch (error) {
+      console.error("Case reward pool loading failed:", error);
+      if (requestId === caseRewardsRequestRef.current) {
+        setCaseRewards([]);
+        setActionMessage(error?.message || "Не удалось загрузить содержимое кейса.");
+      }
+      return [];
+    } finally {
+      if (requestId === caseRewardsRequestRef.current) setCaseRewardsLoading(false);
+    }
+  }
+
+  async function sendGlobalMessage(event) {
+    event?.preventDefault();
+    if (!isOwner) return;
+    const message = globalMessageDraft.trim();
+    if (!message) {
+      setAdminMessage("Напиши текст глобального сообщения.");
+      setAdminMessageError(true);
+      return;
+    }
+    setGlobalMessageSending(true);
+    setAdminMessage("");
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "admin_send_global_message", message },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось отправить сообщение");
+      setGlobalMessageDraft("");
+      setGlobalMessage(data.message || null);
+      setAdminMessage("Глобальное сообщение отправлено всем игрокам онлайн.");
+      setAdminMessageError(false);
+    } catch (error) {
+      setAdminMessage(error?.message || "Не удалось отправить глобальное сообщение.");
+      setAdminMessageError(true);
+    } finally {
+      setGlobalMessageSending(false);
+    }
+  }
+
+  async function toggleAdminEvent(eventName) {
+    if (!isOwner || adminEventLoading) return;
+    setAdminEventLoading(true);
+    setAdminEventFeedback("");
+    setAdminEventFeedbackError(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "admin_set_event", eventName },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось изменить ивент");
+      setGlobalEvent(data.event || null);
+      setAdminEventFeedback(data.event
+        ? "Ивент запущен. Он автоматически завершится через 2:59."
+        : "Ивент остановлен. Оформление и бонусы возвращены к обычным.");
+      setAdminEventFeedbackError(false);
+    } catch (error) {
+      setAdminEventFeedback(error?.message || "Не удалось изменить ивент.");
+      setAdminEventFeedbackError(true);
+    } finally {
+      setAdminEventLoading(false);
+    }
+  }
 
   async function loadInventory() {
     setInventoryLoading(true);
@@ -629,7 +895,14 @@ export default function App() {
         throw new Error(data?.error || "Не удалось загрузить цели");
       }
 
-      setUpgradeTargets(data.items || []);
+      const uniqueTargets = new Map();
+      for (const item of data.items || []) {
+        const key = String(item.item_name || "").trim();
+        if (!key) continue;
+        const existing = uniqueTargets.get(key);
+        if (!existing || Number(item.value_gg || 0) > Number(existing.value_gg || 0)) uniqueTargets.set(key, item);
+      }
+      setUpgradeTargets([...uniqueTargets.values()].sort((a, b) => Number(a.value_gg || 0) - Number(b.value_gg || 0)));
     } catch (error) {
       console.error("Ошибка загрузки целей:", error);
       setActionMessage("Не удалось загрузить список целей апгрейда.");
@@ -659,6 +932,7 @@ export default function App() {
       }
 
       setAdminLogs(data.logs || []);
+      setIsOwner(Boolean(data.isOwner));
     } catch (error) {
       console.error("Ошибка истории админки:", error);
       setAdminMessage("Не удалось загрузить историю выдач.");
@@ -830,7 +1104,7 @@ export default function App() {
       .filter((item) => item.item_name !== source.item_name)
       .map((item) => ({
         ...item,
-        actualChance: calculateUpgradeChance(source, item),
+        actualChance: calculateUpgradeChance(source, item, globalEvent?.event_name === "lucky" ? 2 : 1),
       }))
       .filter((item) => item.actualChance > 0);
 
@@ -872,6 +1146,7 @@ export default function App() {
 
   function chooseSource(item) {
     setSelectedUpgrade(item);
+    setMobileUpgradeList("target");
     setUpgradeResult(null);
     setActionMessage("");
 
@@ -909,7 +1184,7 @@ export default function App() {
   }
 
   async function openSelectedCase() {
-    if (!selectedCase || !player || opening) return;
+    if (!selectedCase || !player || opening || caseRewardsLoading || caseRewardsFor !== selectedCase.caseName || caseRewards.length === 0) return;
 
     setOpening(true);
     setLastRewards([]);
@@ -925,7 +1200,7 @@ export default function App() {
     const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
     const makeReel = (winner, rowIndex) => {
-      const pool = upgradeTargets.length ? upgradeTargets : [];
+      const pool = caseRewards.length ? caseRewards : [];
       const fallback = ["Noobini Pizzanini", "Lirili Larila", "Trippi Troppi", "Ballerina Cappuccina", "Cappuccino Assassino", "Bombardiro Crocodilo"];
       const cards = Array.from({ length:  41 }, (_, index) => {
         const source = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
@@ -959,6 +1234,7 @@ export default function App() {
           value_gg: Number(reward.value_gg || reward.sold_price || 0),
           image: reward.image || reward.image_url || reward.photo_url,
           case_name: selectedCase.name,
+          mutation: reward.mutation || null,
           created_at: new Date().toISOString(),
         }, ...previous].slice(0, 8));
         setPlayer((previous) => previous ? {
@@ -1177,6 +1453,7 @@ export default function App() {
 
       setSelectedUpgrade(null);
       setTargetItem("");
+      setMobileUpgradeList("source");
     } catch (error) {
       console.error("Ошибка апгрейда:", error);
       setActionMessage(
@@ -1192,7 +1469,7 @@ export default function App() {
   );
 
   const actualChance = selectedUpgrade && selectedTarget
-    ? calculateUpgradeChance(selectedUpgrade, selectedTarget)
+    ? calculateUpgradeChance(selectedUpgrade, selectedTarget, globalEvent?.event_name === "lucky" ? 2 : 1)
     : 0;
 
   const availableTargets = upgradeTargets
@@ -1200,7 +1477,7 @@ export default function App() {
     .map((item) => ({
       ...item,
       actualChance: selectedUpgrade
-        ? calculateUpgradeChance(selectedUpgrade, item)
+        ? calculateUpgradeChance(selectedUpgrade, item, globalEvent?.event_name === "lucky" ? 2 : 1)
         : null,
     }));
 
@@ -1220,6 +1497,25 @@ export default function App() {
     return matchesQuery && matchesAction;
   });
 
+  const eventRemainingSeconds = globalEvent?.event_ends_at
+    ? Math.max(0, Math.ceil((Date.parse(globalEvent.event_ends_at) - eventClock) / 1000))
+    : 0;
+  const eventRemainingLabel = `${Math.floor(eventRemainingSeconds / 60)}:${String(eventRemainingSeconds % 60).padStart(2, "0")}`;
+  const eventPresentation = {
+    tacos: { title: "IT'S RAINING TACOS", subtitle: "Тако падают с неба — наслаждайся событием!", emoji: "🌮", particle: "🌮" },
+    lucky: { title: "LUCKY DAY!", subtitle: "Удача ×2 в кейсах и апгрейдере", emoji: "🍀", particle: "🍀" },
+    strawberry: { title: "STRAWBERRY DAY!", subtitle: "5% шанс клубничной мутации · цена ×2.5", emoji: "🍓", particle: "🍓" },
+  };
+  const activeEventPresentation = globalEvent?.event_name ? eventPresentation[globalEvent.event_name] : null;
+  const eventParticles = Array.from({ length: 30 }, (_, index) => ({
+    id: index,
+    left: `${(index * 31 + 7) % 100}%`,
+    delay: `${-((index * 11) % 18)}s`,
+    duration: `${12 + ((index * 5) % 12)}s`,
+    size: `${18 + ((index * 7) % 17)}px`,
+    drift: `${((index * 19) % 110) - 55}px`,
+    opacity: 0.48 + ((index * 13) % 48) / 100,
+  }));
   const snowflakes = Array.from({ length: 34 }, (_, index) => ({
     id: index,
     left: `${(index * 37 + 11) % 100}%`,
@@ -1231,33 +1527,39 @@ export default function App() {
   }));
 
   return (
-    <div className="app">
-      <div className="winter-snow" aria-hidden="true">
-        {snowflakes.map((flake) => (
-          <i
-            className="snowflake"
-            key={flake.id}
-            style={{
-              left: flake.left,
-              animationDelay: flake.delay,
-              animationDuration: flake.duration,
-              width: flake.size,
-              height: flake.size,
-              opacity: flake.opacity,
-              "--snow-drift": flake.drift,
-            }}
-          />
+    <div className={`app ${globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
+      <div className={`winter-snow ${globalEvent?.event_name ? `event-particles event-particles-${globalEvent.event_name}` : ""}`} aria-hidden="true">
+        {globalEvent?.event_name && activeEventPresentation ? eventParticles.map((particle) => (
+          <i className="event-particle" key={particle.id} style={{ left: particle.left, animationDelay: particle.delay, animationDuration: particle.duration, fontSize: particle.size, opacity: particle.opacity, "--particle-drift": particle.drift }}>{activeEventPresentation.particle}</i>
+        )) : snowflakes.map((flake) => (
+          <i className="snowflake" key={flake.id} style={{ left: flake.left, animationDelay: flake.delay, animationDuration: flake.duration, width: flake.size, height: flake.size, opacity: flake.opacity, "--snow-drift": flake.drift }} />
         ))}
       </div>
       <header className="header">
         <div className="logo"><span className="logo-heart">💜</span> BrainGG</div>
         <div className="header-wallet">
-          <button className={`winter-audio-toggle ${musicEnabled ? "is-on" : ""}`} onClick={toggleWinterMusic} title="Фоновая новогодняя музыка">{musicEnabled ? "♫ Музыка вкл." : "♫ Музыка"}</button>
+          <button className={`winter-audio-toggle ${musicEnabled ? "is-on" : ""}`} onClick={toggleWinterMusic} title={globalEvent?.event_name ? "Музыка текущего ивента" : "Фоновая зимняя музыка"}>{musicEnabled ? "♫ Музыка вкл." : "♫ Музыка"}</button>
           <button className={`winter-audio-toggle ${soundEnabled ? "is-on" : ""}`} onClick={() => setSoundEnabled((value) => !value)} title="Звуковые эффекты">{soundEnabled ? "🔊 Звуки" : "🔇 Звуки"}</button>
           <div className="balance">🪙 {player ? player.balance : 0} GG</div>
           <button className="topup-trigger" onClick={() => { setTopupMessage(""); setTopupOpen(true); }}>＋ Пополнить</button>
         </div>
       </header>
+
+      {activeEventPresentation && (
+        <section className={`global-event-banner global-event-${globalEvent.event_name}`} aria-live="polite">
+          <span className="global-event-banner-icon">{activeEventPresentation.emoji}</span>
+          <div><b>{activeEventPresentation.title}</b><small>{activeEventPresentation.subtitle}</small></div>
+          <strong>{eventRemainingLabel}</strong>
+        </section>
+      )}
+      {musicNotice && globalEvent?.event_name && (
+        <button className="event-music-notice" type="button" onClick={() => { setMusicEnabled(true); startEventMusic(globalEvent.event_name); }}>{musicNotice} · Нажми, чтобы повторить</button>
+      )}
+      {globalMessage && (
+        <aside className="global-message-toast" role="status" aria-live="assertive">
+          <span>📣</span><div><b>Глобальное сообщение BrainGG</b><p>{globalMessage.message}</p></div><button type="button" aria-label="Закрыть сообщение" onClick={() => setGlobalMessage(null)}>×</button>
+        </aside>
+      )}
 
       {loading && (
         <div className="content">
@@ -1306,8 +1608,8 @@ export default function App() {
             <div className="live-drops-track">
               {liveDrops.length ? liveDrops.map((drop) => (
                 <article className="live-drop-chip" key={drop.id}>
-                  <div className="live-drop-art">{brainrotImage(drop) ? <img src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>❄</span>}</div>
-                  <div><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
+                  <div className="live-drop-art">{brainrotImage(drop) ? <img className={drop.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>❄</span>}</div>
+                  <div><b>{drop.item_name}{drop.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
                   {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
                 </article>
               )) : <div className="live-drops-empty">Здесь появятся реальные выигрыши после открытия кейса</div>}
@@ -1339,7 +1641,7 @@ export default function App() {
                 <section className="case-detail-page">
                   <button
                     className="case-back-button"
-                    onClick={() => { setSelectedCase(null); setLastRewards([]); setReelRows([]); setActionMessage(""); }}
+                    onClick={() => { caseRewardsRequestRef.current += 1; setSelectedCase(null); setCaseRewards([]); setCaseRewardsFor(""); setCaseRewardsLoading(false); setLastRewards([]); setReelRows([]); setActionMessage(""); }}
                   >
                     ← Назад к кейсам
                   </button>
@@ -1391,8 +1693,8 @@ export default function App() {
                         <div className="case-roulette-strip" style={{ "--reel-index": row.position, "--reel-duration": `${5.0 + rowIndex * 0.18}s` }}>
                           {row.cards.map((reward, index) => (
                             <div className={`case-roulette-item ${row.revealed && index === row.winnerIndex ? "is-winner" : ""}`} key={`${reward.item_name}-${rowIndex}-${index}`}>
-                              {brainrotImage(reward) ? <img src={brainrotImage(reward)} alt={reward.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement.classList.add("has-image-error"); }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
-                              <b>{reward.item_name}</b>
+                              {brainrotImage(reward) ? <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement.classList.add("has-image-error"); }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
+                              <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
                               {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
                             </div>
                           ))}
@@ -1421,10 +1723,10 @@ export default function App() {
 
                   <button
                     className="main-button case-open-main"
-                    disabled={!player || opening}
+                    disabled={!player || opening || caseRewardsLoading || caseRewardsFor !== selectedCase.caseName || caseRewards.length === 0}
                     onClick={openSelectedCase}
                   >
-                    {opening ? "Открываем..." : (() => {
+                    {opening ? "Открываем..." : caseRewardsLoading || caseRewardsFor !== selectedCase.caseName ? "Загружаем дроп..." : (() => {
                       const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
                       const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
                       return `Крутить · ${(selectedCase.price * paidCount).toLocaleString("ru-RU")} GG`;
@@ -1438,7 +1740,7 @@ export default function App() {
                       <h3>🎉 Твои выпадения</h3>
                       {lastRewards.map((reward, index) => (
                         <div className="reward-item" key={`${reward.item_name}-${index}`}>
-                          <b>{reward.item_name}</b><span>{reward.rarity}</span>
+                          <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b><span>{reward.rarity}</span>
                         </div>
                       ))}
                     </div>
@@ -1446,15 +1748,18 @@ export default function App() {
 
                   <section className="case-contents-panel">
                     <h3>Содержимое кейса</h3>
-                    <p className="case-contents-caption">Возможные награды из пула BrainGG</p>
+                    <p className="case-contents-caption">Полный список наград именно из этого кейса · шанс рассчитан по весам дропа</p>
+                    {globalEvent?.event_name === "lucky" && <p className="case-contents-event-note">🍀 LUCKY DAY: шансы всех редкостей выше обычной увеличены в 2 раза.</p>}
+                    {globalEvent?.event_name === "strawberry" && <p className="case-contents-event-note">🍓 STRAWBERRY DAY: дополнительно действует 5% шанс клубничной мутации с ценой ×2.5.</p>}
                     <div className="case-contents-grid">
-                      {(upgradeTargets.length ? upgradeTargets.slice(0, 12) : []).map((item, index) => (
+                      {caseRewardsLoading && caseRewardsFor === selectedCase.caseName && <p className="case-contents-caption">Загружаем полный список наград...</p>}
+                      {caseRewardsFor === selectedCase.caseName && caseRewards.map((item, index) => (
                         <div className="case-content-item" key={`${item.item_name}-${index}`}>
                           {brainrotImage(item) ? <img className="brainrot-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
-                          <div><b>{item.item_name}</b><small>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small></div>
+                          <div className="case-content-info"><b>{item.item_name}</b><small>{item.rarity || "Награда"} · {Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small><em>{Number(item.drop_chance_percent || 0).toFixed(2)}% шанс</em></div>
                         </div>
                       ))}
-                      {!upgradeTargets.length && <p className="case-contents-caption">Список наград загружается при переходе в апгрейдер.</p>}
+                      {!caseRewardsLoading && caseRewardsFor === selectedCase.caseName && caseRewards.length === 0 && <p className="case-contents-caption">Для этого кейса пока не настроен пул наград.</p>}
                     </div>
                   </section>
                 </section>
@@ -1481,6 +1786,8 @@ export default function App() {
                               className="case-card-reference-button"
                               onClick={() => {
                                 setSelectedCase(item);
+                                setCaseRewards([]);
+                                setCaseRewardsFor(item.caseName);
                                 setLastRewards([]);
                                 setOpenCount(1);
                                 setActionMessage("");
@@ -1544,7 +1851,11 @@ export default function App() {
               ) : (
                 <>
                   <div className="upgrade-arena">
-                    <section className="upgrade-column">
+                    <div className="upgrade-mobile-tabs" role="tablist" aria-label="Выбор брейнрота для апгрейда">
+                      <button type="button" role="tab" aria-selected={mobileUpgradeList === "source"} className={mobileUpgradeList === "source" ? "active" : ""} onClick={() => setMobileUpgradeList("source")}>Мой брейнрот</button>
+                      <button type="button" role="tab" aria-selected={mobileUpgradeList === "target"} className={mobileUpgradeList === "target" ? "active" : ""} onClick={() => setMobileUpgradeList("target")}>Цель апгрейда</button>
+                    </div>
+                    <section className={`upgrade-column upgrade-source-column ${mobileUpgradeList === "source" ? "" : "is-mobile-hidden"}`}>
                       <div className="upgrade-column-title">
                         <span>1</span>
                         <div>
@@ -1565,10 +1876,10 @@ export default function App() {
                             disabled={upgradeLoading}
                             onClick={() => chooseSource(item)}
                           >
-                            {brainrotImage(item) ? <img className="upgrade-item-emoji-image" src={brainrotImage(item)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="upgrade-item-emoji">🧠</span>}
+                            {brainrotImage(item) ? <img className={`upgrade-item-emoji-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="upgrade-item-emoji">🧠</span>}
 
                             <span className="upgrade-item-info">
-                              <b>{item.item_name}</b>
+                              <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b>
 
                               <small
                                 style={{
@@ -1616,7 +1927,6 @@ export default function App() {
                           className="upgrade-pointer"
                           style={{
                             transform: `rotate(${upgradeRotation}deg)`,
-                            transformOrigin: "50% 115px",
                             transition: upgradeLoading
                               ? "transform 4.2s cubic-bezier(0.12, 0.72, 0.12, 1)"
                               : "none",
@@ -1682,7 +1992,7 @@ export default function App() {
                       </div>
                     </section>
 
-                    <section className="upgrade-column">
+                    <section className={`upgrade-column upgrade-target-column ${mobileUpgradeList === "target" ? "" : "is-mobile-hidden"}`}>
                       <div className="upgrade-column-title target-title">
                         <span>2</span>
                         <div>
@@ -1827,7 +2137,7 @@ export default function App() {
                 <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select><button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button></div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className="brainrot-inventory-image" src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная ×2.5</span> : null}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
@@ -1898,6 +2208,7 @@ export default function App() {
                   ["overview", "Обзор", "▦"],
                   ["players", "Игроки", "♙"],
                   ["history", "Журнал", "◷"],
+                  ["events", "События", "✦"],
                 ].map(([key, label, icon]) => (
                   <button
                     key={key}
@@ -2145,7 +2456,7 @@ export default function App() {
                         {adminInventory.map((item) => (
                           <div className="admin-inventory-row" key={item.id}>
                             <span>🧠</span>
-                            <b>{item.item_name}</b>
+                            <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
                             <small>{item.rarity}</small>
                             <strong>{item.value_gg} GG</strong>
                           </div>
@@ -2161,6 +2472,45 @@ export default function App() {
                   {adminMessage}
                 </div>
               )}
+                </>
+              )}
+
+              {adminSection === "events" && (
+                <>
+                  {isOwner ? (
+                    <>
+                      <section className="admin-panel-card global-message-admin-card">
+                        <div className="admin-section-title"><span className="admin-section-icon">📣</span><div><h3>Глобальное сообщение</h3><p>Сообщение мгновенно появится у игроков, которые сейчас открыли BrainGG.</p></div></div>
+                        <form className="global-message-form" onSubmit={sendGlobalMessage}>
+                          <textarea className="admin-input global-message-textarea" maxLength={500} value={globalMessageDraft} onChange={(event) => setGlobalMessageDraft(event.target.value)} placeholder="Напиши сообщение всем игрокам онлайн..." />
+                          <div className="global-message-form-footer"><small>{globalMessageDraft.length}/500 · Отправка только владельцем</small><button className="main-button" type="submit" disabled={globalMessageSending || !globalMessageDraft.trim()}>{globalMessageSending ? "Отправляем..." : "📣 Отправить всем онлайн"}</button></div>
+                        </form>
+                      </section>
+
+                      <section className="admin-panel-card admin-events-card">
+                        <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG. Каждый запуск длится 2 минуты 59 секунд.</p></div></div>
+                        {globalEvent?.event_name && <div className="admin-active-event"><b>Сейчас активен: {globalEvent.event_name === "tacos" ? "🌮 It's Raining Tacos" : globalEvent.event_name === "lucky" ? "🍀 LUCKY DAY!" : "🍓 STRAWBERRY DAY!"}</b><span>Осталось {Math.floor(eventRemainingSeconds / 60)}:{String(eventRemainingSeconds % 60).padStart(2, "0")}</span></div>}
+                        <div className="admin-event-grid">
+                          {[
+                            ["tacos", "🌮", "It's Raining Tacos", "Тако вместо снега, тёплый фон и музыка события."],
+                            ["lucky", "🍀", "LUCKY DAY!", "Клеверы, золотисто-зелёная тема и x2 удача в кейсах и апгрейдере."],
+                            ["strawberry", "🍓", "STRAWBERRY DAY!", "Клубничная тема, тихая музыка и 5% шанс мутации ×2.5."],
+                          ].map(([key, icon, title, description]) => (
+                            <article className={`admin-event-card admin-event-${key} ${globalEvent?.event_name === key ? "is-active" : ""}`} key={key}>
+                              <div className="admin-event-icon">{icon}</div><h4>{title}</h4><p>{description}</p>
+                              <button type="button" className="main-button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(key)}>{adminEventLoading ? "Подождите..." : globalEvent?.event_name === key ? "Остановить ивент" : "Запустить на 2:59"}</button>
+                            </article>
+                          ))}
+                        </div>
+                        {globalEvent?.event_name && <button type="button" className="admin-event-stop-button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(null)}>■ Остановить текущий ивент</button>}
+                        <p className="admin-data-note">Доступ к запуску и остановке проверяется на сервере по Telegram ID владельца. Другие администраторы не могут запускать ивенты или отправлять глобальные сообщения.</p>
+                      </section>
+                    </>
+                  ) : (
+                    <section className="admin-panel-card"><h3>Управление событиями доступно только владельцу</h3><p className="admin-muted">Твоя учётная запись имеет доступ к обычной админ-панели, но не подтверждена как владелец BrainGG.</p></section>
+                  )}
+                  {adminMessage && <div className={`admin-feedback ${adminMessageError ? "error" : "success"}`}>{adminMessage}</div>}
+                  {adminEventFeedback && <div className={`admin-feedback ${adminEventFeedbackError ? "error" : "success"}`}>{adminEventFeedback}</div>}
                 </>
               )}
 
@@ -2234,9 +2584,10 @@ export default function App() {
             <div className={`reward-modal-grid ${lastRewards.length > 1 ? "multi" : ""}`}>
               {lastRewards.map((reward, index) => (
                 <article className="reward-modal-item" key={`${reward.item_name}-${index}`}>
-                  <div className="reward-modal-art">{brainrotImage(reward) ? <img src={brainrotImage(reward)} alt={reward.item_name} /> : <span>🧠</span>}</div>
+                  <div className="reward-modal-art">{brainrotImage(reward) ? <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} /> : <span>🧠</span>}</div>
                   <h3>{reward.item_name || reward.name}</h3>
                   <span className={`reward-modal-rarity ${reward.rarity === "OG" ? "rarity-og" : ""}`}>{reward.rarity || "Brainrot"}</span>
+                  {reward.mutation === "strawberry" && <span className="strawberry-mutation-pill">🍓 Клубничная мутация · ×2.5</span>}
                   <strong>{Number(reward.value_gg || reward.sold_price || 0).toLocaleString("ru-RU")} GG</strong>
                 </article>
               ))}
@@ -2246,7 +2597,7 @@ export default function App() {
               <button className="main-button" onClick={() => { setShowRewardModal(false); setActionMessage("Награда сохранена в инвентаре!"); }}>✓ Забрать</button>
               <button className="case-button reward-upgrade-button" onClick={() => {
                 const reward = lastRewards[0];
-                const owned = rewardInventoryRows.find((item) => String(item.item_name).toLowerCase() === String(reward.item_name || reward.name).toLowerCase());
+                const owned = rewardInventoryRows.find((item) => String(item.item_name).toLowerCase() === String(reward.item_name || reward.name).toLowerCase() && (item.mutation || null) === (reward.mutation || null));
                 if (!owned) { setShowRewardModal(false); setActionMessage("Награда уже сохранена в инвентаре. Обнови инвентарь, чтобы выбрать её для апгрейда."); changePage("Инвентарь"); return; }
                 setShowRewardModal(false); chooseSource(owned); changePage("Апгрейдер");
               }}>⚡ Апгрейд {lastRewards.length > 1 ? "первого предмета" : "предмета"}</button>
