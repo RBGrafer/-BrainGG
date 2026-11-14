@@ -88,7 +88,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .wheel-chance { color: #fff; font-size: clamp(28px, 4vw, 42px); font-weight: 900; text-shadow: 0 0 18px #c18bff99; }
 .wheel-label { margin-top: 3px; color: #a99bb5; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; }
 .upgrade-pointer-orbit { position: absolute; z-index: 3; inset: 0; pointer-events: none; transform-origin: 50% 50%; will-change: transform; }
-.upgrade-pointer { position: absolute; top: -5px; left: 50%; width: 0; height: 0; transform: translateX(-50%); border-left: 13px solid transparent; border-right: 13px solid transparent; border-top: 0; border-bottom: 29px solid #fff; filter: drop-shadow(0 3px 7px #000); }
+.upgrade-pointer { position: absolute; top: -5px; left: 50%; width: 0; height: 0; transform: translateX(-50%); border-left: 13px solid transparent; border-right: 13px solid transparent; border-top: 29px solid #fff; border-bottom: 0; filter: drop-shadow(0 3px 7px #000); }
 .chance-title { margin: 0 0 12px; color: #bca9ca; font-size: 11px; font-weight: 900; letter-spacing: 2px; }
 .chance-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; width: 100%; max-width: 310px; margin-bottom: 16px; }
 .chance-button { padding: 11px 5px; border: 1px solid #49325c; border-radius: 9px; background: #21152d; color: #c9b8d7; font-size: 13px; font-weight: 900; transition: .2s; }
