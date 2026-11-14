@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
+import { getNextUpgradeRotation, getUpgradeSectorCenter, normalizeUpgradeChance } from "./utils/upgradeWheel.js";
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
@@ -144,6 +145,7 @@ export default function App() {
   const [upgradeResult, setUpgradeResult] = useState(null);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeRotation, setUpgradeRotation] = useState(0);
+  const [upgradeVisualChance, setUpgradeVisualChance] = useState(null);
 
   const [sellingId, setSellingId] = useState(null);
   const [sellingAll, setSellingAll] = useState(false);
@@ -1132,6 +1134,8 @@ export default function App() {
 
   function chooseChance(preset) {
     setUpgradeChance(preset);
+    setUpgradeVisualChance(null);
+    setUpgradeRotation(0);
     setUpgradeResult(null);
     setActionMessage("");
 
@@ -1146,6 +1150,8 @@ export default function App() {
 
   function chooseSource(item) {
     setSelectedUpgrade(item);
+    setUpgradeVisualChance(null);
+    setUpgradeRotation(0);
     setMobileUpgradeList("target");
     setUpgradeResult(null);
     setActionMessage("");
@@ -1427,22 +1433,32 @@ export default function App() {
       }
 
       const result = data.result;
-      const actualChance = Number(result.chance);
+      const won = result.won === true;
+      if (won && (result.inventory_verified !== true || !result.awarded_inventory_id)) {
+        throw new Error("Сервер сообщил о победе, но не подтвердил выдачу предмета. Примени последнюю SQL-миграцию апгрейдера.");
+      }
+      // Use the chance returned by the database transaction, not a client-side
+      // estimate, so the visible green sector is exactly the one used by the roll.
+      const serverChance = normalizeUpgradeChance(result.chance, actualChance);
+      const sectorCenter = getUpgradeSectorCenter(won, serverChance);
+      const confirmedResult = {
+        ...result,
+        won,
+        chance: Number(serverChance.toFixed(2)),
+        target_item: result.target_item || targetItem,
+      };
 
-      const greenCenter = actualChance * 1.8;
-      const darkCenter = 180 + actualChance * 1.8;
-      const sectorCenter = result.won ? greenCenter : darkCenter;
-
-      setUpgradeRotation(
-        (previous) => previous + 360 * 5 - sectorCenter
+      setUpgradeVisualChance(serverChance);
+      setUpgradeRotation((previous) =>
+        getNextUpgradeRotation(previous, sectorCenter, 5)
       );
 
-      setActionMessage("Улучшение выполнено!");
+      setActionMessage("Результат подтверждён сервером. Стрелка показывает итог.");
 
       await new Promise((resolve) => setTimeout(resolve, 4200));
 
-      setUpgradeResult(result);
-      playUiSound(result.won ? "win" : "lose");
+      setUpgradeResult(confirmedResult);
+      playUiSound(won ? "win" : "lose");
 
       setPlayer((previous) => ({
         ...previous,
@@ -1461,6 +1477,8 @@ export default function App() {
       );
     } finally {
       setUpgradeLoading(false);
+      setUpgradeVisualChance(null);
+      setUpgradeRotation(0);
     }
   }
 
@@ -1481,7 +1499,8 @@ export default function App() {
         : null,
     }));
 
-  const wheelAngle = actualChance * 3.6;
+  const wheelChance = upgradeVisualChance ?? actualChance;
+  const wheelAngle = wheelChance * 3.6;
 
   // Показатели панели строятся только по реально доступному журналу выдач.
   const adminTotalOperations = adminLogs.length;
@@ -1913,7 +1932,7 @@ export default function App() {
                           <div className="wheel-inner">
                             <span className="wheel-chance">
                               {selectedTarget
-                                ? `${actualChance.toFixed(1)}%`
+                                ? `${wheelChance.toFixed(1)}%`
                                 : "—"}
                             </span>
 
@@ -1924,14 +1943,17 @@ export default function App() {
                         </div>
 
                         <div
-                          className="upgrade-pointer"
+                          className="upgrade-pointer-orbit"
                           style={{
                             transform: `rotate(${upgradeRotation}deg)`,
                             transition: upgradeLoading
                               ? "transform 4.2s cubic-bezier(0.12, 0.72, 0.12, 1)"
                               : "none",
                           }}
-                        />
+                          aria-hidden="true"
+                        >
+                          <div className="upgrade-pointer" />
+                        </div>
                       </div>
 
                       <div className="chance-title">
@@ -2013,6 +2035,8 @@ export default function App() {
                             disabled={upgradeLoading}
                             onClick={() => {
                               setTargetItem(item.item_name);
+                              setUpgradeVisualChance(null);
+                              setUpgradeRotation(0);
                               setUpgradeResult(null);
                               setActionMessage("");
                             }}
