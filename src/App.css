@@ -91,7 +91,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    pointer head is anchored at the rim, so it travels around the circumference. */
 .upgrade-pointer-rotator {
   position: absolute;
-  z-index: 30;
+  z-index: 50;
   inset: 0;
   display: block;
   width: 100%;
@@ -103,21 +103,23 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   will-change: transform;
 }
 .upgrade-pointer-rotator.is-spinning {
-  animation: upgradePointerOrbit 4.2s cubic-bezier(.12, .72, .12, 1) both;
+  /* Exactly one full orbit around the wheel's center. */
+  animation: upgradePointerOrbit 2.8s cubic-bezier(.12, .72, .12, 1) both;
 }
 .upgrade-pointer-head {
   position: absolute;
-  inset: 0;
+  top: -2px;
+  left: 50%;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 34px;
+  height: 42px;
+  transform: translateX(-50%);
   overflow: visible;
   filter: drop-shadow(0 3px 7px #000) drop-shadow(0 0 5px rgba(190, 239, 255, .45));
 }
 @keyframes upgradePointerOrbit {
-  0% { transform: rotate(0deg); }
-  72% { transform: rotate(1440deg); }
-  100% { transform: rotate(var(--upgrade-pointer-final-angle, 1800deg)); }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .chance-title { margin: 0 0 12px; color: #bca9ca; font-size: 11px; font-weight: 900; letter-spacing: 2px; }
 .chance-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; width: 100%; max-width: 310px; margin-bottom: 16px; }
