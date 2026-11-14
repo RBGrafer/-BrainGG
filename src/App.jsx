@@ -2,7 +2,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
-import { getUpgradeSectorCenter, normalizeUpgradeChance } from "./utils/upgradeWheel.js";
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
@@ -18,6 +17,26 @@ const CASE_DISPLAY_NAMES = {
 function displayCaseName(value) {
   const key = String(value || "");
   return CASE_DISPLAY_NAMES[key] || key || "Кейс";
+}
+
+// Keep upgrade-wheel geometry in this module so Vercel cannot fail on a missing
+// optional helper file in deployments that upload only the src tree.
+function normalizeUpgradeChance(value, fallback = 0.1) {
+  const parsed = Number(value);
+  const fallbackValue = Number(fallback);
+  const safeValue = Number.isFinite(parsed)
+    ? parsed
+    : Number.isFinite(fallbackValue)
+      ? fallbackValue
+      : 0.1;
+  return Math.min(90, Math.max(0.1, safeValue));
+}
+
+function getUpgradeSectorCenter(won, chancePercent) {
+  const chance = normalizeUpgradeChance(chancePercent);
+  const greenSweep = chance * 3.6;
+  if (won) return greenSweep / 2;
+  return greenSweep + (360 - greenSweep) / 2;
 }
 
 // Official/game-style reference artwork for the named Steal a Brainrot characters.
@@ -1948,15 +1967,16 @@ export default function App() {
                         </div>
 
                         <div
-                          className={`upgrade-pointer-alignment${upgradeWheelAnimating ? " is-aligning" : ""}`}
-                          style={{ transform: `rotate(${upgradeRotation}deg)` }}
+                          className={`upgrade-pointer-rotator${upgradeWheelAnimating ? " is-spinning" : ""}`}
+                          style={{
+                            "--upgrade-pointer-final-angle": `${upgradeRotation + 1800}deg`,
+                            transform: `rotate(${upgradeRotation}deg)`,
+                          }}
                           aria-hidden="true"
                         >
-                          <div className={`upgrade-pointer-orbit${upgradeWheelAnimating ? " is-spinning" : ""}`}>
-                            <svg className="upgrade-pointer" viewBox="0 0 270 270" focusable="false" aria-hidden="true">
-                              <path d="M135 29 L121 3 L149 3 Z" fill="#f5fdff" stroke="#245c78" strokeWidth="2.5" strokeLinejoin="round" />
-                            </svg>
-                          </div>
+                          <svg className="upgrade-pointer-head" viewBox="0 0 270 270" focusable="false" aria-hidden="true">
+                            <path d="M135 31 L120 5 Q135 -2 150 5 Z" fill="#f5fdff" stroke="#245c78" strokeWidth="2.5" strokeLinejoin="round" />
+                          </svg>
                         </div>
                       </div>
 
