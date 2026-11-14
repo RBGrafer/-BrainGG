@@ -893,8 +893,9 @@ body {
 }
 .case-roulette-strip {
   position: absolute;
+  z-index: 1;
   top: 0;
-  left: 0;
+  left: 50%;
   display: flex;
   width: max-content;
   height: 100%;
@@ -904,8 +905,10 @@ body {
   border: 0;
   border-radius: 0;
   background: transparent;
-  transform: translateX(calc(50% - (var(--reel-index, 0) * 132px + 66px)));
-  transition: transform 5.2s cubic-bezier(.08,.72,.08,1);
+  /* The offset is computed in JS from the real responsive card width.
+     Avoid multiplying CSS variables inside calc(), which is unsupported in many browsers. */
+  transform: translate3d(var(--reel-offset, -66px), 0, 0);
+  transition: transform var(--reel-duration, 5.2s) cubic-bezier(.08,.72,.08,1);
   will-change: transform;
 }
 .case-roulette-item {
@@ -942,6 +945,7 @@ body {
   bottom: 0;
   left: 50%;
   width: 3px;
+  transform: translateX(-50%);
   background: #e8fbff;
   box-shadow: 0 0 10px #fff, 0 0 24px #63d7ff, 0 0 42px #48bfff;
   pointer-events: none;
@@ -972,7 +976,7 @@ body {
   .case-detail-visual { height: 230px; padding: 10px; }
   .case-roulette-viewport { height: 140px; }
   .case-roulette-item { flex-basis: 118px; width: 118px; min-width: 118px; }
-  .case-roulette-strip { transform: translateX(calc(50% - (var(--reel-index, 0) * 118px + 59px))); transition-duration: 4.8s; }
+  .case-roulette-strip { transition-duration: var(--reel-duration, 4.8s); }
 }
 @media (prefers-reduced-motion: reduce) {
   .case-roulette-strip { transition-duration: .01ms !important; }
@@ -1080,7 +1084,7 @@ body {
 .case-roulette-stack.is-rolling .case-roulette-viewport { border-color:#a4edff; box-shadow:inset 0 0 28px #56caff24,0 0 16px #56caff20; }
 .case-roulette-stack .case-roulette-item.is-winner { animation:reelWinnerReveal .65s cubic-bezier(.2,.8,.2,1) both; }
 @keyframes reelWinnerReveal { 0%{filter:brightness(1);transform:scale(.94)} 45%{filter:brightness(1.8);transform:scale(1.035)} 100%{filter:brightness(1.2);transform:scale(1)} }
-@media(max-width:620px){.case-roulette-stack{gap:9px}.case-roulette-stack .case-roulette-viewport{height:118px}.case-roulette-stack .case-roulette-item{flex-basis:118px;width:118px;min-width:118px}.case-roulette-stack .case-roulette-strip{transform:translateX(calc(50% - (var(--reel-index,0) * 118px + 59px)));transition-duration:var(--reel-duration,4.8s)}}
+@media(max-width:620px){.case-roulette-stack{gap:9px}.case-roulette-stack .case-roulette-viewport{height:118px}.case-roulette-stack .case-roulette-item{flex-basis:118px;width:118px;min-width:118px}.case-roulette-stack .case-roulette-strip{transition-duration:var(--reel-duration,4.8s)}}
 
 /* Arctic Season 2: player progression, missions and leaderboard */
 .season-page{display:grid;gap:20px;animation:seasonPageIn .38s cubic-bezier(.2,.75,.25,1) both}
