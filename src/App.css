@@ -83,15 +83,30 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .upgrade-middle { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; padding: 15px 5px; }
 .upgrade-wheel-wrap { position: relative; isolation: isolate; display: grid; place-items: center; width: min(100%, 270px); aspect-ratio: 1; margin: 0 auto 22px; overflow: visible; }
 .wheel-glow { position: absolute; inset: 3%; border-radius: 50%; background: #9b4de8; filter: blur(35px); opacity: .22; }
-.upgrade-wheel-rotor { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; height: 100%; border: 9px solid #49335b; border-radius: 50%; box-shadow: 0 0 0 5px #171020, 0 0 35px #a54df044, inset 0 0 20px #0008; transition: transform 4.2s cubic-bezier(.12, .75, .18, 1); will-change: transform; }
+.upgrade-wheel-rotor { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; height: 100%; border: 9px solid #49335b; border-radius: 50%; box-shadow: 0 0 0 5px #171020, 0 0 35px #a54df044, inset 0 0 20px #0008; transition: none; }
 .wheel-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 57%; height: 57%; border: 2px solid #65477c; border-radius: 50%; background: radial-gradient(circle, #281a37, #100b17 75%); box-shadow: 0 0 25px #0009; }
 .wheel-chance { color: #fff; font-size: clamp(28px, 4vw, 42px); font-weight: 900; text-shadow: 0 0 18px #c18bff99; }
 .wheel-label { margin-top: 3px; color: #a99bb5; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; }
-/* A single full-wheel layer rotates around the wheel's actual center. The
-   pointer head is anchored at the rim, so it travels around the circumference. */
-.upgrade-pointer-rotator {
+/* The outer positioner selects the final sector; it is hidden only while
+   staging a loss at the dark sector. The inner layer performs exactly one
+   full 360-degree orbit around the wheel center. The wheel itself never spins. */
+.upgrade-pointer-positioner {
   position: absolute;
   z-index: 50;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  opacity: 1;
+  transition: opacity .12s ease;
+  will-change: transform, opacity;
+}
+.upgrade-pointer-positioner.is-hidden { opacity: 0; }
+.upgrade-pointer-rotator {
+  position: absolute;
   inset: 0;
   display: block;
   width: 100%;
@@ -103,7 +118,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   will-change: transform;
 }
 .upgrade-pointer-rotator.is-spinning {
-  /* Exactly one full orbit around the wheel's center. */
+  /* One revolution, no second spin and no wheel/sector rotation. */
   animation: upgradePointerOrbit 2.8s cubic-bezier(.12, .72, .12, 1) both;
 }
 .upgrade-pointer-head {
