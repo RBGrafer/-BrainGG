@@ -255,7 +255,91 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
-    const isAdmin = adminIds.includes(String(telegramUser.id));
+    const configuredOwnerId = (Deno.env.get("OWNER_TELEGRAM_ID") ?? "").trim();
+    // The project reserves @RB_Grafer as its owner. Prefer the immutable Telegram ID secret;
+    // the verified Telegram username is a backwards-compatible fallback for existing installs.
+    const telegramUsername = String(telegramUser.username ?? "").replace(/^@/, "").toLowerCase();
+    const isOwner = configuredOwnerId
+      ? configuredOwnerId === String(telegramUser.id)
+      : telegramUsername === "rb_grafer";
+    const isAdmin = isOwner || adminIds.includes(String(telegramUser.id));
+
+    const getActiveEvent = async () => {
+      const { data: eventRow, error: eventError } = await supabase
+        .from("game_global_state")
+        .select("id, event_name, event_started_at, event_ends_at, updated_at")
+        .eq("id", 1)
+        .maybeSingle();
+      if (eventError) throw eventError;
+      if (!eventRow?.event_name || !eventRow?.event_ends_at || Date.parse(eventRow.event_ends_at) <= Date.now()) {
+        if (eventRow?.event_name) {
+          await supabase.from("game_global_state").update({
+            event_name: null, event_started_at: null, event_ends_at: null, updated_at: new Date().toISOString(),
+          }).eq("id", 1);
+        }
+        return null;
+      }
+      return eventRow;
+    };
+
+    if (body.action === "get_global_state") {
+      try {
+        const event = await getActiveEvent();
+        return respond({ success: true, event });
+      } catch (error) {
+        console.error("Global state loading failed:", error?.message || error);
+        return respond({ error: "Глобальные события пока не настроены. Примени новую SQL-миграцию." }, 503);
+      }
+    }
+
+    if (body.action === "admin_set_event") {
+      if (!isOwner) return respond({ error: "Запуск и управление ивентами доступны только владельцу BrainGG." }, 403);
+      const requestedEvent = body.eventName == null || body.eventName === ""
+        ? null
+        : String(body.eventName).trim();
+      const allowedEvents = ["tacos", "lucky", "strawberry"];
+      if (requestedEvent && !allowedEvents.includes(requestedEvent)) {
+        return respond({ error: "Неизвестный ивент." }, 400);
+      }
+      try {
+        const currentEvent = await getActiveEvent();
+        const shouldStop = !requestedEvent || currentEvent?.event_name === requestedEvent;
+        const now = new Date();
+        const update = shouldStop
+          ? { event_name: null, event_started_at: null, event_ends_at: null, updated_at: now.toISOString() }
+          : { event_name: requestedEvent, event_started_at: now.toISOString(), event_ends_at: new Date(now.getTime() + 179000).toISOString(), updated_at: now.toISOString() };
+        const { data, error } = await supabase.from("game_global_state")
+          .update(update).eq("id", 1)
+          .select("id, event_name, event_started_at, event_ends_at, updated_at").single();
+        if (error) throw error;
+        return respond({ success: true, event: data?.event_name ? data : null, stopped: shouldStop });
+      } catch (error) {
+        console.error("Admin event update failed:", error?.message || error);
+        return respond({ error: "Не удалось изменить глобальный ивент. Проверь SQL-миграцию." }, 500);
+      }
+    }
+
+    if (body.action === "admin_send_global_message") {
+      if (!isOwner) return respond({ error: "Глобальные сообщения доступны только владельцу BrainGG." }, 403);
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      if (!message || message.length > 500) return respond({ error: "Сообщение должно содержать от 1 до 500 символов." }, 400);
+      try {
+        const recentSince = new Date(Date.now() - 2500).toISOString();
+        const { data: recent } = await supabase.from("game_global_messages")
+          .select("id").gte("created_at", recentSince).limit(1);
+        if (recent?.length) return respond({ error: "Подожди пару секунд перед следующим сообщением." }, 429);
+        const { data, error } = await supabase.from("game_global_messages")
+          .insert({ message })
+          .select("id, message, created_at").single();
+        if (error) throw error;
+        await supabase.from("game_global_messages")
+          .delete().lt("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+        return respond({ success: true, message: data });
+      } catch (error) {
+        console.error("Global message send failed:", error?.message || error);
+        return respond({ error: "Не удалось отправить глобальное сообщение. Проверь SQL-миграцию." }, 500);
+      }
+    }
 
     // Create a Telegram Stars invoice. The client never credits its own balance.
     if (body.action === "create_stars_invoice") {
@@ -330,7 +414,7 @@ Deno.serve(async (req) => {
 
       const { data: latestItems, error: dropsError } = await supabase
         .from("game_live_drops")
-        .select("id, telegram_id, item_name, rarity, value_gg, case_name, created_at")
+        .select("id, telegram_id, item_name, rarity, value_gg, case_name, mutation, created_at")
         .order("created_at", { ascending: false }).limit(25);
       if (dropsError) console.error("Live drops loading failed:", dropsError.message);
       const dropIds = [...new Set((latestItems || []).map((item: any) => item.telegram_id))];
@@ -340,7 +424,8 @@ Deno.serve(async (req) => {
       const usernames = new Map((dropPlayers || []).map((p: any) => [String(p.telegram_id), p.username]));
       const liveDrops = (latestItems || []).map((item: any) => ({
         id: item.id, item_name: item.item_name, rarity: item.rarity, value_gg: Number(item.value_gg || 0),
-        created_at: item.created_at, case_name: item.case_name, username: usernames.get(String(item.telegram_id)) || "Игрок",
+        created_at: item.created_at, case_name: item.case_name, mutation: item.mutation || null,
+        username: usernames.get(String(item.telegram_id)) || "Игрок",
       }));
 
       const { data: rankingRows, error: rankingError } = await supabase
@@ -474,7 +559,7 @@ Deno.serve(async (req) => {
 
       const { data: inventory, error: inventoryError } = await supabase
         .from("inventory")
-        .select("id, item_name, rarity, value_gg, created_at")
+        .select("id, item_name, rarity, value_gg, mutation, created_at")
         .eq("telegram_id", player.telegram_id)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -695,14 +780,14 @@ Deno.serve(async (req) => {
         );
       }
 
-      return respond({ success: true, logs: logs ?? [] });
+      return respond({ success: true, logs: logs ?? [], isOwner });
     }
 
     // ИНВЕНТАРЬ
     if (body.action === "get_inventory") {
       const { data: items, error } = await supabase
         .from("inventory")
-        .select("id, item_name, rarity, value_gg, created_at")
+        .select("id, item_name, rarity, value_gg, mutation, created_at")
         .eq("telegram_id", telegramUser.id)
         .order("created_at", { ascending: false });
 
@@ -712,7 +797,7 @@ Deno.serve(async (req) => {
       }
 
       const uniqueItems = Array.from(
-        new Map((items ?? []).map((item) => [item.item_name, item])).values(),
+        new Map((items ?? []).map((item) => [`${item.item_name}:${item.mutation || "normal"}`, item])).values(),
       );
       return respond({ success: true, items: uniqueItems });
     }
@@ -760,7 +845,48 @@ Deno.serve(async (req) => {
         );
       }
 
-      return respond({ success: true, items: items ?? [] });
+      const uniqueTargets = new Map<string, any>();
+      for (const item of items ?? []) {
+        const key = String(item.item_name || "").trim();
+        if (!key) continue;
+        const existing = uniqueTargets.get(key);
+        if (!existing || Number(item.value_gg || 0) > Number(existing.value_gg || 0)) {
+          uniqueTargets.set(key, item);
+        }
+      }
+      const targets = [...uniqueTargets.values()].sort((a, b) =>
+        Number(a.value_gg || 0) - Number(b.value_gg || 0) || String(a.item_name).localeCompare(String(b.item_name), "ru"),
+      );
+      return respond({ success: true, items: targets });
+    }
+
+    if (body.action === "get_case_rewards") {
+      const rawCaseName = typeof body.caseName === "string" ? body.caseName.trim() : "";
+      const caseName = ALLOWED_CASES.find((name) => name.toLowerCase() === rawCaseName.toLowerCase());
+      if (!caseName) return respond({ error: "Unknown case" }, 400);
+      const { data: rewards, error } = await supabase.from("case_rewards")
+        .select("item_name, rarity, value_gg, chance")
+        .eq("case_name", caseName).gt("chance", 0)
+        .order("value_gg", { ascending: true });
+      if (error) {
+        console.error("Case rewards loading failed:", error.message);
+        return respond({ error: "Не удалось загрузить содержимое кейса" }, 500);
+      }
+      let event = null;
+      try { event = await getActiveEvent(); } catch (eventError) {
+        console.warn("Could not load event multiplier for case preview:", eventError?.message || eventError);
+      }
+      const weighted = (rewards || []).map((item: any) => {
+        const rarity = String(item.rarity || "").toLowerCase();
+        const boosted = event?.event_name === "lucky" && !["обычный", "common"].includes(rarity);
+        return { ...item, effective_weight: Number(item.chance || 0) * (boosted ? 2 : 1) };
+      });
+      const totalWeight = weighted.reduce((sum: number, item: any) => sum + Number(item.effective_weight || 0), 0);
+      const result = weighted.map((item: any) => ({
+        ...item,
+        drop_chance_percent: totalWeight > 0 ? Number(item.effective_weight) / totalWeight * 100 : 0,
+      }));
+      return respond({ success: true, caseName, items: result, luckyBoost: event?.event_name === "lucky" });
     }
 
     // АПГРЕЙД
@@ -780,8 +906,10 @@ Deno.serve(async (req) => {
         );
       }
 
+      // The wrapper checks the event timestamp inside the same database transaction,
+      // avoiding a race between the Edge Function's event read and the actual upgrade.
       const { data, error } = await supabase.rpc(
-        "upgrade_inventory_item",
+        "upgrade_inventory_item_with_luck",
         {
           p_telegram_id: telegramUser.id,
           p_inventory_id: inventoryId,
@@ -840,6 +968,7 @@ Deno.serve(async (req) => {
           rarity: openedReward.rarity || null,
           value_gg: Number(openedReward.value_gg || openedReward.sold_price || 0),
           case_name: caseName,
+          mutation: openedReward.mutation || null,
         });
         if (dropInsertError) console.error("Live drop event insert failed:", dropInsertError.message);
       }
