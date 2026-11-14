@@ -81,14 +81,25 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .item-check { margin-left: auto; color: #54efa5; font-size: 18px; font-weight: 900; }
 .no-targets { padding: 15px; color: #9e91a9; font-size: 13px; text-align: center; }
 .upgrade-middle { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; padding: 15px 5px; }
-.upgrade-wheel-wrap { position: relative; display: grid; place-items: center; width: min(100%, 270px); aspect-ratio: 1; margin: 0 auto 22px; }
+.upgrade-wheel-wrap { position: relative; isolation: isolate; display: grid; place-items: center; width: min(100%, 270px); aspect-ratio: 1; margin: 0 auto 22px; overflow: visible; }
 .wheel-glow { position: absolute; inset: 3%; border-radius: 50%; background: #9b4de8; filter: blur(35px); opacity: .22; }
 .upgrade-wheel-rotor { position: relative; z-index: 1; display: grid; place-items: center; width: 100%; height: 100%; border: 9px solid #49335b; border-radius: 50%; box-shadow: 0 0 0 5px #171020, 0 0 35px #a54df044, inset 0 0 20px #0008; transition: transform 4.2s cubic-bezier(.12, .75, .18, 1); will-change: transform; }
 .wheel-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 57%; height: 57%; border: 2px solid #65477c; border-radius: 50%; background: radial-gradient(circle, #281a37, #100b17 75%); box-shadow: 0 0 25px #0009; }
 .wheel-chance { color: #fff; font-size: clamp(28px, 4vw, 42px); font-weight: 900; text-shadow: 0 0 18px #c18bff99; }
 .wheel-label { margin-top: 3px; color: #a99bb5; font-size: 9px; font-weight: 800; letter-spacing: 1.5px; }
-.upgrade-pointer-orbit { position: absolute; z-index: 3; inset: 0; pointer-events: none; transform-origin: 50% 50%; will-change: transform; }
-.upgrade-pointer { position: absolute; top: -5px; left: 50%; width: 0; height: 0; transform: translateX(-50%); border-left: 13px solid transparent; border-right: 13px solid transparent; border-top: 29px solid #fff; border-bottom: 0; filter: drop-shadow(0 3px 7px #000); }
+.upgrade-pointer-alignment { position: absolute; z-index: 20; inset: 0; pointer-events: none; transform-origin: 50% 50%; will-change: transform; }
+.upgrade-pointer-alignment.is-aligning { transition: transform 4.2s cubic-bezier(.12, .72, .12, 1); }
+.upgrade-pointer-orbit { position: absolute; inset: 0; transform-origin: 50% 50%; will-change: transform; }
+.upgrade-pointer-orbit.is-spinning { animation: upgradePointerOrbitSpin 4.2s linear both; }
+.upgrade-pointer { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 7px #000); }
+@keyframes upgradePointerOrbitSpin {
+  0% { transform: rotate(0deg); animation-timing-function: linear; }
+  20% { transform: rotate(360deg); animation-timing-function: linear; }
+  40% { transform: rotate(720deg); animation-timing-function: linear; }
+  60% { transform: rotate(1080deg); animation-timing-function: linear; }
+  80% { transform: rotate(1440deg); animation-timing-function: cubic-bezier(.12, .72, .12, 1); }
+  100% { transform: rotate(1800deg); }
+}
 .chance-title { margin: 0 0 12px; color: #bca9ca; font-size: 11px; font-weight: 900; letter-spacing: 2px; }
 .chance-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; width: 100%; max-width: 310px; margin-bottom: 16px; }
 .chance-button { padding: 11px 5px; border: 1px solid #49325c; border-radius: 9px; background: #21152d; color: #c9b8d7; font-size: 13px; font-weight: 900; transition: .2s; }
