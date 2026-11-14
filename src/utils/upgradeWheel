@@ -1,7 +1,7 @@
 /**
  * Geometry helpers for the upgrade roulette.
  * The conic-gradient green sector starts at 12 o'clock and grows clockwise.
- * The orbit wrapper rotates the fixed pointer clockwise around the wheel.
+ * The orbit wrapper rotates the inward-pointing fixed pointer clockwise around the wheel.
  */
 export function normalizeUpgradeChance(value, fallback = 0.1) {
   const parsed = Number(value);
