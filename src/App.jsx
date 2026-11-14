@@ -37,6 +37,21 @@ function formatUpgradeChance(value) {
   return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
 }
 
+// Keep the case reel's winning card centered under the fixed pointer.
+// The item widths intentionally match the responsive CSS breakpoints below.
+function getCaseReelItemWidth() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return 132;
+  if (window.matchMedia("(max-width: 600px)").matches) return 104;
+  if (window.matchMedia("(max-width: 620px)").matches) return 118;
+  return 132;
+}
+
+function getCaseReelOffset(position) {
+  const itemWidth = getCaseReelItemWidth();
+  const safePosition = Math.max(0, Number(position) || 0);
+  return -(safePosition * itemWidth + itemWidth / 2);
+}
+
 // Official/game-style reference artwork for the named Steal a Brainrot characters.
 const BRAINROT_ART = [
   { match: ["skibidi toilet"], image: "https://img.g4mmo.com/images/class/steal%20a%20brainrot%20Skibidi%20Toilet-095404.png" },
@@ -1805,14 +1820,39 @@ export default function App() {
                       winnerIndex: -1, position: 0, revealed: false,
                     }))).map((row, rowIndex) => (
                       <div className={`case-roulette-viewport ${opening && !fastOpen ? "is-rolling" : ""} ${row.revealed && rowIndex === rareDropIndex ? "is-rare-winner" : ""}`} key={row.id} aria-label={`Рулетка ${rowIndex + 1}`}>
-                        <div className="case-roulette-strip" style={{ "--reel-index": row.position, "--reel-duration": `${5.0 + rowIndex * 0.18}s` }}>
-                          {row.cards.map((reward, index) => (
-                            <div className={`case-roulette-item ${row.revealed && index === row.winnerIndex ? "is-winner" : ""}`} key={`${reward.item_name}-${rowIndex}-${index}`}>
-                              {brainrotImage(reward) ? <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement.classList.add("has-image-error"); }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
-                              <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
-                              {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
-                            </div>
-                          ))}
+                        <div
+                          className="case-roulette-strip"
+                          style={{
+                            "--reel-offset": `${getCaseReelOffset(row.position)}px`,
+                            "--reel-duration": `${5.0 + rowIndex * 0.18}s`,
+                          }}
+                        >
+                          {row.cards.map((reward, index) => {
+                            const isWinner = index === row.winnerIndex;
+                            return (
+                              <div
+                                className={`case-roulette-item ${row.revealed && isWinner ? "is-winner" : ""}`}
+                                key={`${reward.item_name}-${rowIndex}-${index}`}
+                                data-drop-name={isWinner ? reward.item_name : undefined}
+                                aria-label={isWinner ? `Фактический дроп: ${reward.item_name}` : undefined}
+                              >
+                                {brainrotImage(reward) ? (
+                                  <img
+                                    className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""}
+                                    src={brainrotImage(reward)}
+                                    alt={reward.item_name}
+                                    loading="lazy"
+                                    onError={(event) => {
+                                      event.currentTarget.style.display = "none";
+                                      event.currentTarget.parentElement.classList.add("has-image-error");
+                                    }}
+                                  />
+                                ) : <span>🧠</span>}
+                                <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
+                                {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
+                              </div>
+                            );
+                          })}
                         </div>
                         <i className="case-roulette-pointer" />
                         <div className="case-roulette-edge case-roulette-edge-left" />
