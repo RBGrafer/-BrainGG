@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
-import { getNextUpgradeRotation, getUpgradeSectorCenter, normalizeUpgradeChance } from "./utils/upgradeWheel.js";
+import { getUpgradeSectorCenter, normalizeUpgradeChance } from "./utils/upgradeWheel.js";
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
@@ -145,6 +145,7 @@ export default function App() {
   const [upgradeResult, setUpgradeResult] = useState(null);
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeRotation, setUpgradeRotation] = useState(0);
+  const [upgradeWheelAnimating, setUpgradeWheelAnimating] = useState(false);
   const [upgradeVisualChance, setUpgradeVisualChance] = useState(null);
 
   const [sellingId, setSellingId] = useState(null);
@@ -1136,6 +1137,7 @@ export default function App() {
     setUpgradeChance(preset);
     setUpgradeVisualChance(null);
     setUpgradeRotation(0);
+    setUpgradeWheelAnimating(false);
     setUpgradeResult(null);
     setActionMessage("");
 
@@ -1152,6 +1154,7 @@ export default function App() {
     setSelectedUpgrade(item);
     setUpgradeVisualChance(null);
     setUpgradeRotation(0);
+    setUpgradeWheelAnimating(false);
     setMobileUpgradeList("target");
     setUpgradeResult(null);
     setActionMessage("");
@@ -1390,6 +1393,9 @@ export default function App() {
     }
 
     setUpgradeLoading(true);
+    setUpgradeWheelAnimating(false);
+    setUpgradeVisualChance(null);
+    setUpgradeRotation(0);
     playUiSound("upgrade");
     setUpgradeResult(null);
     setActionMessage("Отправляем запрос на улучшение...");
@@ -1449,13 +1455,13 @@ export default function App() {
       };
 
       setUpgradeVisualChance(serverChance);
-      setUpgradeRotation((previous) =>
-        getNextUpgradeRotation(previous, sectorCenter, 5)
-      );
+      setUpgradeRotation(sectorCenter);
+      setUpgradeWheelAnimating(true);
 
       setActionMessage("Результат подтверждён сервером. Стрелка показывает итог.");
 
       await new Promise((resolve) => setTimeout(resolve, 4200));
+      setUpgradeWheelAnimating(false);
 
       setUpgradeResult(confirmedResult);
       playUiSound(won ? "win" : "lose");
@@ -1477,8 +1483,7 @@ export default function App() {
       );
     } finally {
       setUpgradeLoading(false);
-      setUpgradeVisualChance(null);
-      setUpgradeRotation(0);
+      setUpgradeWheelAnimating(false);
     }
   }
 
@@ -1943,16 +1948,15 @@ export default function App() {
                         </div>
 
                         <div
-                          className="upgrade-pointer-orbit"
-                          style={{
-                            transform: `rotate(${upgradeRotation}deg)`,
-                            transition: upgradeLoading
-                              ? "transform 4.2s cubic-bezier(0.12, 0.72, 0.12, 1)"
-                              : "none",
-                          }}
+                          className={`upgrade-pointer-alignment${upgradeWheelAnimating ? " is-aligning" : ""}`}
+                          style={{ transform: `rotate(${upgradeRotation}deg)` }}
                           aria-hidden="true"
                         >
-                          <div className="upgrade-pointer" />
+                          <div className={`upgrade-pointer-orbit${upgradeWheelAnimating ? " is-spinning" : ""}`}>
+                            <svg className="upgrade-pointer" viewBox="0 0 270 270" focusable="false" aria-hidden="true">
+                              <path d="M135 29 L121 3 L149 3 Z" fill="#f5fdff" stroke="#245c78" strokeWidth="2.5" strokeLinejoin="round" />
+                            </svg>
+                          </div>
                         </div>
                       </div>
 
@@ -2037,6 +2041,7 @@ export default function App() {
                               setTargetItem(item.item_name);
                               setUpgradeVisualChance(null);
                               setUpgradeRotation(0);
+                              setUpgradeWheelAnimating(false);
                               setUpgradeResult(null);
                               setActionMessage("");
                             }}
@@ -2161,7 +2166,7 @@ export default function App() {
                 <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select><button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button></div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная ×2.5</span> : null}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная ×2.5</span> : null}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeVisualChance(null);setUpgradeRotation(0);setUpgradeWheelAnimating(false);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
