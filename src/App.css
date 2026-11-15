@@ -1604,3 +1604,29 @@ body[data-braingg-event] { transition: background .5s ease; }
   .menu-backdrop,.menu-drawer { animation:none; }
   .menu-trigger,.menu-item { transition:none; }
 }
+
+/* Shared community event feed: every entry is written by the trusted API and
+   delivered to all connected Mini Apps through Supabase Realtime. */
+.global-activity-heading { position:relative; overflow:hidden; }
+.global-activity-heading::after { content:"🌍"; position:absolute; right:26px; top:18px; color:rgba(137,220,255,.12); font-size:clamp(54px,9vw,92px); pointer-events:none; }
+.global-activity-panel { margin-top:16px; }
+.global-activity-live-note { display:flex; align-items:center; gap:8px; margin:-3px 0 14px; color:#8fb8ca; font-size:10px; }
+.global-activity-live-dot { width:8px; height:8px; flex:0 0 8px; border-radius:50%; background:#54e2a6; box-shadow:0 0 0 4px rgba(84,226,166,.12),0 0 12px rgba(84,226,166,.55); }
+.global-activity-list { display:grid; gap:8px; }
+.global-activity-row { display:flex; align-items:center; gap:11px; min-width:0; padding:11px; border:1px solid rgba(119,193,224,.17); border-radius:13px; background:linear-gradient(115deg,rgba(7,29,46,.84),rgba(9,36,53,.64)); }
+.global-activity-row.is-unsuccessful { border-color:rgba(255,130,130,.2); }
+.global-activity-icon { display:grid; place-items:center; flex:0 0 42px; width:42px; height:42px; border:1px solid rgba(127,211,242,.2); border-radius:12px; background:rgba(17,70,94,.42); font-size:20px; }
+.global-activity-copy { display:flex; flex:1; flex-direction:column; gap:4px; min-width:0; }
+.global-activity-title-line { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.global-activity-title-line b { color:#e8f8ff; font-size:11px; }
+.global-activity-title-line small { color:#7fc5e3; font-size:9px; }
+.global-activity-copy p { overflow-wrap:anywhere; color:#9bb8ca; font-size:10px; line-height:1.4; }
+.global-activity-copy time { color:#668ba0; font-size:8px; }
+.global-activity-value { flex:0 0 auto; color:#ffe1a1; font-size:10px; white-space:nowrap; }
+@media (max-width:600px) {
+  .global-activity-heading::after { right:13px; top:13px; font-size:52px; opacity:.6; }
+  .global-activity-row { gap:8px; padding:8px; }
+  .global-activity-icon { flex-basis:36px; width:36px; height:36px; font-size:17px; }
+  .global-activity-title-line b { font-size:10px; }
+  .global-activity-value { font-size:9px; }
+}
