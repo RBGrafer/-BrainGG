@@ -142,6 +142,19 @@ async function getFreeCaseCredits(supabase: any, telegramId: number) {
   };
 }
 
+async function findPlayerByPublicGameId(supabase: any, rawValue: string, columns: string) {
+  const raw = String(rawValue || "").trim();
+  const username = raw.replace(/^@/, "").trim();
+  if (username) {
+    const escapedUsername = username.replace(/[\\%_]/g, "\\$&");
+    const { data, error } = await supabase.from("players").select(columns).ilike("username", escapedUsername).maybeSingle();
+    if (error) return { data: null, error };
+    if (data) return { data, error: null };
+  }
+  // Backwards compatibility: administrators can still use an old internal ID for accounts without a Telegram username.
+  return await supabase.from("players").select(columns).eq("game_id", raw).maybeSingle();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -547,7 +560,7 @@ Deno.serve(async (req) => {
       const leaderboard = (rankingRows || []).map((row: any) => {
         const p: any = rankMap.get(String(row.telegram_id)) || {};
         const xp = Number(row.xp || 0);
-        return { username: p.username || "Игрок", game_id: p.game_id, xp, level: Math.floor(Math.sqrt(xp / 100)) + 1,
+        return { username: p.username || "Игрок", game_id: p.username ? `@${p.username}` : null, xp, level: Math.floor(Math.sqrt(xp / 100)) + 1,
           total_cases_opened: Number(row.total_cases_opened || 0) };
       });
 
@@ -616,7 +629,7 @@ Deno.serve(async (req) => {
       const gameId = String(body.gameId || "").trim();
       const amount = Number(body.amount);
       if (!gameId || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return respond({ error: "Некорректное количество XP" }, 400);
-      const { data: targetPlayer, error: targetError } = await supabase.from("players").select("telegram_id").eq("game_id", gameId).maybeSingle();
+      const { data: targetPlayer, error: targetError } = await findPlayerByPublicGameId(supabase, gameId, "telegram_id");
       if (targetError || !targetPlayer) return respond({ error: "Игрок не найден" }, 404);
       const { data: xp, error } = await supabase.rpc("admin_adjust_player_xp", { p_player_telegram_id: targetPlayer.telegram_id, p_amount: amount });
       if (error) { console.error("Admin XP adjustment failed:", error.message); return respond({ error: "Не удалось начислить XP. Применена ли миграция Season 2?" }, 400); }
@@ -642,14 +655,14 @@ Deno.serve(async (req) => {
       const gameId = String(body.gameId ?? "").trim();
 
       if (!gameId || gameId.length > 100) {
-        return respond({ error: "Укажи корректный Game ID" }, 400);
+        return respond({ error: "Укажи Telegram username игрока" }, 400);
       }
 
-      const { data: player, error } = await supabase
-        .from("players")
-        .select("telegram_id, game_id, username, balance, free_cases")
-        .eq("game_id", gameId)
-        .maybeSingle();
+      const { data: player, error } = await findPlayerByPublicGameId(
+        supabase,
+        gameId,
+        "telegram_id, game_id, username, balance, free_cases",
+      );
 
       if (error) {
         console.error("Admin player lookup failed:", error.message);
@@ -658,7 +671,7 @@ Deno.serve(async (req) => {
 
       if (!player) {
         return respond(
-          { error: "Игрок с таким Game ID не найден" },
+          { error: "Игрок с таким Telegram username не найден" },
           404,
         );
       }
@@ -701,6 +714,7 @@ Deno.serve(async (req) => {
         success: true,
         player: {
           ...player,
+          game_id: player.username ? `@${player.username}` : String(player.game_id || ""),
           ...credits,
           progress: playerProgress || null,
         },
@@ -766,11 +780,11 @@ Deno.serve(async (req) => {
         return respond({ error: "Выбери брейнрота" }, 400);
       }
 
-      const { data: player, error: playerError } = await supabase
-        .from("players")
-        .select("telegram_id, game_id")
-        .eq("game_id", gameId)
-        .maybeSingle();
+      const { data: player, error: playerError } = await findPlayerByPublicGameId(
+        supabase,
+        gameId,
+        "telegram_id, game_id, username",
+      );
 
       if (playerError) {
         console.error(
@@ -886,7 +900,33 @@ Deno.serve(async (req) => {
         );
       }
 
-      return respond({ success: true, logs: logs ?? [], isOwner });
+      const logPlayerIds = [...new Set((logs || []).map((log: any) => String(log.player_telegram_id || "")).filter(Boolean))];
+      const { data: logPlayers } = logPlayerIds.length
+        ? await supabase.from("players").select("telegram_id, username").in("telegram_id", logPlayerIds)
+        : { data: [] };
+      const logUsernames = new Map((logPlayers || []).map((entry: any) => [String(entry.telegram_id), entry.username]));
+      const publicLogs = (logs || []).map((log: any) => ({
+        ...log,
+        game_id: logUsernames.get(String(log.player_telegram_id))
+          ? `@${logUsernames.get(String(log.player_telegram_id))}`
+          : log.game_id,
+      }));
+      return respond({ success: true, logs: publicLogs, isOwner });
+    }
+
+    // PERSONAL HISTORY: initData is verified above, so only the signed-in player's rows are returned.
+    if (body.action === "get_player_history") {
+      const { data: history, error } = await supabase
+        .from("opening_history")
+        .select("case_name, item_name, price, created_at")
+        .eq("telegram_id", telegramUser.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) {
+        console.error("Player history loading failed:", error.message);
+        return respond({ error: "Could not load player history" }, 503);
+      }
+      return respond({ success: true, history: history || [] });
     }
 
     // ИНВЕНТАРЬ
@@ -1140,6 +1180,8 @@ Deno.serve(async (req) => {
       success: true,
       player: {
         ...player,
+        game_id: player.username ? `@${player.username}` : null,
+        public_game_id: player.username ? `@${player.username}` : null,
         ...credits,
       },
     });
