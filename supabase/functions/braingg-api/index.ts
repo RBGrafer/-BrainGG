@@ -289,10 +289,49 @@ Deno.serve(async (req) => {
           await supabase.from("game_global_state").update({
             event_name: null, event_started_at: null, event_ends_at: null, updated_at: new Date().toISOString(),
           }).eq("id", 1);
+          await recordGlobalActivity({
+            eventType: "event_ended",
+            title: "Глобальное событие завершилось",
+            description: `Событие ${eventRow.event_name} закончилось по общему таймеру.`,
+            success: true,
+          });
         }
         return null;
       }
       return eventRow;
+    };
+
+    // Every major game action is written to one shared community feed. Only the
+    // verified public Telegram username is stored; Telegram IDs and private
+    // account data are never exposed in this table. Feed failures never undo a
+    // successful game action.
+    const recordGlobalActivity = async (activity: {
+      eventType: string; title: string; description?: string; username?: string | null;
+      itemName?: string | null; caseName?: string | null; rarity?: string | null;
+      valueGg?: number | null; success?: boolean | null;
+    }) => {
+      try {
+        const usernameSource = activity.username !== undefined ? activity.username : telegramUser.username;
+        const safeUsername = String(usernameSource ?? "").replace(/^@/, "").trim().slice(0, 32) || null;
+        const safeValue = activity.valueGg == null ? null : Number(activity.valueGg);
+        const { error: activityError } = await supabase.from("game_global_activity").insert({
+          username: safeUsername,
+          event_type: String(activity.eventType).slice(0, 32),
+          title: String(activity.title).slice(0, 80),
+          description: String(activity.description ?? "").slice(0, 240) || null,
+          item_name: activity.itemName ? String(activity.itemName).slice(0, 120) : null,
+          case_name: activity.caseName ? String(activity.caseName).slice(0, 100) : null,
+          rarity: activity.rarity ? String(activity.rarity).slice(0, 40) : null,
+          value_gg: safeValue != null && Number.isFinite(safeValue) && safeValue >= 0 ? safeValue : null,
+          success: activity.success ?? null,
+        });
+        if (activityError) throw activityError;
+        // Keep the public activity table compact without affecting the feed.
+        await supabase.from("game_global_activity")
+          .delete().lt("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+      } catch (activityError) {
+        console.warn("Global activity insert failed:", activityError instanceof Error ? activityError.message : activityError);
+      }
     };
 
     if (body.action === "get_global_state") {
@@ -325,6 +364,20 @@ Deno.serve(async (req) => {
           .update(update).eq("id", 1)
           .select("id, event_name, event_started_at, event_ends_at, updated_at").single();
         if (error) throw error;
+        if (!shouldStop && currentEvent?.event_name) {
+          await recordGlobalActivity({
+            eventType: "event_ended",
+            title: "Глобальное событие заменено",
+            description: `Событие ${currentEvent.event_name} завершено запуском нового события.`,
+            success: true,
+          });
+        }
+        await recordGlobalActivity({
+          eventType: shouldStop ? "event_ended" : "event_started",
+          title: shouldStop ? "Глобальное событие завершено" : "Запущено глобальное событие",
+          description: shouldStop ? `Событие ${currentEvent?.event_name || requestedEvent || "BrainGG"} завершено для всех игроков.` : `Событие ${requestedEvent} началось одновременно для всего BrainGG.`,
+          success: true,
+        });
         return respond({ success: true, event: data?.event_name ? data : null, stopped: shouldStop });
       } catch (error) {
         console.error("Admin event update failed:", error?.message || error);
@@ -347,6 +400,7 @@ Deno.serve(async (req) => {
         if (error) throw error;
         await supabase.from("game_global_messages")
           .delete().lt("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+        await recordGlobalActivity({ eventType: "global_message", title: "Глобальное объявление BrainGG", description: message });
         return respond({ success: true, message: data });
       } catch (error) {
         console.error("Global message send failed:", error?.message || error);
@@ -457,6 +511,7 @@ Deno.serve(async (req) => {
       let credits = { free_case_credits: [], free_cases_total: Number(result?.free_cases_total || 0) };
       try { credits = await getFreeCaseCredits(supabase, telegramUser.id); }
       catch (creditError) { console.warn("Promo redemption credits refresh failed:", creditError?.message || creditError); }
+      await recordGlobalActivity({ eventType: "promo_redeemed", title: "Активировал промокод", description: "Игрок получил бонус BrainGG за промокод.", valueGg: Number(result?.reward_gg || 0), success: true });
       return respond({ success: true, result: { ...(result || {}), ...credits } });
     }
 
@@ -580,17 +635,22 @@ Deno.serve(async (req) => {
     if (body.action === "claim_daily_reward") {
       const { data, error } = await supabase.rpc("claim_daily_reward", { p_telegram_id: telegramUser.id });
       if (error) { console.error("Daily reward claim failed:", error.message); return respond({ error: "Не удалось получить ежедневную награду" }, 400); }
+      const rewardResult = typeof data === "string" ? JSON.parse(data) : data;
       const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
-      return respond({ success: true, result: data, balance: player?.balance });
+      if (rewardResult?.success) await recordGlobalActivity({ eventType: "daily_reward", title: "Забрал ежедневную награду", description: `Серия: ${Number(rewardResult.streak || 1)} дн.`, valueGg: Number(rewardResult.reward_gg || 0), success: true });
+      return respond({ success: true, result: rewardResult, balance: player?.balance });
     }
 
     if (body.action === "claim_task_reward") {
       const taskId = String(body.taskId || "");
-      if (!GAME_TASKS.some((task) => task.id === taskId)) return respond({ error: "Неизвестное задание" }, 400);
+      const task = GAME_TASKS.find((entry) => entry.id === taskId);
+      if (!task) return respond({ error: "Неизвестное задание" }, 400);
       const { data, error } = await supabase.rpc("claim_task_reward", { p_telegram_id: telegramUser.id, p_task_id: taskId });
       if (error) { console.error("Task reward claim failed:", error.message); return respond({ error: "Не удалось получить награду" }, 400); }
+      const taskResult = typeof data === "string" ? JSON.parse(data) : data;
       const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
-      return respond({ success: true, result: data, balance: player?.balance });
+      if (taskResult?.success) await recordGlobalActivity({ eventType: "task_reward", title: "Завершил игровое задание", description: `${task.title} · +${Number(taskResult.reward_gg || 0)} GG`, valueGg: Number(taskResult.reward_gg || 0), success: true });
+      return respond({ success: true, result: taskResult, balance: player?.balance });
     }
 
     if (body.action === "get_quiz_status") {
@@ -621,6 +681,7 @@ Deno.serve(async (req) => {
       if (error) { console.error("Quiz answer submit failed:", error.message); return respond({ error: error.message.includes("QUIZ_DAILY_LIMIT") ? "Все три попытки на сегодня использованы." : "Не удалось сохранить ответ. Проверь SQL-миграцию викторины." }, 400); }
       const result = typeof data === "string" ? JSON.parse(data) : data;
       const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      await recordGlobalActivity({ eventType: correct ? "quiz_correct" : "quiz_answered", title: correct ? "Правильно ответил в викторине" : "Участвовал в викторине", description: correct ? "Верный ответ · +5 GG" : "Ответил на вопрос BrainGG.", valueGg: correct ? 5 : 0, success: correct });
       return respond({ success: true, correct, reward_gg: correct ? 5 : 0, correct_answer: question.options[question.answer], correct_index: question.answer, explanation: question.explanation, balance: player?.balance, status: { used: result.used, remaining: Math.max(0, 3 - Number(result.used || 0)), correct: result.correct_count } });
     }
 
@@ -629,10 +690,11 @@ Deno.serve(async (req) => {
       const gameId = String(body.gameId || "").trim();
       const amount = Number(body.amount);
       if (!gameId || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) return respond({ error: "Некорректное количество XP" }, 400);
-      const { data: targetPlayer, error: targetError } = await findPlayerByPublicGameId(supabase, gameId, "telegram_id");
+      const { data: targetPlayer, error: targetError } = await findPlayerByPublicGameId(supabase, gameId, "telegram_id, username");
       if (targetError || !targetPlayer) return respond({ error: "Игрок не найден" }, 404);
       const { data: xp, error } = await supabase.rpc("admin_adjust_player_xp", { p_player_telegram_id: targetPlayer.telegram_id, p_amount: amount });
       if (error) { console.error("Admin XP adjustment failed:", error.message); return respond({ error: "Не удалось начислить XP. Применена ли миграция Season 2?" }, 400); }
+      await recordGlobalActivity({ eventType: "admin_reward", title: "Игрок получил XP от администрации", description: `${targetPlayer.username ? `@${targetPlayer.username}` : "Игрок"} · +${amount} XP`, username: targetPlayer.username, success: true });
       return respond({ success: true, xp });
     }
 
@@ -834,6 +896,7 @@ Deno.serve(async (req) => {
           supabase,
           player.telegram_id,
         );
+        await recordGlobalActivity({ eventType: "admin_reward", title: "Игрок получил кейсы от администрации", description: `${player.username ? `@${player.username}` : "Игрок"} · ${amount} × ${caseName}`, username: player.username, caseName, success: true });
 
         return respond({
           success: true,
@@ -875,6 +938,15 @@ Deno.serve(async (req) => {
         );
       }
 
+      await recordGlobalActivity({
+        eventType: "admin_reward",
+        title: grantType === "coins" ? "Игрок получил GG от администрации" : "Игрок получил брейнрота от администрации",
+        description: `${player.username ? `@${player.username}` : "Игрок"} · ${grantType === "coins" ? `${amount} GG` : itemName}`,
+        username: player.username,
+        itemName: grantType === "brainrot" ? itemName : null,
+        valueGg: grantType === "coins" ? amount : null,
+        success: true,
+      });
       return respond({ success: true, result: data });
     }
 
@@ -959,6 +1031,9 @@ Deno.serve(async (req) => {
         return respond({ error: "Invalid inventory item" }, 400);
       }
 
+      const { data: soldItem } = await supabase.from("inventory")
+        .select("item_name, rarity, value_gg, mutation")
+        .eq("id", inventoryId).eq("telegram_id", telegramUser.id).maybeSingle();
       const { data, error } = await supabase.rpc(
         "sell_inventory_item",
         {
@@ -973,6 +1048,7 @@ Deno.serve(async (req) => {
       }
 
       await recordProgress("sell_item", 1);
+      if (soldItem) await recordGlobalActivity({ eventType: "item_sold", title: "Продал брейнрота", description: `${soldItem.item_name} · ${Number(soldItem.value_gg || 0)} GG`, itemName: soldItem.item_name, rarity: soldItem.rarity, valueGg: Number(soldItem.value_gg || 0), success: true });
       return respond({ success: true, result: data });
     }
 
@@ -1054,6 +1130,9 @@ Deno.serve(async (req) => {
 
       // The wrapper checks the event timestamp inside the same database transaction,
       // avoiding a race between the Edge Function's event read and the actual upgrade.
+      const { data: upgradeSource } = await supabase.from("inventory")
+        .select("item_name, rarity, value_gg")
+        .eq("id", inventoryId).eq("telegram_id", telegramUser.id).maybeSingle();
       const { data, error } = await supabase.rpc(
         "upgrade_inventory_item_with_luck",
         {
@@ -1069,7 +1148,17 @@ Deno.serve(async (req) => {
       }
 
       await recordProgress("upgrade_item", 1);
-      return respond({ success: true, result: data });
+      const upgradeResult = typeof data === "string" ? JSON.parse(data) : data;
+      const upgradeWon = Boolean(upgradeResult?.won);
+      await recordGlobalActivity({
+        eventType: upgradeWon ? "upgrade_won" : "upgrade_failed",
+        title: upgradeWon ? "Успешный апгрейд" : "Попытка апгрейда",
+        description: `${upgradeSource?.item_name || "Предмет"} → ${upgradeResult?.target_item || targetItem.trim()}`,
+        itemName: upgradeResult?.target_item || targetItem.trim(),
+        rarity: upgradeSource?.rarity || null,
+        success: upgradeWon,
+      });
+      return respond({ success: true, result: upgradeResult });
     }
 
     // ОТКРЫТИЕ КЕЙСА
@@ -1108,6 +1197,16 @@ Deno.serve(async (req) => {
       const openedReward: any = data || {};
       const dropItemName = String(openedReward.item_name || openedReward.name || "").trim();
       if (dropItemName) {
+        await recordGlobalActivity({
+          eventType: "case_opened",
+          title: "Открыл кейс",
+          description: `${dropItemName} · ${caseName}${openedReward.mutation === "strawberry" ? " · 🍓 Strawberry ×2.5" : ""}`,
+          itemName: dropItemName,
+          caseName,
+          rarity: openedReward.rarity || null,
+          valueGg: Number(openedReward.value_gg || openedReward.sold_price || 0),
+          success: true,
+        });
         const { error: dropInsertError } = await supabase.from("game_live_drops").insert({
           telegram_id: telegramUser.id,
           item_name: dropItemName,
