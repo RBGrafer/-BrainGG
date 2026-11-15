@@ -1630,3 +1630,39 @@ body[data-braingg-event] { transition: background .5s ease; }
   .global-activity-title-line b { font-size:10px; }
   .global-activity-value { font-size:9px; }
 }
+
+/* Streamer mode: a transparent, restricted presentation mode for live broadcasts.
+   It removes chance-based play and payment controls instead of disguising them. */
+.streamer-mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  width: min(1180px, calc(100% - 28px));
+  margin: 10px auto 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(94, 218, 177, .3);
+  border-radius: 13px;
+  background: linear-gradient(105deg, rgba(9, 55, 49, .94), rgba(8, 35, 43, .94));
+  color: #c9f7e7;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+}
+.streamer-mode-banner b { color: #8df0c3; font-size: 10px; font-weight: 950; letter-spacing: 1.2px; white-space: nowrap; }
+.streamer-mode-banner span { color: #b4d8d4; font-size: 10px; line-height: 1.5; text-align: center; }
+.settings-streamer-row { margin-top: 5px; padding-top: 18px; }
+.settings-streamer-row .settings-icon { border-color: rgba(91, 224, 174, .3); background: rgba(15, 92, 68, .3); }
+.settings-switch:disabled { opacity: .45; cursor: not-allowed; }
+.streamer-mode-feedback { margin: 12px 0 0; padding: 11px 13px; border: 1px solid rgba(91, 224, 174, .25); border-radius: 11px; background: rgba(12, 67, 54, .28); color: #b9f0d9; font-size: 11px; line-height: 1.5; }
+.streamer-readonly-label { margin-top: 8px; padding: 8px 9px; border: 1px solid rgba(91, 224, 174, .18); border-radius: 9px; background: rgba(12, 67, 54, .2); color: #9bd9c0; font-size: 9px; font-weight: 800; text-align: center; }
+.streamer-blocked-panel { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 650px; margin: 35px auto; padding: 30px; text-align: center; }
+.streamer-blocked-panel h2 { margin: 0; color: #e9f8ff; font-size: 20px; }
+.streamer-blocked-panel p { max-width: 480px; margin: 0; color: #9bb9c9; font-size: 12px; line-height: 1.6; }
+.streamer-blocked-panel .main-button { margin-top: 5px; }
+@media (max-width: 600px) {
+  .streamer-mode-banner { width: calc(100% - 18px); padding: 9px 10px; }
+  .streamer-mode-banner span { text-align: left; }
+  .settings-streamer-row { align-items: flex-start; }
+  .settings-streamer-row .settings-icon { flex-basis: 38px; width: 38px; height: 38px; }
+  .streamer-blocked-panel { margin: 18px auto; padding: 22px 16px; }
+}
