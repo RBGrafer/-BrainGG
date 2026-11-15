@@ -189,7 +189,7 @@ export default function App() {
   const [sellingAll, setSellingAll] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
 
-  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь", "Рейтинг", "Задания", "Викторина", "Профиль"];
+  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь", "Промокод", "Рейтинг", "Задания", "Викторина", "Профиль"];
   const [customError, setCustomError] = useState("");
 
   // Состояние защищённой админ-панели BrainGG
@@ -197,6 +197,22 @@ export default function App() {
   const [isOwner, setIsOwner] = useState(false);
   const [globalMessageDraft, setGlobalMessageDraft] = useState("");
   const [globalMessageSending, setGlobalMessageSending] = useState(false);
+  const [promoCodeDraft, setPromoCodeDraft] = useState("");
+  const [promoRedeemLoading, setPromoRedeemLoading] = useState(false);
+  const [promoFeedback, setPromoFeedback] = useState("");
+  const [promoFeedbackError, setPromoFeedbackError] = useState(false);
+  const [adminPromoCode, setAdminPromoCode] = useState("");
+  const [adminPromoRewardType, setAdminPromoRewardType] = useState("coins");
+  const [adminPromoRewardAmount, setAdminPromoRewardAmount] = useState("100");
+  const [adminPromoCaseName, setAdminPromoCaseName] = useState("Truckini Case");
+  const [adminPromoItemName, setAdminPromoItemName] = useState("");
+  const [adminPromoMaxUses, setAdminPromoMaxUses] = useState("100");
+  const [adminPromoExpiresAt, setAdminPromoExpiresAt] = useState("");
+  const [adminPromoCodes, setAdminPromoCodes] = useState([]);
+  const [adminPromoBusy, setAdminPromoBusy] = useState(false);
+  const [adminPromoLoading, setAdminPromoLoading] = useState(false);
+  const [adminPromoFeedback, setAdminPromoFeedback] = useState("");
+  const [adminPromoFeedbackError, setAdminPromoFeedbackError] = useState(false);
   const [adminEventLoading, setAdminEventLoading] = useState(false);
   const [adminEventFeedback, setAdminEventFeedback] = useState("");
   const [adminEventFeedbackError, setAdminEventFeedbackError] = useState(false);
@@ -828,6 +844,152 @@ export default function App() {
     }
   }
 
+  async function redeemPromoCode(event) {
+    event?.preventDefault();
+    if (promoRedeemLoading) return;
+    const code = promoCodeDraft.trim().toUpperCase();
+    if (!code) {
+      setPromoFeedback("Введи промокод.");
+      setPromoFeedbackError(true);
+      return;
+    }
+    setPromoRedeemLoading(true);
+    setPromoFeedback("");
+    setPromoFeedbackError(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "redeem_promo_code", code },
+      });
+      if (error) throw error;
+      if (!data?.success || !data?.result) throw new Error(data?.error || "Не удалось активировать промокод.");
+      const reward = data.result;
+      setPlayer((current) => current ? {
+        ...current,
+        balance: reward.balance ?? current.balance,
+        free_cases: reward.free_cases_total ?? current.free_cases,
+        free_cases_total: reward.free_cases_total ?? current.free_cases_total,
+        free_case_credits: reward.free_case_credits ?? current.free_case_credits,
+      } : current);
+      if (reward.reward_type === "coins") {
+        setPromoFeedback(`Промокод активирован! На баланс начислено ${Number(reward.reward_amount).toLocaleString("ru-RU")} GG. 🎉`);
+      } else if (reward.reward_type === "cases") {
+        setPromoFeedback(`Промокод активирован! Получено ${reward.reward_amount} бесплатных кейсов «${displayCaseName(reward.case_name)}». 🎁`);
+      } else {
+        setPromoFeedback(`Промокод активирован! В инвентарь добавлено: ${reward.item_name} ×${reward.reward_amount}. 🧠`);
+        await loadInventory();
+      }
+      setPromoCodeDraft("");
+      setPromoFeedbackError(false);
+    } catch (error) {
+      setPromoFeedback(error?.message || "Не удалось активировать промокод.");
+      setPromoFeedbackError(true);
+    } finally {
+      setPromoRedeemLoading(false);
+    }
+  }
+
+  async function loadAdminPromoCodes() {
+    if (!isOwner) return;
+    setAdminPromoLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "admin_list_promo_codes" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось загрузить промокоды.");
+      setAdminPromoCodes(data.promoCodes || []);
+    } catch (error) {
+      setAdminPromoFeedback(error?.message || "Не удалось загрузить промокоды.");
+      setAdminPromoFeedbackError(true);
+    } finally {
+      setAdminPromoLoading(false);
+    }
+  }
+
+  async function createAdminPromoCode(event) {
+    event?.preventDefault();
+    if (!isOwner || adminPromoBusy) return;
+    const code = adminPromoCode.trim().toUpperCase();
+    const rewardAmount = Number(adminPromoRewardAmount);
+    const maxUses = adminPromoMaxUses.trim() === "" ? null : Number(adminPromoMaxUses);
+    if (!/^[A-Z0-9_-]{3,24}$/.test(code)) {
+      setAdminPromoFeedback("Код: 3–24 символа, только латинские буквы, цифры, дефис и подчёркивание.");
+      setAdminPromoFeedbackError(true);
+      return;
+    }
+    if (!Number.isSafeInteger(rewardAmount) || rewardAmount < 1) {
+      setAdminPromoFeedback("Укажи корректное количество награды.");
+      setAdminPromoFeedbackError(true);
+      return;
+    }
+    if (maxUses !== null && (!Number.isSafeInteger(maxUses) || maxUses < 1)) {
+      setAdminPromoFeedback("Лимит активаций должен быть положительным целым числом или пустым.");
+      setAdminPromoFeedbackError(true);
+      return;
+    }
+    if (adminPromoRewardType === "brainrot" && !adminPromoItemName) {
+      setAdminPromoFeedback("Выбери брейнрота для награды.");
+      setAdminPromoFeedbackError(true);
+      return;
+    }
+    if (adminPromoRewardType === "cases" && !adminPromoCaseName) {
+      setAdminPromoFeedback("Выбери кейс для награды.");
+      setAdminPromoFeedbackError(true);
+      return;
+    }
+
+    setAdminPromoBusy(true);
+    setAdminPromoFeedback("");
+    setAdminPromoFeedbackError(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: {
+          initData: initData(),
+          action: "admin_create_promo_code",
+          code,
+          rewardType: adminPromoRewardType,
+          rewardAmount,
+          caseName: adminPromoRewardType === "cases" ? adminPromoCaseName : null,
+          itemName: adminPromoRewardType === "brainrot" ? adminPromoItemName : null,
+          maxUses,
+          expiresAt: adminPromoExpiresAt ? new Date(adminPromoExpiresAt).toISOString() : null,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось создать промокод.");
+      setAdminPromoCode("");
+      setAdminPromoFeedback(`Промокод ${data.promoCode.code} создан. Награда: ${rewardAmount} ${adminPromoRewardType === "coins" ? "GG" : adminPromoRewardType === "cases" ? "кейсов" : "брейнротов"}.`);
+      setAdminPromoFeedbackError(false);
+      await loadAdminPromoCodes();
+    } catch (error) {
+      setAdminPromoFeedback(error?.message || "Не удалось создать промокод.");
+      setAdminPromoFeedbackError(true);
+    } finally {
+      setAdminPromoBusy(false);
+    }
+  }
+
+  async function deactivateAdminPromoCode(promoId) {
+    if (!isOwner || adminPromoBusy) return;
+    setAdminPromoBusy(true);
+    setAdminPromoFeedback("");
+    setAdminPromoFeedbackError(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "admin_deactivate_promo_code", promoId },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось отключить промокод.");
+      setAdminPromoFeedback(`Промокод ${data.promoCode.code} отключён.`);
+      await loadAdminPromoCodes();
+    } catch (error) {
+      setAdminPromoFeedback(error?.message || "Не удалось отключить промокод.");
+      setAdminPromoFeedbackError(true);
+    } finally {
+      setAdminPromoBusy(false);
+    }
+  }
+
   async function sendGlobalMessage(event) {
     event?.preventDefault();
     if (!isOwner) return;
@@ -1218,6 +1380,10 @@ export default function App() {
     }
 
     if (["Рейтинг", "Задания", "Профиль"].includes(nextPage)) await loadGameHub();
+    if (nextPage === "Промокод") {
+      setPromoFeedback("");
+      setPromoFeedbackError(false);
+    }
     if (nextPage === "Викторина") {
       try { await loadQuizStatus(); await startQuizQuestion(); }
       catch (error) { setQuizFeedback(error.message || "Викторина временно недоступна."); }
@@ -1229,6 +1395,7 @@ export default function App() {
         await loadUpgradeTargets();
       }
       await loadAdminLogs();
+      if (isOwner) await loadAdminPromoCodes();
     }
   }
 
@@ -2352,6 +2519,39 @@ export default function App() {
             </main>
           )}
 
+          {page === "Промокод" && (
+            <main className="content season-page promo-page">
+              <header className="season-page-heading">
+                <span className="season-kicker">BRAIN GG REWARDS</span>
+                <h2>🎟️ Активация промокода</h2>
+                <p>Введи промокод от BrainGG и забери свою награду.</p>
+              </header>
+              <section className="promo-redeem-card">
+                <div className="promo-card-emblem">🎁</div>
+                <h3>Есть промокод?</h3>
+                <p>Каждый код можно активировать один раз на аккаунт. Награда сразу поступит на баланс или в инвентарь.</p>
+                <form className="promo-redeem-form" onSubmit={redeemPromoCode}>
+                  <label htmlFor="promo-code-input">ТВОЙ ПРОМОКОД</label>
+                  <input
+                    id="promo-code-input"
+                    className="admin-input promo-code-input"
+                    value={promoCodeDraft}
+                    maxLength={24}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) => setPromoCodeDraft(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))}
+                    placeholder="ВВЕДИ-КОД"
+                  />
+                  <button className="main-button promo-redeem-button" type="submit" disabled={promoRedeemLoading || !promoCodeDraft.trim()}>
+                    {promoRedeemLoading ? "Проверяем код..." : "🎉 Активировать промокод"}
+                  </button>
+                </form>
+                {promoFeedback && <div className={`promo-feedback ${promoFeedbackError ? "error" : "success"}`} role="status">{promoFeedback}</div>}
+                <div className="promo-rules"><span>✓</span> Одно использование на игрока <span>•</span> Награда выдаётся сервером <span>•</span> Повторная активация невозможна</div>
+              </section>
+            </main>
+          )}
+
           {page === "Админка" && isAdmin && (
             <main className="content admin-content">
               <div className="admin-heading">
@@ -2369,12 +2569,16 @@ export default function App() {
                   ["players", "Игроки", "♙"],
                   ["history", "Журнал", "◷"],
                   ["events", "События", "✦"],
+                  ...(isOwner ? [["promocodes", "Промокоды", "🎟"]] : []),
                 ].map(([key, label, icon]) => (
                   <button
                     key={key}
                     type="button"
                     className={adminSection === key ? "active" : ""}
-                    onClick={() => setAdminSection(key)}
+                    onClick={() => {
+                      setAdminSection(key);
+                      if (key === "promocodes") loadAdminPromoCodes();
+                    }}
                   >
                     <span>{icon}</span>{label}
                   </button>
@@ -2671,6 +2875,104 @@ export default function App() {
                   )}
                   {adminMessage && <div className={`admin-feedback ${adminMessageError ? "error" : "success"}`}>{adminMessage}</div>}
                   {adminEventFeedback && <div className={`admin-feedback ${adminEventFeedbackError ? "error" : "success"}`}>{adminEventFeedback}</div>}
+                </>
+              )}
+
+              {adminSection === "promocodes" && isOwner && (
+                <>
+                  <section className="admin-panel-card promo-admin-card">
+                    <div className="admin-section-title">
+                      <span className="admin-section-icon">🎟️</span>
+                      <div>
+                        <h3>Создать промокод</h3>
+                        <p>Создание доступно только владельцу. Каждый игрок сможет активировать один код один раз.</p>
+                      </div>
+                    </div>
+                    <form className="promo-admin-form" onSubmit={createAdminPromoCode}>
+                      <label className="admin-field">
+                        <span>Код промокода</span>
+                        <input className="admin-input promo-admin-code-input" value={adminPromoCode} maxLength={24} autoComplete="off" spellCheck={false} onChange={(event) => setAdminPromoCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))} placeholder="Например, BRAIN2026" />
+                      </label>
+                      <label className="admin-field">
+                        <span>Тип награды</span>
+                        <select className="admin-input" value={adminPromoRewardType} onChange={(event) => {
+                            setAdminPromoRewardType(event.target.value);
+                            if (event.target.value === "brainrot") setAdminPromoRewardAmount("1");
+                          }}>
+                          <option value="coins">🪙 Монеты GG</option>
+                          <option value="cases">🎁 Бесплатные кейсы</option>
+                          <option value="brainrot">🧠 Брейнрот в инвентарь</option>
+                        </select>
+                      </label>
+                      {adminPromoRewardType === "cases" && (
+                        <label className="admin-field promo-admin-full">
+                          <span>Какой кейс выдать?</span>
+                          <select className="admin-input" value={adminPromoCaseName} onChange={(event) => setAdminPromoCaseName(event.target.value)}>
+                            {cases.map((item) => <option key={item.id} value={item.caseName}>{item.name}</option>)}
+                          </select>
+                        </label>
+                      )}
+                      {adminPromoRewardType === "brainrot" && (
+                        <label className="admin-field promo-admin-full">
+                          <span>Какого брейнрота выдать?</span>
+                          <select className="admin-input" value={adminPromoItemName} onChange={(event) => setAdminPromoItemName(event.target.value)}>
+                            <option value="">Выбери брейнрота...</option>
+                            {upgradeTargets.map((item) => <option key={item.item_name} value={item.item_name}>{item.item_name} · {Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</option>)}
+                          </select>
+                        </label>
+                      )}
+                      <label className="admin-field">
+                        <span>{adminPromoRewardType === "coins" ? "Количество GG" : adminPromoRewardType === "cases" ? "Количество кейсов" : "Количество брейнротов"}</span>
+                        <input className="admin-input" type="number" min="1" max={adminPromoRewardType === "brainrot" ? "1" : "1000000"} step="1" value={adminPromoRewardAmount} onChange={(event) => setAdminPromoRewardAmount(event.target.value)} />
+                      </label>
+                      <label className="admin-field">
+                        <span>Максимум активаций</span>
+                        <input className="admin-input" type="number" min="1" max="1000000" step="1" value={adminPromoMaxUses} onChange={(event) => setAdminPromoMaxUses(event.target.value)} placeholder="Пусто — без лимита" />
+                      </label>
+                      <label className="admin-field promo-admin-full">
+                        <span>Срок действия (необязательно)</span>
+                        <input className="admin-input" type="datetime-local" value={adminPromoExpiresAt} onChange={(event) => setAdminPromoExpiresAt(event.target.value)} />
+                      </label>
+                      <button className="main-button promo-admin-submit promo-admin-full" type="submit" disabled={adminPromoBusy}>
+                        {adminPromoBusy ? "Сохраняем..." : "🎟️ Создать промокод"}
+                      </button>
+                    </form>
+                    {adminPromoFeedback && <div className={`admin-feedback ${adminPromoFeedbackError ? "error" : "success"}`}>{adminPromoFeedback}</div>}
+                    <p className="admin-data-note">Промокоды создаются на сервере. Проверка владельца выполняется по Telegram ID; скрытие этой формы не является защитой само по себе.</p>
+                  </section>
+
+                  <section className="admin-panel-card promo-admin-list-card">
+                    <div className="admin-section-title">
+                      <span className="admin-section-icon">📋</span>
+                      <div><h3>Созданные промокоды</h3><p>Лимиты, количество активаций и статус каждого кода.</p></div>
+                      <button className="admin-refresh-button" type="button" onClick={loadAdminPromoCodes} disabled={adminPromoLoading}>{adminPromoLoading ? "..." : "↻ Обновить"}</button>
+                    </div>
+                    {adminPromoLoading ? <p className="admin-muted">Загружаем промокоды...</p> : adminPromoCodes.length === 0 ? <p className="admin-muted">Пока нет созданных промокодов.</p> : (
+                      <div className="promo-admin-list">
+                        {adminPromoCodes.map((promo) => {
+                          const rewardLabel = promo.reward_type === "coins"
+                            ? `${Number(promo.reward_amount).toLocaleString("ru-RU")} GG`
+                            : promo.reward_type === "cases"
+                              ? `${promo.reward_amount} × ${displayCaseName(promo.case_name)}`
+                              : `${promo.item_name} ×${promo.reward_amount}`;
+                          const expired = promo.expires_at && Date.parse(promo.expires_at) <= Date.now();
+                          const exhausted = promo.max_uses != null && Number(promo.uses_count) >= Number(promo.max_uses);
+                          const active = promo.active && !expired && !exhausted;
+                          return (
+                            <article className="promo-admin-row" key={promo.id}>
+                              <div className="promo-admin-main">
+                                <b>{promo.code}</b>
+                                <span>{rewardLabel}</span>
+                                <small>Использовано: {promo.uses_count} / {promo.max_uses == null ? "∞" : promo.max_uses}{promo.expires_at ? ` · до ${new Date(promo.expires_at).toLocaleString("ru-RU")}` : " · без срока"}</small>
+                              </div>
+                              <div className={`promo-admin-status ${active ? "active" : "inactive"}`}>{active ? "Активен" : expired ? "Истёк" : exhausted ? "Лимит исчерпан" : "Отключён"}</div>
+                              {promo.active && <button type="button" className="promo-admin-disable" disabled={adminPromoBusy} onClick={() => deactivateAdminPromoCode(promo.id)}>Отключить</button>}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
                 </>
               )}
 
