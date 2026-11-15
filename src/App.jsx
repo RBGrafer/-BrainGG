@@ -4,6 +4,9 @@ import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 import winterHomeBackground from "./assets/braingg-winter-home.jpg";
 
+const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
+const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Live Drops", "Глобальные события", "История", "Промокод", "Задания", "Достижения", "Админка"]);
+
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
   "Truckini Case": "Frostbite Case",
@@ -125,6 +128,11 @@ function calculateUpgradeChance(source, target, luckMultiplier = 1) {
 
 export default function App() {
   const [page, setPage] = useState("Главная");
+  const [streamerMode, setStreamerMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.localStorage.getItem(STREAMER_MODE_STORAGE_KEY) === "1"; } catch { return false; }
+  });
+  const [streamerModeFeedback, setStreamerModeFeedback] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [openCount, setOpenCount] = useState(1);
   const [fastOpen, setFastOpen] = useState(true);
@@ -197,13 +205,12 @@ export default function App() {
   const menuGroups = [
     { title: "ИГРАТЬ", items: [
       { label: "Кейсы", page: "Кейсы", icon: "🎁", description: "Открывай кейсы и лови редкие дропы" },
-      { label: "Рулетка кейсов", page: "Кейсы", icon: "🎰", description: "Смотри анимацию выпадения награды" },
       { label: "Апгрейдер", page: "Апгрейдер", icon: "⚡", description: "Улучшай предметы из инвентаря" },
       { label: "Викторина", page: "Викторина", icon: "🧠", description: "Отвечай и зарабатывай GG" },
       { label: "Коллекция", page: "Коллекция", icon: "📚", description: "Все твои брейнроты в одном альбоме" },
     ]},
     { title: "ПРОГРЕСС", items: [
-      { label: "Ежедневная награда", page: "Главная", icon: "🎄", description: "Забирай GG и держи серию" },
+      { label: "Главная", page: "Главная", icon: "🏠", description: "Перейти на главную страницу BrainGG" },
       { label: "Квесты", page: "Задания", icon: "📋", description: "Выполняй миссии и забирай награды" },
       { label: "Достижения", page: "Достижения", icon: "🏆", description: "Открывай новые значки" },
       { label: "Рекорды", page: "Рейтинг", icon: "🥇", description: "Сравнивай свой XP с игроками" },
@@ -219,6 +226,9 @@ export default function App() {
       { label: "Обучение", page: "Обучение", icon: "🎓", description: "Как играть и что делать" },
     ]},
   ];
+  const visibleMenuGroups = streamerMode
+    ? menuGroups.map((group) => ({ ...group, items: group.items.filter((item) => !STREAMER_RESTRICTED_PAGES.has(item.page)) })).filter((group) => group.items.length > 0)
+    : menuGroups;
   const [customError, setCustomError] = useState("");
 
   // Состояние защищённой админ-панели BrainGG
@@ -283,9 +293,13 @@ export default function App() {
 
   const initData = () => window.Telegram?.WebApp?.initData;
   const telegramIdentity = window.Telegram?.WebApp?.initDataUnsafe?.user || {};
-  const greetingLabel = telegramIdentity.username
-    ? `@${telegramIdentity.username}`
-    : (telegramIdentity.first_name || player?.username || "друг");
+  const greetingLabel = streamerMode
+    ? "Стример"
+    : (telegramIdentity.username ? `@${telegramIdentity.username}` : (telegramIdentity.first_name || player?.username || "друг"));
+
+  useEffect(() => {
+    try { window.localStorage.setItem(STREAMER_MODE_STORAGE_KEY, streamerMode ? "1" : "0"); } catch (error) { console.warn("Could not persist streamer mode preference:", error); }
+  }, [streamerMode]);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -460,6 +474,36 @@ export default function App() {
     eventMusicTimerRef.current = window.setInterval(playStep, track.stepMs);
   }
 
+  function toggleStreamerMode() {
+    if (opening || upgradeLoading || topupBusy || sellingId || sellingAll) {
+      setStreamerModeFeedback("Дождись завершения текущего действия, затем включи режим стримера.");
+      return;
+    }
+    const next = !streamerMode;
+    setStreamerMode(next);
+    setStreamerModeFeedback(next
+      ? "Режим стримера включён. Случайные игровые действия, продажи и платежи отключены на этом устройстве."
+      : "Обычный режим BrainGG восстановлен.");
+    if (next) {
+      caseRewardsRequestRef.current += 1;
+      setPage("Главная");
+      setMenuOpen(false);
+      setSelectedCase(null);
+      setCaseRewards([]);
+      setCaseRewardsFor("");
+      setCaseRewardsLoading(false);
+      setLastRewards([]);
+      setReelRows([]);
+      setShowRewardModal(false);
+      setTopupOpen(false);
+      setTopupMessage("");
+      setSelectedUpgrade(null);
+      setTargetItem("");
+      setUpgradeResult(null);
+      setInventorySort("newest");
+    }
+  }
+
   function toggleWinterMusic() {
     const next = !musicEnabled;
     setMusicEnabled(next);
@@ -470,7 +514,7 @@ export default function App() {
       setMusicNotice("");
       return;
     }
-    if (globalEvent?.event_name) startEventMusic(globalEvent.event_name);
+    if (globalEvent?.event_name && !streamerMode) startEventMusic(globalEvent.event_name);
     else startWinterMusic();
   }
 
@@ -481,6 +525,7 @@ export default function App() {
 
 
   async function startStarsTopup() {
+    if (streamerMode) { setTopupMessage("Пополнение отключено в режиме стримера."); return; }
     if (topupBusy) return;
     if (!initData()) { setTopupMessage("Открой BrainGG через Telegram, чтобы оплатить Stars."); return; }
     const stars = Number(topupStars);
@@ -815,7 +860,7 @@ export default function App() {
 
   useEffect(() => {
     const eventName = globalEvent?.event_name || "";
-    if (eventName) {
+    if (eventName && !streamerMode) {
       if (!eventWasActiveRef.current) winterMusicWasEnabledRef.current = musicEnabled;
       eventWasActiveRef.current = true;
       setMusicEnabled(true);
@@ -828,12 +873,12 @@ export default function App() {
       if (resumeWinter) startWinterMusic();
       else stopWinterMusic();
     }
-  }, [globalEvent?.event_name]);
+  }, [globalEvent?.event_name, streamerMode]);
 
   useEffect(() => {
     const eventName = globalEvent?.event_name || "";
     const colors = { tacos: "#3b1b0c", lucky: "#102a16", strawberry: "#3b1020" };
-    if (eventName) {
+    if (eventName && !streamerMode) {
       document.body.dataset.brainggEvent = eventName;
       try { window.Telegram?.WebApp?.setBackgroundColor?.(colors[eventName]); } catch { /* Telegram theme is optional. */ }
     } else {
@@ -841,11 +886,11 @@ export default function App() {
       try { window.Telegram?.WebApp?.setBackgroundColor?.("#071827"); } catch { /* Telegram theme is optional. */ }
     }
     return () => { delete document.body.dataset.brainggEvent; };
-  }, [globalEvent?.event_name]);
+  }, [globalEvent?.event_name, streamerMode]);
 
   useEffect(() => {
-    if (selectedCase?.caseName) loadCaseRewards(selectedCase.caseName);
-  }, [globalEvent?.event_name, selectedCase?.caseName]);
+    if (!streamerMode && selectedCase?.caseName) loadCaseRewards(selectedCase.caseName);
+  }, [globalEvent?.event_name, selectedCase?.caseName, streamerMode]);
 
   useEffect(() => {
     if (!player?.telegram_id) return undefined;
@@ -1453,6 +1498,11 @@ export default function App() {
   }
 
   async function changePage(nextPage) {
+    if (streamerMode && STREAMER_RESTRICTED_PAGES.has(nextPage)) {
+      setMenuOpen(false);
+      setStreamerModeFeedback("Этот раздел отключён в режиме стримера. Выключи режим в настройках, чтобы вернуться к обычной игре.");
+      return;
+    }
     if (nextPage !== page) playUiSound("tab");
     setPage(nextPage);
     setMenuOpen(false);
@@ -1489,6 +1539,7 @@ export default function App() {
   }
 
   async function openSelectedCase() {
+    if (streamerMode) { setActionMessage("Открытие кейсов отключено в режиме стримера."); return; }
     if (!selectedCase || !player || opening || caseRewardsLoading || caseRewardsFor !== selectedCase.caseName || caseRewards.length === 0) return;
 
     setOpening(true);
@@ -1596,6 +1647,7 @@ export default function App() {
   }
 
   async function sellItem(item) {
+    if (streamerMode) { setActionMessage("Продажа предметов отключена в режиме стримера."); return; }
     if (sellingId || sellingAll || upgradeLoading) return;
 
 
@@ -1648,6 +1700,7 @@ export default function App() {
   }
 
   async function sellAllItems() {
+    if (streamerMode) { setActionMessage("Продажа предметов отключена в режиме стримера."); return; }
     if (sellingAll || sellingId || upgradeLoading || inventory.length === 0) return;
     setSellingAll(true);
     setActionMessage("");
@@ -1678,6 +1731,7 @@ export default function App() {
   }
 
   async function performUpgrade() {
+    if (streamerMode) { setActionMessage("Апгрейдер отключён в режиме стримера."); return; }
     if (!selectedUpgrade || !targetItem || !selectedTarget || upgradeLoading) {
       setActionMessage("Сначала выбери свой брейнрот и цель для улучшения.");
       return;
@@ -1913,9 +1967,9 @@ export default function App() {
   }));
 
   return (
-    <div className={`app ${globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
-      <div className={`winter-snow ${globalEvent?.event_name ? `event-particles event-particles-${globalEvent.event_name}` : ""}`} aria-hidden="true">
-        {globalEvent?.event_name && activeEventPresentation ? eventParticles.map((particle) => (
+    <div className={`app ${!streamerMode && globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
+      <div className={`winter-snow ${!streamerMode && globalEvent?.event_name ? `event-particles event-particles-${globalEvent.event_name}` : ""}`} aria-hidden="true">
+        {!streamerMode && globalEvent?.event_name && activeEventPresentation ? eventParticles.map((particle) => (
           <i className="event-particle" key={particle.id} style={{ left: particle.left, animationDelay: particle.delay, animationDuration: particle.duration, fontSize: particle.size, opacity: particle.opacity, "--particle-drift": particle.drift }}>{activeEventPresentation.particle}</i>
         )) : snowflakes.map((flake) => (
           <i className="snowflake" key={flake.id} style={{ left: flake.left, animationDelay: flake.delay, animationDuration: flake.duration, width: flake.size, height: flake.size, opacity: flake.opacity, "--snow-drift": flake.drift }} />
@@ -1934,10 +1988,14 @@ export default function App() {
         <div className="header-wallet">
           <button className={`winter-audio-toggle ${musicEnabled ? "is-on" : ""}`} onClick={toggleWinterMusic} title={globalEvent?.event_name ? "Музыка текущего ивента" : "Фоновая зимняя музыка"}>{musicEnabled ? "♫ Музыка вкл." : "♫ Музыка"}</button>
           <button className={`winter-audio-toggle ${soundEnabled ? "is-on" : ""}`} onClick={() => setSoundEnabled((value) => !value)} title="Звуковые эффекты">{soundEnabled ? "🔊 Звуки" : "🔇 Звуки"}</button>
-          <div className="balance">🪙 {player ? player.balance : 0} GG</div>
-          <button className="topup-trigger" onClick={() => { setTopupMessage(""); setTopupOpen(true); }}>＋ Пополнить</button>
+          {!streamerMode && <>
+            <div className="balance">🪙 {player ? player.balance : 0} GG</div>
+            <button className="topup-trigger" onClick={() => { setTopupMessage(""); setTopupOpen(true); }}>＋ Пополнить</button>
+          </>}
         </div>
       </header>
+
+      {streamerMode && <aside className="streamer-mode-banner" role="status" aria-live="polite"><b>📡 РЕЖИМ СТРИМЕРА</b><span>{streamerModeFeedback || "Отключены случайные открытия, апгрейды, продажи и платежи. Баланс, личные данные и ленты выпадений скрыты."}</span></aside>}
 
       {menuOpen && <>
         <button className="menu-backdrop" type="button" aria-label="Закрыть меню" onClick={() => setMenuOpen(false)} />
@@ -1947,12 +2005,12 @@ export default function App() {
             <button className="menu-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Закрыть">×</button>
           </div>
           <div className="menu-player-card">
-            <div className="menu-player-avatar">{String(player?.username || telegramIdentity.first_name || "B").slice(0, 1).toUpperCase()}</div>
-            <div className="menu-player-identity"><b>{player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок BrainGG")}</b><small>Game ID: {player?.game_id || "нет username"}</small></div>
-            <span className="menu-player-balance">{Number(player?.balance || 0).toLocaleString("ru-RU")} GG</span>
+            <div className="menu-player-avatar">{streamerMode ? "S" : String(player?.username || telegramIdentity.first_name || "B").slice(0, 1).toUpperCase()}</div>
+            <div className="menu-player-identity"><b>{streamerMode ? "Стример BrainGG" : (player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок BrainGG"))}</b><small>{streamerMode ? "Личные данные скрыты" : `Game ID: ${player?.game_id || "нет username"}`}</small></div>
+            {!streamerMode && <span className="menu-player-balance">{Number(player?.balance || 0).toLocaleString("ru-RU")} GG</span>}
           </div>
           <nav className="menu-navigation" aria-label="Разделы BrainGG">
-            {menuGroups.map((group) => <section className="menu-group" key={group.title}>
+            {visibleMenuGroups.map((group) => <section className="menu-group" key={group.title}>
               <h3>{group.title}</h3>
               <div className="menu-items">
                 {group.items.map((item) => <button key={`${group.title}-${item.label}`} type="button" className={`menu-item ${page === item.page ? "active" : ""}`} onClick={() => changePage(item.page)}>
@@ -1962,7 +2020,7 @@ export default function App() {
                 </button>)}
               </div>
             </section>)}
-            {isAdmin && <section className="menu-group">
+            {isAdmin && !streamerMode && <section className="menu-group">
               <h3>УПРАВЛЕНИЕ</h3>
               <div className="menu-items"><button type="button" className={`menu-item ${page === "Админка" ? "active" : ""}`} onClick={() => changePage("Админка")}><span className="menu-item-icon">🛠</span><span className="menu-item-copy"><b>Админка</b><small>Инструменты управления</small></span><span className="menu-item-arrow">›</span></button></div>
             </section>}
@@ -1971,17 +2029,17 @@ export default function App() {
         </aside>
       </>}
 
-      {activeEventPresentation && (
+      {!streamerMode && activeEventPresentation && (
         <section className={`global-event-banner global-event-${globalEvent.event_name}`} aria-live="polite">
           <span className="global-event-banner-icon">{activeEventPresentation.emoji}</span>
           <div><b>{activeEventPresentation.title}</b><small>{activeEventPresentation.subtitle}</small></div>
           <strong>{eventRemainingLabel}</strong>
         </section>
       )}
-      {musicNotice && globalEvent?.event_name && (
+      {!streamerMode && musicNotice && globalEvent?.event_name && (
         <button className="event-music-notice" type="button" onClick={() => { setMusicEnabled(true); startEventMusic(globalEvent.event_name); }}>{musicNotice} · Нажми, чтобы повторить</button>
       )}
-      {globalMessage && (
+      {!streamerMode && globalMessage && (
         <aside className="global-message-toast" role="status" aria-live="assertive">
           <span>📣</span><div><b>Глобальное сообщение BrainGG</b><p>{globalMessage.message}</p></div><button type="button" aria-label="Закрыть сообщение" onClick={() => setGlobalMessage(null)}>×</button>
         </aside>
@@ -2001,7 +2059,7 @@ export default function App() {
 
       {!loading && !authError && (
         <>
-          {topupOpen && <div className="stars-modal-backdrop" onClick={() => !topupBusy && setTopupOpen(false)}>
+          {topupOpen && !streamerMode && <div className="stars-modal-backdrop" onClick={() => !topupBusy && setTopupOpen(false)}>
             <section className="stars-modal" role="dialog" aria-modal="true" aria-labelledby="stars-modal-title" onClick={event => event.stopPropagation()}>
               <button className="stars-modal-close" onClick={() => setTopupOpen(false)} aria-label="Закрыть">×</button>
               <span className="stars-modal-kicker">BRAIN GG WALLET</span><h2 id="stars-modal-title">Пополнение баланса</h2>
@@ -2017,7 +2075,7 @@ export default function App() {
             </section>
           </div>}
 
-          <section className="live-drops-bar" aria-label="Live Drops">
+          {!streamerMode && <section className="live-drops-bar" aria-label="Live Drops">
             <div className="live-drops-heading"><span className="live-pulse" /> <b>LIVE DROPS</b><small>ПОСЛЕДНИЕ ВЫПАДЕНИЯ</small></div>
             <div className="live-drops-track">
               {liveDrops.length ? liveDrops.map((drop) => (
@@ -2028,7 +2086,9 @@ export default function App() {
                 </article>
               )) : <div className="live-drops-empty">Здесь появятся реальные выигрыши после открытия кейса</div>}
             </div>
-          </section>
+          </section>}
+
+          {streamerMode && STREAMER_RESTRICTED_PAGES.has(page) && <main className="content season-page"><section className="season-panel streamer-blocked-panel"><span className="settings-icon">📡</span><h2>Раздел временно скрыт</h2><p>В режиме стримера этот раздел отключён, чтобы случайные игровые механики и платёжные действия не попадали в трансляцию.</p><button className="main-button" onClick={() => changePage("Настройки")}>Открыть настройки</button></section></main>}
 
           {page === "Главная" && (
             <main className="content home-welcome">
@@ -2039,9 +2099,9 @@ export default function App() {
                 <div className="home-welcome-emblem">❄</div>
                 <p className="home-greeting">Привет, <b>{greetingLabel}!</b></p>
                 <h2>Добро пожаловать в BrainGG!</h2>
-                <p>Открывай кейсы, собирай персонажей и улучшай свою коллекцию.</p>
-                <p className="home-luck">Удачи!</p>
-                <button className="main-button" onClick={() => changePage("Кейсы")}>Смотреть кейсы 🎁</button>
+                <p>{streamerMode ? "Собирай коллекцию, проходи викторины и выполняй задания сообщества." : "Открывай кейсы, собирай персонажей и улучшай свою коллекцию."}</p>
+                <p className="home-luck">{streamerMode ? "Трансляция в безопасном режиме просмотра" : "Удачи!"}</p>
+                <button className="main-button" onClick={() => changePage(streamerMode ? "Коллекция" : "Кейсы")}>{streamerMode ? "Открыть коллекцию 📚" : "Смотреть кейсы 🎁"}</button>
                 <section className="season-card daily-card">
                   <div><span className="season-kicker">ARCTIC DAILY</span><h3>Ежедневная награда</h3><p>Заходи каждый день и увеличивай серию посещений.</p></div>
                   <div className="daily-streak">❄ {gameHub.progress?.daily_streak || 0} дней подряд</div>
@@ -2052,7 +2112,7 @@ export default function App() {
             </main>
           )}
 
-          {page === "Кейсы" && (
+          {page === "Кейсы" && !streamerMode && (
             <main className="content cases-page">
               {selectedCase ? (
                 <section className="case-detail-page">
@@ -2259,7 +2319,7 @@ export default function App() {
             </main>
           )}
 
-          {page === "Апгрейдер" && (
+          {page === "Апгрейдер" && !streamerMode && (
             <main className="content upgrade-content">
               <div className="upgrade-heading">
                 <div>
@@ -2576,36 +2636,36 @@ export default function App() {
 
           {page === "Инвентарь" && (
             <main className="content inventory-page">
-              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Ледяное хранилище</h2><p>Все твои брейнроты — в одном месте</p></div><div className="inventory-hero-icon">❄️</div></div>
-              <div className="inventory-stats"><div><small>Предметов</small><b>{inventory.length}</b></div><div><small>Общая стоимость</small><b>{inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0).toLocaleString("ru-RU")} <i>GG</i></b></div><div><small>Средняя стоимость</small><b>{inventory.length?Math.round(inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0)/inventory.length).toLocaleString("ru-RU"):0} <i>GG</i></b></div></div>
+              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Ледяное хранилище</h2><p>{streamerMode ? "Просматривай свою коллекцию в режиме трансляции" : "Все твои брейнроты — в одном месте"}</p></div><div className="inventory-hero-icon">❄️</div></div>
+              <div className="inventory-stats">{streamerMode ? <><div><small>Предметов в коллекции</small><b>{inventory.length}</b></div><div><small>Видов редкости</small><b>{new Set(inventory.map((item) => item.rarity || "Обычный")).size}</b></div><div><small>Режим</small><b>Просмотр</b></div></> : <><div><small>Предметов</small><b>{inventory.length}</b></div><div><small>Общая стоимость</small><b>{inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0).toLocaleString("ru-RU")} <i>GG</i></b></div><div><small>Средняя стоимость</small><b>{inventory.length?Math.round(inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0)/inventory.length).toLocaleString("ru-RU"):0} <i>GG</i></b></div></>}</div>
               {inventoryLoading && <div className="inventory-state"><div className="inventory-loader">❄</div><b>Собираем коллекцию...</b></div>}
               {inventoryError && <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div>}
               {!inventoryLoading && !inventoryError && inventory.length > 0 && (<>
-                <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></select><button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button></div>
+                <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option>{!streamerMode && <><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></>}</select>{!streamerMode && <button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button>}</div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная ×2.5</span> : null}</h3><div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div><p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div><div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div></article>
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 {streamerMode ? "Клубничная" : "Клубничная ×2.5"}</span> : null}</h3>{!streamerMode && <div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div>}<p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div>{!streamerMode ? <div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div> : <div className="streamer-readonly-label">Только просмотр во время трансляции</div>}</article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
-              {!inventoryLoading&&!inventoryError&&inventory.length===0&&<div className="inventory-state"><div className="inventory-empty-icon">❄️</div><h3>Хранилище пока пустое</h3><p>Открой первый кейс — и здесь появится твоя коллекция.</p><button className="main-button" onClick={()=>changePage("Кейсы")}>Перейти к кейсам</button></div>}
+              {!inventoryLoading&&!inventoryError&&inventory.length===0&&<div className="inventory-state"><div className="inventory-empty-icon">❄️</div><h3>Хранилище пока пустое</h3><p>{streamerMode ? "Продолжай собирать коллекцию через задания и викторину." : "Открой первый кейс — и здесь появится твоя коллекция."}</p><button className="main-button" onClick={()=>changePage(streamerMode ? "Задания" : "Кейсы")}>{streamerMode ? "Перейти к заданиям" : "Перейти к кейсам"}</button></div>}
             </main>
           )}
 
           {page === "Коллекция" && (
             <main className="content season-page collection-page">
-              <header className="season-page-heading"><span className="season-kicker">BRAINROT ALBUM</span><h2>📚 Альбом коллекционера</h2><p>Собирай редких брейнротов и следи за ценностью своей коллекции.</p></header>
+              <header className="season-page-heading"><span className="season-kicker">BRAINROT ALBUM</span><h2>📚 Альбом коллекционера</h2><p>{streamerMode ? "Просматривай свою коллекцию во время трансляции." : "Собирай редких брейнротов и следи за ценностью своей коллекции."}</p></header>
               <div className="collection-summary">
                 <article><small>Уникальных предметов</small><b>{inventory.length}</b></article>
-                <article><small>Общая стоимость</small><b>{inventory.reduce((sum, item) => sum + Number(item.value_gg || 0), 0).toLocaleString("ru-RU")} GG</b></article>
+                {!streamerMode && <article><small>Общая стоимость</small><b>{inventory.reduce((sum, item) => sum + Number(item.value_gg || 0), 0).toLocaleString("ru-RU")} GG</b></article>}
                 <article><small>Видов редкости</small><b>{new Set(inventory.map((item) => item.rarity || "Обычный")).size}</b></article>
               </div>
               {inventoryLoading ? <div className="inventory-state"><div className="inventory-loader">❄</div><b>Загружаем альбом...</b></div> : inventoryError ? <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div> : inventory.length ? <div className="collection-grid">
                 {inventory.map((item) => <article className="collection-card" key={`${item.item_name}-${item.mutation || "normal"}`}>
                   <div className="collection-card-art">{brainrotImage(item) ? <img src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}</div>
-                  <div className="collection-card-info"><b>{item.item_name}</b><small>{item.rarity || "Обычный"}{item.mutation === "strawberry" ? " · 🍓 Strawberry" : ""}</small><strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong></div>
+                  <div className="collection-card-info"><b>{item.item_name}</b><small>{item.rarity || "Обычный"}{item.mutation === "strawberry" ? " · 🍓 Strawberry" : ""}</small>{!streamerMode && <strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>}</div>
                 </article>)}
-              </div> : <div className="inventory-state"><div className="inventory-empty-icon">📚</div><h3>Альбом пока пуст</h3><p>Открой первый кейс, чтобы добавить первого брейнрота.</p><button className="main-button" onClick={() => changePage("Кейсы")}>К кейсам</button></div>}
+              </div> : <div className="inventory-state"><div className="inventory-empty-icon">📚</div><h3>Альбом пока пуст</h3><p>{streamerMode ? "Выполняй задания и участвуй в викторине, чтобы развивать профиль." : "Открой первый кейс, чтобы добавить первого брейнрота."}</p><button className="main-button" onClick={() => changePage(streamerMode ? "Задания" : "Кейсы")}>{streamerMode ? "К заданиям" : "К кейсам"}</button></div>}
             </main>
           )}
 
@@ -2613,12 +2673,12 @@ export default function App() {
             <main className="content season-page">
               <header className="season-page-heading"><span className="season-kicker">GLOBAL LEADERBOARD</span><h2>❄ Глобальный рейтинг</h2><p>Игроки с самым высоким опытом BrainGG.</p></header>
               <section className="season-panel"><div className="season-panel-title"><h3>Таблица лидеров</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>↻ Обновить</button></div>
-                {hubLoading ? <p>Загружаем рейтинг...</p> : (gameHub.leaderboard || []).length ? <div className="leaderboard-list">{gameHub.leaderboard.map((entry,index)=><article className={`leaderboard-row ${index<3?"top-player":""}`} key={`${entry.game_id||entry.username}-${index}`}><b className="leaderboard-place">{index===0?"👑":`#${index+1}`}</b><div className="leaderboard-avatar">{index<3?"❄":"♙"}</div><div className="leaderboard-user"><b>@{entry.username}</b><small>Уровень {entry.level} · {Number(entry.total_cases_opened||0)} открытий</small></div><strong>{Number(entry.xp||0).toLocaleString("ru-RU")} XP</strong></article>)}</div> : <p className="season-empty">Рейтинг появится после накопления игрового опыта.</p>}
+                {hubLoading ? <p>Загружаем рейтинг...</p> : (gameHub.leaderboard || []).length ? <div className="leaderboard-list">{gameHub.leaderboard.map((entry,index)=><article className={`leaderboard-row ${index<3?"top-player":""}`} key={`${entry.game_id||entry.username}-${index}`}><b className="leaderboard-place">{index===0?"👑":`#${index+1}`}</b><div className="leaderboard-avatar">{index<3?"❄":"♙"}</div><div className="leaderboard-user"><b>{streamerMode ? `Игрок #${index + 1}` : `@${entry.username}`}</b><small>Уровень {entry.level}{streamerMode ? "" : ` · ${Number(entry.total_cases_opened || 0)} открытий`}</small></div><strong>{Number(entry.xp||0).toLocaleString("ru-RU")} XP</strong></article>)}</div> : <p className="season-empty">Рейтинг появится после накопления игрового опыта.</p>}
               </section>
             </main>
           )}
 
-          {page === "Live Drops" && (
+          {page === "Live Drops" && !streamerMode && (
             <main className="content season-page drops-page">
               <header className="season-page-heading"><span className="season-kicker">COMMUNITY FEED</span><h2>🔥 Live Drops</h2><p>Последние подтверждённые выпадения игроков BrainGG.</p></header>
               <section className="season-panel"><div className="season-panel-title"><h3>Лента выпадений</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>{hubLoading ? "..." : "↻ Обновить"}</button></div>
@@ -2631,7 +2691,7 @@ export default function App() {
             </main>
           )}
 
-          {page === "Глобальные события" && (
+          {page === "Глобальные события" && !streamerMode && (
             <main className="content season-page global-activity-page">
               <header className="season-page-heading global-activity-heading">
                 <span className="season-kicker">ONE COMMUNITY · LIVE</span>
@@ -2665,7 +2725,7 @@ export default function App() {
             </main>
           )}
 
-          {page === "Задания" && (
+          {page === "Задания" && !streamerMode && (
             <main className="content season-page">
               <header className="season-page-heading"><span className="season-kicker">ARCTIC MISSIONS</span><h2>❄ Задания и достижения</h2><p>Выполняй игровые цели, получай GG и опыт.</p></header>
               {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
@@ -2674,7 +2734,7 @@ export default function App() {
             </main>
           )}
 
-          {page === "Достижения" && (
+          {page === "Достижения" && !streamerMode && (
             <main className="content season-page achievements-page">
               <header className="season-page-heading"><span className="season-kicker">PLAYER MILESTONES</span><h2>🏆 Достижения</h2><p>Выполняй игровые цели и собирай значки BrainGG.</p></header>
               <div className="achievement-overview"><b>{[
@@ -2700,7 +2760,7 @@ export default function App() {
             </main>
           )}
 
-          {page === "История" && (
+          {page === "История" && !streamerMode && (
             <main className="content season-page history-page">
               <header className="season-page-heading"><span className="season-kicker">YOUR ACTIVITY</span><h2>🕒 История открытий</h2><p>Твои последние кейсы и выпавшие предметы.</p></header>
               <section className="season-panel"><div className="season-panel-title"><h3>Последние 100 открытий</h3><button className="case-button" onClick={loadPlayerHistory} disabled={historyLoading}>{historyLoading ? "..." : "↻ Обновить"}</button></div>
@@ -2715,8 +2775,10 @@ export default function App() {
               <section className="season-panel settings-list">
                 <article className="settings-row"><span className="settings-icon">🎵</span><div><b>Фоновая музыка</b><small>Зимний саундтрек и музыка ивентов</small></div><button className={`settings-switch ${musicEnabled ? "active" : ""}`} type="button" onClick={toggleWinterMusic}>{musicEnabled ? "Вкл." : "Выкл."}</button></article>
                 <article className="settings-row"><span className="settings-icon">🔊</span><div><b>Звуковые эффекты</b><small>Звуки кнопок и игровых действий</small></div><button className={`settings-switch ${soundEnabled ? "active" : ""}`} type="button" onClick={() => setSoundEnabled((value) => !value)}>{soundEnabled ? "Вкл." : "Выкл."}</button></article>
+                <article className="settings-row settings-streamer-row"><span className="settings-icon">📡</span><div><b>Режим стримера</b><small>Скрывает личные данные, баланс и ленты выпадений; отключает кейсы, апгрейды, продажи и платежи в интерфейсе трансляции.</small></div><button className={`settings-switch ${streamerMode ? "active" : ""}`} type="button" aria-pressed={streamerMode} disabled={opening || upgradeLoading || topupBusy || Boolean(sellingId) || sellingAll} onClick={toggleStreamerMode}>{streamerMode ? "Вкл." : "Выкл."}</button></article>
               </section>
-              <p className="settings-note">Настройки действуют в текущем сеансе BrainGG.</p>
+              {streamerModeFeedback && <p className="streamer-mode-feedback" role="status">{streamerModeFeedback}</p>}
+              <p className="settings-note">Режим сохраняется в этом браузере на этом устройстве. Он действительно отключает перечисленные действия в интерфейсе, но не меняет правила соцсетей и не гарантирует отсутствие модерации. Правила каждой площадки нужно соблюдать отдельно.</p>
             </main>
           )}
 
@@ -2724,10 +2786,17 @@ export default function App() {
             <main className="content season-page tutorial-page">
               <header className="season-page-heading"><span className="season-kicker">BRAIN GG GUIDE</span><h2>🎓 Обучение</h2><p>Коротко о том, как развивать свой аккаунт.</p></header>
               <div className="tutorial-grid">
-                <article><span>🎁</span><b>1. Открывай кейсы</b><p>Выбери кейс, посмотри состав наград и открой его. Выигрыш появится в инвентаре.</p><button onClick={() => changePage("Кейсы")}>К кейсам →</button></article>
-                <article><span>⚡</span><b>2. Улучшай предметы</b><p>В апгрейдере выбери свой брейнрот и цель. Шанс победы показан до запуска.</p><button onClick={() => changePage("Апгрейдер")}>К апгрейдеру →</button></article>
-                <article><span>📋</span><b>3. Забирай награды</b><p>Заходи каждый день, выполняй задания и получай GG и XP.</p><button onClick={() => changePage("Задания")}>К квестам →</button></article>
-                <article><span>🏆</span><b>4. Попадай в топ</b><p>Опыт даёт уровни. Сравнивай свои рекорды с другими игроками.</p><button onClick={() => changePage("Рейтинг")}>Открыть рейтинг →</button></article>
+                {streamerMode ? <>
+                  <article><span>📚</span><b>1. Просматривай коллекцию</b><p>Показывай собранных персонажей без отображения внутренней стоимости.</p><button onClick={() => changePage("Коллекция")}>К коллекции →</button></article>
+                  <article><span>🧠</span><b>2. Играй в викторину</b><p>Проверяй знания и отвечай на вопросы.</p><button onClick={() => changePage("Викторина")}>К викторине →</button></article>
+                  <article><span>📋</span><b>3. Выполняй задания</b><p>Развивай игровой профиль через задания и ежедневную активность.</p><button onClick={() => changePage("Задания")}>К заданиям →</button></article>
+                  <article><span>🏆</span><b>4. Смотри рейтинг</b><p>Показывай прогресс и место в сообществе.</p><button onClick={() => changePage("Рейтинг")}>Открыть рейтинг →</button></article>
+                </> : <>
+                  <article><span>🎁</span><b>1. Открывай кейсы</b><p>Выбери кейс, посмотри состав наград и открой его. Выигрыш появится в инвентаре.</p><button onClick={() => changePage("Кейсы")}>К кейсам →</button></article>
+                  <article><span>⚡</span><b>2. Улучшай предметы</b><p>В апгрейдере выбери свой брейнрот и цель. Шанс победы показан до запуска.</p><button onClick={() => changePage("Апгрейдер")}>К апгрейдеру →</button></article>
+                  <article><span>📋</span><b>3. Забирай награды</b><p>Заходи каждый день, выполняй задания и получай GG и XP.</p><button onClick={() => changePage("Задания")}>К квестам →</button></article>
+                  <article><span>🏆</span><b>4. Попадай в топ</b><p>Опыт даёт уровни. Сравнивай свои рекорды с другими игроками.</p><button onClick={() => changePage("Рейтинг")}>Открыть рейтинг →</button></article>
+                </>}
               </div>
             </main>
           )}
@@ -2756,12 +2825,12 @@ export default function App() {
 
           {page === "Профиль" && (
             <main className="content season-page"><header className="season-page-heading"><span className="season-kicker">PLAYER IDENTITY</span><h2>❄ Профиль игрока</h2><p>Твой путь в мире BrainGG.</p></header>
-              <section className="season-profile-card"><div className="profile-avatar">❄</div><div className="profile-identity"><h2>{player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок")}</h2><p>Game ID: {player?.game_id || "Не задан — добавь username в Telegram"}</p><span>Уровень {gameHub.progress?.level||1}</span></div><div className="profile-xp"><b>{Number(gameHub.progress?.xp||0).toLocaleString("ru-RU")} XP</b><div className="mission-progress"><span style={{width:`${Math.min(100,Math.max(0,(Number(gameHub.progress?.xp||0)-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)/Math.max(1,Number(gameHub.progress?.level||1)*Number(gameHub.progress?.level||1)*100-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)*100))}%`}}/></div><small>До следующего уровня: {Math.max(0,Number(gameHub.progress?.next_level_xp||100)-Number(gameHub.progress?.xp||0))} XP</small></div></section>
-              <div className="profile-stat-grid"><article><small>ОТКРЫТО КЕЙСОВ</small><b>{gameHub.progress?.total_cases_opened||0}</b></article><article><small>ПРОДАНО ПРЕДМЕТОВ</small><b>{gameHub.progress?.total_sales||0}</b></article><article><small>АПГРЕЙДОВ</small><b>{gameHub.progress?.total_upgrades||0}</b></article><article><small>СЕРИЯ ВХОДОВ</small><b>{gameHub.progress?.daily_streak||0} дней</b></article></div>
+              <section className="season-profile-card"><div className="profile-avatar">❄</div><div className="profile-identity"><h2>{streamerMode ? "Стример BrainGG" : (player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок"))}</h2><p>{streamerMode ? "Личные данные скрыты в режиме трансляции" : `Game ID: ${player?.game_id || "Не задан — добавь username в Telegram"}`}</p><span>Уровень {gameHub.progress?.level||1}</span></div><div className="profile-xp"><b>{Number(gameHub.progress?.xp||0).toLocaleString("ru-RU")} XP</b><div className="mission-progress"><span style={{width:`${Math.min(100,Math.max(0,(Number(gameHub.progress?.xp||0)-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)/Math.max(1,Number(gameHub.progress?.level||1)*Number(gameHub.progress?.level||1)*100-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)*100))}%`}}/></div><small>До следующего уровня: {Math.max(0,Number(gameHub.progress?.next_level_xp||100)-Number(gameHub.progress?.xp||0))} XP</small></div></section>
+              <div className="profile-stat-grid">{streamerMode ? <><article><small>УРОВЕНЬ</small><b>{gameHub.progress?.level || 1}</b></article><article><small>ОПЫТ</small><b>{Number(gameHub.progress?.xp || 0).toLocaleString("ru-RU")} XP</b></article><article><small>СЕРИЯ ВХОДОВ</small><b>{gameHub.progress?.daily_streak || 0} дней</b></article><article><small>РЕЖИМ</small><b>Трансляция</b></article></> : <><article><small>ОТКРЫТО КЕЙСОВ</small><b>{gameHub.progress?.total_cases_opened||0}</b></article><article><small>ПРОДАНО ПРЕДМЕТОВ</small><b>{gameHub.progress?.total_sales||0}</b></article><article><small>АПГРЕЙДОВ</small><b>{gameHub.progress?.total_upgrades||0}</b></article><article><small>СЕРИЯ ВХОДОВ</small><b>{gameHub.progress?.daily_streak||0} дней</b></article></>}</div>
             </main>
           )}
 
-          {page === "Промокод" && (
+          {page === "Промокод" && !streamerMode && (
             <main className="content season-page promo-page">
               <header className="season-page-heading">
                 <span className="season-kicker">BRAIN GG REWARDS</span>
@@ -2794,7 +2863,7 @@ export default function App() {
             </main>
           )}
 
-          {page === "Админка" && isAdmin && (
+          {page === "Админка" && isAdmin && !streamerMode && (
             <main className="content admin-content">
               <div className="admin-heading">
                 <div>
