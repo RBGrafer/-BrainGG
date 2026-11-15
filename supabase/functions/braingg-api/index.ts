@@ -341,6 +341,112 @@ Deno.serve(async (req) => {
       }
     }
 
+    // PROMO CODES: only the verified owner may create, inspect or deactivate codes.
+    if (body.action === "admin_create_promo_code") {
+      if (!isOwner) return respond({ error: "Создавать промокоды может только владелец BrainGG." }, 403);
+
+      const code = String(body.code ?? "").trim().toUpperCase();
+      const rewardType = String(body.rewardType ?? "").trim();
+      const rewardAmount = Number(body.rewardAmount);
+      const maxUsesRaw = body.maxUses == null || body.maxUses === "" ? null : Number(body.maxUses);
+      const allowedRewardTypes = ["coins", "cases", "brainrot"];
+
+      if (!/^[A-Z0-9_-]{3,24}$/.test(code)) {
+        return respond({ error: "Промокод должен содержать 3–24 символа: латинские буквы, цифры, дефис или подчёркивание." }, 400);
+      }
+      if (!allowedRewardTypes.includes(rewardType)) return respond({ error: "Неизвестный тип награды." }, 400);
+      if (!Number.isSafeInteger(rewardAmount) || rewardAmount < 1 || rewardAmount > (rewardType === "brainrot" ? 1 : 1000000)) {
+        return respond({ error: rewardType === "brainrot" ? "Для награды брейнротом количество должно быть равно 1." : "Количество награды должно быть от 1 до 1 000 000." }, 400);
+      }
+      if (maxUsesRaw !== null && (!Number.isSafeInteger(maxUsesRaw) || maxUsesRaw < 1 || maxUsesRaw > 1000000)) {
+        return respond({ error: "Лимит активаций должен быть от 1 до 1 000 000 или оставь поле пустым." }, 400);
+      }
+
+      let caseName: string | null = null;
+      let itemName: string | null = null;
+      if (rewardType === "cases") {
+        const raw = String(body.caseName ?? "").trim();
+        caseName = ALLOWED_CASES.find((name) => name.toLowerCase() === raw.toLowerCase()) ?? null;
+        if (!caseName) return respond({ error: "Выбери корректный кейс для награды." }, 400);
+      }
+      if (rewardType === "brainrot") {
+        itemName = String(body.itemName ?? "").trim();
+        if (!itemName || itemName.length > 120) return respond({ error: "Выбери брейнрота для награды." }, 400);
+        const { data: reward, error: rewardError } = await supabase.from("case_rewards")
+          .select("item_name").eq("item_name", itemName).gt("chance", 0).limit(1).maybeSingle();
+        if (rewardError || !reward) return respond({ error: "Такого брейнрота нет в доступном пуле наград." }, 400);
+      }
+
+      let expiresAt: string | null = null;
+      if (body.expiresAt != null && String(body.expiresAt).trim()) {
+        const timestamp = Date.parse(String(body.expiresAt));
+        if (!Number.isFinite(timestamp) || timestamp <= Date.now()) return respond({ error: "Срок действия должен быть датой в будущем." }, 400);
+        expiresAt = new Date(timestamp).toISOString();
+      }
+
+      const { data: promoCode, error: insertError } = await supabase.from("promo_codes").insert({
+        code, reward_type: rewardType, reward_amount: rewardAmount, case_name: caseName, item_name: itemName,
+        max_uses: maxUsesRaw, expires_at: expiresAt, created_by: telegramUser.id, active: true,
+      }).select("id, code, reward_type, reward_amount, case_name, item_name, max_uses, uses_count, expires_at, active, created_at").single();
+
+      if (insertError) {
+        console.error("Promo code creation failed:", insertError.message);
+        if (insertError.code === "23505") return respond({ error: "Такой промокод уже существует. Придумай другой." }, 409);
+        return respond({ error: "Не удалось создать промокод. Проверь SQL-миграцию." }, 500);
+      }
+      return respond({ success: true, promoCode });
+    }
+
+    if (body.action === "admin_list_promo_codes") {
+      if (!isOwner) return respond({ error: "Просматривать промокоды может только владелец BrainGG." }, 403);
+      const { data: promoCodes, error } = await supabase.from("promo_codes")
+        .select("id, code, reward_type, reward_amount, case_name, item_name, max_uses, uses_count, expires_at, active, created_at")
+        .order("created_at", { ascending: false }).limit(100);
+      if (error) {
+        console.error("Promo code list failed:", error.message);
+        return respond({ error: "Не удалось загрузить промокоды. Проверь SQL-миграцию." }, 500);
+      }
+      return respond({ success: true, promoCodes: promoCodes ?? [] });
+    }
+
+    if (body.action === "admin_deactivate_promo_code") {
+      if (!isOwner) return respond({ error: "Управлять промокодами может только владелец BrainGG." }, 403);
+      const promoId = String(body.promoId ?? "").trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(promoId)) {
+        return respond({ error: "Некорректный промокод." }, 400);
+      }
+      const { data: promoCode, error } = await supabase.from("promo_codes")
+        .update({ active: false }).eq("id", promoId).select("id, code, active").maybeSingle();
+      if (error) {
+        console.error("Promo code deactivation failed:", error.message);
+        return respond({ error: "Не удалось отключить промокод." }, 500);
+      }
+      if (!promoCode) return respond({ error: "Промокод не найден." }, 404);
+      return respond({ success: true, promoCode });
+    }
+
+    if (body.action === "redeem_promo_code") {
+      const code = String(body.code ?? "").trim().toUpperCase();
+      if (!/^[A-Z0-9_-]{3,24}$/.test(code)) return respond({ error: "Введи корректный промокод длиной 3–24 символа." }, 400);
+      const { data: result, error } = await supabase.rpc("redeem_promo_code", {
+        p_telegram_id: telegramUser.id, p_code: code,
+      });
+      if (error) {
+        console.warn("Promo code redemption rejected:", error.message);
+        const message = String(error.message || "");
+        if (message.includes("PROMO_ALREADY_USED")) return respond({ error: "Ты уже активировал этот промокод." }, 409);
+        if (message.includes("PROMO_EXPIRED")) return respond({ error: "Срок действия этого промокода закончился." }, 400);
+        if (message.includes("PROMO_EXHAUSTED")) return respond({ error: "Все активации этого промокода уже использованы." }, 400);
+        if (message.includes("PROMO_INVALID")) return respond({ error: "Промокод не найден или больше не активен." }, 404);
+        if (message.includes("PROMO_REWARD_INVALID")) return respond({ error: "Награда этого промокода больше недоступна. Обратись к владельцу." }, 400);
+        return respond({ error: "Не удалось активировать промокод. Попробуй ещё раз." }, 400);
+      }
+      let credits = { free_case_credits: [], free_cases_total: Number(result?.free_cases_total || 0) };
+      try { credits = await getFreeCaseCredits(supabase, telegramUser.id); }
+      catch (creditError) { console.warn("Promo redemption credits refresh failed:", creditError?.message || creditError); }
+      return respond({ success: true, result: { ...(result || {}), ...credits } });
+    }
+
     // Create a Telegram Stars invoice. The client never credits its own balance.
     if (body.action === "create_stars_invoice") {
       const stars = Number(body.stars);
