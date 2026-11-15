@@ -125,6 +125,7 @@ function calculateUpgradeChance(source, target, luckMultiplier = 1) {
 
 export default function App() {
   const [page, setPage] = useState("Главная");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [openCount, setOpenCount] = useState(1);
   const [fastOpen, setFastOpen] = useState(true);
   const [selectedCase, setSelectedCase] = useState(null);
@@ -190,7 +191,30 @@ export default function App() {
   const [sellingAll, setSellingAll] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
 
-  const pages = ["Главная", "Кейсы", "Апгрейдер", "Инвентарь", "Промокод", "Рейтинг", "Задания", "Викторина", "Профиль"];
+  const menuGroups = [
+    { title: "ИГРАТЬ", items: [
+      { label: "Кейсы", page: "Кейсы", icon: "🎁", description: "Открывай кейсы и лови редкие дропы" },
+      { label: "Рулетка кейсов", page: "Кейсы", icon: "🎰", description: "Смотри анимацию выпадения награды" },
+      { label: "Апгрейдер", page: "Апгрейдер", icon: "⚡", description: "Улучшай предметы из инвентаря" },
+      { label: "Викторина", page: "Викторина", icon: "🧠", description: "Отвечай и зарабатывай GG" },
+      { label: "Коллекция", page: "Коллекция", icon: "📚", description: "Все твои брейнроты в одном альбоме" },
+    ]},
+    { title: "ПРОГРЕСС", items: [
+      { label: "Ежедневная награда", page: "Главная", icon: "🎄", description: "Забирай GG и держи серию" },
+      { label: "Квесты", page: "Задания", icon: "📋", description: "Выполняй миссии и забирай награды" },
+      { label: "Достижения", page: "Достижения", icon: "🏆", description: "Открывай новые значки" },
+      { label: "Рекорды", page: "Рейтинг", icon: "🥇", description: "Сравнивай свой XP с игроками" },
+      { label: "Live Drops", page: "Live Drops", icon: "🔥", description: "Смотри последние выпадения" },
+    ]},
+    { title: "АККАУНТ", items: [
+      { label: "Профиль", page: "Профиль", icon: "👤", description: "Уровень, XP и твоя статистика" },
+      { label: "Инвентарь", page: "Инвентарь", icon: "🎒", description: "Храни и продавай предметы" },
+      { label: "История", page: "История", icon: "🕒", description: "Вспоминай все открытия" },
+      { label: "Промокод", page: "Промокод", icon: "🎫", description: "Активируй бонусы" },
+      { label: "Настройки", page: "Настройки", icon: "⚙", description: "Музыка и звуки" },
+      { label: "Обучение", page: "Обучение", icon: "🎓", description: "Как играть и что делать" },
+    ]},
+  ];
   const [customError, setCustomError] = useState("");
 
   // Состояние защищённой админ-панели BrainGG
@@ -217,7 +241,6 @@ export default function App() {
   const [adminEventLoading, setAdminEventLoading] = useState(false);
   const [adminEventFeedback, setAdminEventFeedback] = useState("");
   const [adminEventFeedbackError, setAdminEventFeedbackError] = useState(false);
-  const visiblePages = isAdmin ? [...pages, "Админка"] : pages;
   const [adminGameId, setAdminGameId] = useState("");
   const [adminPlayer, setAdminPlayer] = useState(null);
   const [adminInventory, setAdminInventory] = useState([]);
@@ -239,6 +262,9 @@ export default function App() {
   const [dailyClaimLoading, setDailyClaimLoading] = useState(false);
   const [taskClaimLoading, setTaskClaimLoading] = useState("");
   const [hubMessage, setHubMessage] = useState("");
+  const [playerHistory, setPlayerHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [quizStatus, setQuizStatus] = useState({ used: 0, remaining: 3, correct: 0 });
   const [quizQuestion, setQuizQuestion] = useState(null);
   const [quizSelected, setQuizSelected] = useState(null);
@@ -269,6 +295,15 @@ export default function App() {
       console.warn("Telegram WebApp viewport setup failed:", error);
     }
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
 
   function getAudioContext() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -1044,6 +1079,24 @@ export default function App() {
     }
   }
 
+  async function loadPlayerHistory() {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "get_player_history" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "History unavailable");
+      setPlayerHistory(data.history || []);
+    } catch (error) {
+      console.error("Player history loading failed:", error);
+      setHistoryError("Не удалось загрузить историю. Попробуй ещё раз.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   async function loadInventory() {
     setInventoryLoading(true);
     setInventoryError("");
@@ -1175,7 +1228,7 @@ export default function App() {
 
       if (error) throw error;
       if (!data?.success || !data?.player) {
-        throw new Error(data?.error || "Игрок с таким Game ID не найден.");
+        throw new Error(data?.error || "Игрок с таким Telegram username не найден.");
       }
 
       setAdminPlayer(data.player);
@@ -1189,7 +1242,7 @@ export default function App() {
     } catch (error) {
       console.error("Ошибка поиска игрока:", error);
       setAdminMessage(
-        error?.message || "Не удалось найти игрока. Проверь Game ID."
+        error?.message || "Не удалось найти игрока. Проверь Telegram username."
       );
       setAdminMessageError(true);
     } finally {
@@ -1201,7 +1254,7 @@ export default function App() {
     event?.preventDefault();
 
     if (!adminPlayer?.game_id) {
-      setAdminMessage("Сначала найди игрока по Game ID.");
+      setAdminMessage("Сначала найди игрока по Telegram username.");
       setAdminMessageError(true);
       return;
     }
@@ -1370,9 +1423,10 @@ export default function App() {
   async function changePage(nextPage) {
     if (nextPage !== page) playUiSound("tab");
     setPage(nextPage);
+    setMenuOpen(false);
     setActionMessage("");
 
-    if (nextPage === "Инвентарь" || nextPage === "Апгрейдер") {
+    if (["Инвентарь", "Коллекция", "Апгрейдер"].includes(nextPage)) {
       await loadInventory();
     }
 
@@ -1380,7 +1434,8 @@ export default function App() {
       await loadUpgradeTargets();
     }
 
-    if (["Рейтинг", "Задания", "Профиль"].includes(nextPage)) await loadGameHub();
+    if (["Рейтинг", "Задания", "Достижения", "Профиль", "Live Drops"].includes(nextPage)) await loadGameHub();
+    if (nextPage === "История") await loadPlayerHistory();
     if (nextPage === "Промокод") {
       setPromoFeedback("");
       setPromoFeedbackError(false);
@@ -1834,7 +1889,15 @@ export default function App() {
         ))}
       </div>
       <header className="header">
-        <div className="logo"><span className="logo-heart">💜</span> BrainGG</div>
+        <div className="header-brand">
+          <button className="menu-trigger" type="button" onClick={() => setMenuOpen(true)} aria-label="Открыть меню" aria-expanded={menuOpen} aria-controls="braingg-navigation">
+            <span aria-hidden="true">☰</span>
+          </button>
+          <div className="header-brand-copy">
+            <div className="logo"><span className="logo-heart">💜</span> BrainGG</div>
+            <span className="header-page-name">{page === "Главная" ? "Игровой центр" : page}</span>
+          </div>
+        </div>
         <div className="header-wallet">
           <button className={`winter-audio-toggle ${musicEnabled ? "is-on" : ""}`} onClick={toggleWinterMusic} title={globalEvent?.event_name ? "Музыка текущего ивента" : "Фоновая зимняя музыка"}>{musicEnabled ? "♫ Музыка вкл." : "♫ Музыка"}</button>
           <button className={`winter-audio-toggle ${soundEnabled ? "is-on" : ""}`} onClick={() => setSoundEnabled((value) => !value)} title="Звуковые эффекты">{soundEnabled ? "🔊 Звуки" : "🔇 Звуки"}</button>
@@ -1842,6 +1905,38 @@ export default function App() {
           <button className="topup-trigger" onClick={() => { setTopupMessage(""); setTopupOpen(true); }}>＋ Пополнить</button>
         </div>
       </header>
+
+      {menuOpen && <>
+        <button className="menu-backdrop" type="button" aria-label="Закрыть меню" onClick={() => setMenuOpen(false)} />
+        <aside className="menu-drawer" id="braingg-navigation" aria-label="BrainGG navigation">
+          <div className="menu-drawer-head">
+            <div className="menu-drawer-brand"><span>❄</span><div><b>BrainGG</b><small>Все режимы и разделы</small></div></div>
+            <button className="menu-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Закрыть">×</button>
+          </div>
+          <div className="menu-player-card">
+            <div className="menu-player-avatar">{String(player?.username || telegramIdentity.first_name || "B").slice(0, 1).toUpperCase()}</div>
+            <div className="menu-player-identity"><b>{player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок BrainGG")}</b><small>Game ID: {player?.game_id || "нет username"}</small></div>
+            <span className="menu-player-balance">{Number(player?.balance || 0).toLocaleString("ru-RU")} GG</span>
+          </div>
+          <nav className="menu-navigation" aria-label="Разделы BrainGG">
+            {menuGroups.map((group) => <section className="menu-group" key={group.title}>
+              <h3>{group.title}</h3>
+              <div className="menu-items">
+                {group.items.map((item) => <button key={`${group.title}-${item.label}`} type="button" className={`menu-item ${page === item.page ? "active" : ""}`} onClick={() => changePage(item.page)}>
+                  <span className="menu-item-icon" aria-hidden="true">{item.icon}</span>
+                  <span className="menu-item-copy"><b>{item.label}</b><small>{item.description}</small></span>
+                  <span className="menu-item-arrow" aria-hidden="true">›</span>
+                </button>)}
+              </div>
+            </section>)}
+            {isAdmin && <section className="menu-group">
+              <h3>УПРАВЛЕНИЕ</h3>
+              <div className="menu-items"><button type="button" className={`menu-item ${page === "Админка" ? "active" : ""}`} onClick={() => changePage("Админка")}><span className="menu-item-icon">🛠</span><span className="menu-item-copy"><b>Админка</b><small>Инструменты управления</small></span><span className="menu-item-arrow">›</span></button></div>
+            </section>}
+          </nav>
+          <div className="menu-drawer-footer"><span>❄ ARCTIC SEASON</span><small>BrainGG · Игровой центр</small></div>
+        </aside>
+      </>}
 
       {activeEventPresentation && (
         <section className={`global-event-banner global-event-${globalEvent.event_name}`} aria-live="polite">
@@ -1873,18 +1968,6 @@ export default function App() {
 
       {!loading && !authError && (
         <>
-          <nav className="navigation">
-            {visiblePages.map((item) => (
-              <button
-                key={item}
-                className={page === item ? "active" : ""}
-                onClick={() => changePage(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </nav>
-
           {topupOpen && <div className="stars-modal-backdrop" onClick={() => !topupBusy && setTopupOpen(false)}>
             <section className="stars-modal" role="dialog" aria-modal="true" aria-labelledby="stars-modal-title" onClick={event => event.stopPropagation()}>
               <button className="stars-modal-close" onClick={() => setTopupOpen(false)} aria-label="Закрыть">×</button>
@@ -1907,7 +1990,7 @@ export default function App() {
               {liveDrops.length ? liveDrops.map((drop) => (
                 <article className="live-drop-chip" key={drop.id}>
                   <div className="live-drop-art">{brainrotImage(drop) ? <img className={drop.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>❄</span>}</div>
-                  <div><b>{drop.item_name}{drop.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
+                  <div><b>{drop.item_name}{drop.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b><small>{drop.username ? `@${drop.username}` : "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
                   {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
                 </article>
               )) : <div className="live-drops-empty">Здесь появятся реальные выигрыши после открытия кейса</div>}
@@ -2476,11 +2559,41 @@ export default function App() {
             </main>
           )}
 
+          {page === "Коллекция" && (
+            <main className="content season-page collection-page">
+              <header className="season-page-heading"><span className="season-kicker">BRAINROT ALBUM</span><h2>📚 Альбом коллекционера</h2><p>Собирай редких брейнротов и следи за ценностью своей коллекции.</p></header>
+              <div className="collection-summary">
+                <article><small>Уникальных предметов</small><b>{inventory.length}</b></article>
+                <article><small>Общая стоимость</small><b>{inventory.reduce((sum, item) => sum + Number(item.value_gg || 0), 0).toLocaleString("ru-RU")} GG</b></article>
+                <article><small>Видов редкости</small><b>{new Set(inventory.map((item) => item.rarity || "Обычный")).size}</b></article>
+              </div>
+              {inventoryLoading ? <div className="inventory-state"><div className="inventory-loader">❄</div><b>Загружаем альбом...</b></div> : inventoryError ? <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div> : inventory.length ? <div className="collection-grid">
+                {inventory.map((item) => <article className="collection-card" key={`${item.item_name}-${item.mutation || "normal"}`}>
+                  <div className="collection-card-art">{brainrotImage(item) ? <img src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}</div>
+                  <div className="collection-card-info"><b>{item.item_name}</b><small>{item.rarity || "Обычный"}{item.mutation === "strawberry" ? " · 🍓 Strawberry" : ""}</small><strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong></div>
+                </article>)}
+              </div> : <div className="inventory-state"><div className="inventory-empty-icon">📚</div><h3>Альбом пока пуст</h3><p>Открой первый кейс, чтобы добавить первого брейнрота.</p><button className="main-button" onClick={() => changePage("Кейсы")}>К кейсам</button></div>}
+            </main>
+          )}
+
           {page === "Рейтинг" && (
             <main className="content season-page">
               <header className="season-page-heading"><span className="season-kicker">GLOBAL LEADERBOARD</span><h2>❄ Глобальный рейтинг</h2><p>Игроки с самым высоким опытом BrainGG.</p></header>
               <section className="season-panel"><div className="season-panel-title"><h3>Таблица лидеров</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>↻ Обновить</button></div>
                 {hubLoading ? <p>Загружаем рейтинг...</p> : (gameHub.leaderboard || []).length ? <div className="leaderboard-list">{gameHub.leaderboard.map((entry,index)=><article className={`leaderboard-row ${index<3?"top-player":""}`} key={`${entry.game_id||entry.username}-${index}`}><b className="leaderboard-place">{index===0?"👑":`#${index+1}`}</b><div className="leaderboard-avatar">{index<3?"❄":"♙"}</div><div className="leaderboard-user"><b>@{entry.username}</b><small>Уровень {entry.level} · {Number(entry.total_cases_opened||0)} открытий</small></div><strong>{Number(entry.xp||0).toLocaleString("ru-RU")} XP</strong></article>)}</div> : <p className="season-empty">Рейтинг появится после накопления игрового опыта.</p>}
+              </section>
+            </main>
+          )}
+
+          {page === "Live Drops" && (
+            <main className="content season-page drops-page">
+              <header className="season-page-heading"><span className="season-kicker">COMMUNITY FEED</span><h2>🔥 Live Drops</h2><p>Последние подтверждённые выпадения игроков BrainGG.</p></header>
+              <section className="season-panel"><div className="season-panel-title"><h3>Лента выпадений</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>{hubLoading ? "..." : "↻ Обновить"}</button></div>
+                {hubLoading ? <p>Загружаем ленту...</p> : liveDrops.length ? <div className="drops-list">{liveDrops.map((drop) => <article className="drops-row" key={drop.id}>
+                  <div className="drops-art">{brainrotImage(drop) ? <img src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}</div>
+                  <div className="drops-info"><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small><time>{drop.created_at ? new Date(drop.created_at).toLocaleString("ru-RU") : ""}</time></div>
+                  <strong>{Number(drop.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
+                </article>)}</div> : <div className="season-empty">Пока нет выпадений. Открой кейс и стань первым в ленте!</div>}
               </section>
             </main>
           )}
@@ -2491,6 +2604,64 @@ export default function App() {
               {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
               <section className="season-panel"><h3>Текущие задания</h3>{(gameHub.tasks||[]).map((task)=><article className="mission-card" key={task.id}><div className="mission-icon">✦</div><div className="mission-info"><b>{task.title}</b><p>{task.description}</p><div className="mission-progress"><span style={{width:`${Math.min(100,Number(task.progress||0)/task.goal*100)}%`}}/></div><small>{Math.min(Number(task.progress||0),task.goal)} / {task.goal}</small></div><div className="mission-reward"><b>+{task.reward} GG</b><small>+{task.xp} XP</small><button className="case-button" disabled={!task.progress||task.progress<task.goal||task.claimed||taskClaimLoading===task.id} onClick={()=>claimTaskReward(task.id)}>{task.claimed?"Получено":taskClaimLoading===task.id?"...":"Забрать"}</button></div></article>)}</section>
               <section className="season-panel"><h3>Достижения</h3><div className="achievement-grid">{[{name:"Первый шаг",desc:"Открой первый кейс",ok:Number(gameHub.progress?.total_cases_opened||0)>=1},{name:"Коллекционер",desc:"Открой 10 кейсов",ok:Number(gameHub.progress?.total_cases_opened||0)>=10},{name:"Торговец",desc:"Продай первый предмет",ok:Number(gameHub.progress?.total_sales||0)>=1},{name:"Мастер улучшений",desc:"Улучши первый предмет",ok:Number(gameHub.progress?.total_upgrades||0)>=1}].map((a)=><article className={`achievement-card ${a.ok?"unlocked":""}`} key={a.name}><span>{a.ok?"🏆":"🔒"}</span><b>{a.name}</b><small>{a.desc}</small></article>)}</div></section>
+            </main>
+          )}
+
+          {page === "Достижения" && (
+            <main className="content season-page achievements-page">
+              <header className="season-page-heading"><span className="season-kicker">PLAYER MILESTONES</span><h2>🏆 Достижения</h2><p>Выполняй игровые цели и собирай значки BrainGG.</p></header>
+              <div className="achievement-overview"><b>{[
+                Number(gameHub.progress?.total_cases_opened || 0) >= 1,
+                Number(gameHub.progress?.total_cases_opened || 0) >= 10,
+                Number(gameHub.progress?.total_cases_opened || 0) >= 100,
+                Number(gameHub.progress?.total_sales || 0) >= 1,
+                Number(gameHub.progress?.total_sales || 0) >= 10,
+                Number(gameHub.progress?.total_upgrades || 0) >= 1,
+                Number(gameHub.progress?.total_upgrades || 0) >= 10,
+                Number(gameHub.progress?.daily_streak || 0) >= 7,
+              ].filter(Boolean).length} / 8</b><span>открыто достижений</span></div>
+              <div className="achievement-grid">{[
+                { name: "Первый шаг", desc: "Открой первый кейс", icon: "🎁", ok: Number(gameHub.progress?.total_cases_opened || 0) >= 1 },
+                { name: "Коллекционер", desc: "Открой 10 кейсов", icon: "📚", ok: Number(gameHub.progress?.total_cases_opened || 0) >= 10 },
+                { name: "Легенда", desc: "Открой 100 кейсов", icon: "👑", ok: Number(gameHub.progress?.total_cases_opened || 0) >= 100 },
+                { name: "Торговец", desc: "Продай первый предмет", icon: "💰", ok: Number(gameHub.progress?.total_sales || 0) >= 1 },
+                { name: "Бизнесмен", desc: "Продай 10 предметов", icon: "💼", ok: Number(gameHub.progress?.total_sales || 0) >= 10 },
+                { name: "Мастер апгрейда", desc: "Улучши первый предмет", icon: "⚡", ok: Number(gameHub.progress?.total_upgrades || 0) >= 1 },
+                { name: "Апгрейд-про", desc: "Сделай 10 апгрейдов", icon: "🚀", ok: Number(gameHub.progress?.total_upgrades || 0) >= 10 },
+                { name: "Непрерывная серия", desc: "Заходи 7 дней подряд", icon: "🔥", ok: Number(gameHub.progress?.daily_streak || 0) >= 7 },
+              ].map((achievement) => <article className={`achievement-card ${achievement.ok ? "unlocked" : ""}`} key={achievement.name}><span>{achievement.ok ? achievement.icon : "🔒"}</span><b>{achievement.name}</b><small>{achievement.desc}</small><em>{achievement.ok ? "Открыто" : "Не открыто"}</em></article>)}</div>
+            </main>
+          )}
+
+          {page === "История" && (
+            <main className="content season-page history-page">
+              <header className="season-page-heading"><span className="season-kicker">YOUR ACTIVITY</span><h2>🕒 История открытий</h2><p>Твои последние кейсы и выпавшие предметы.</p></header>
+              <section className="season-panel"><div className="season-panel-title"><h3>Последние 100 открытий</h3><button className="case-button" onClick={loadPlayerHistory} disabled={historyLoading}>{historyLoading ? "..." : "↻ Обновить"}</button></div>
+                {historyLoading ? <p>Загружаем историю...</p> : historyError ? <div className="season-empty">{historyError}</div> : playerHistory.length ? <div className="player-history-list">{playerHistory.map((entry, index) => <article className="player-history-row" key={`${entry.created_at || "entry"}-${index}`}><span className="player-history-icon">🎁</span><div className="player-history-info"><b>{entry.item_name || "Предмет"}</b><small>{displayCaseName(entry.case_name)} · {entry.created_at ? new Date(entry.created_at).toLocaleString("ru-RU") : "Дата не указана"}</small></div><strong>{Number(entry.price || 0).toLocaleString("ru-RU")} GG</strong></article>)}</div> : <div className="season-empty">История пока пуста. Открой кейс, и здесь появится первая запись.</div>}
+              </section>
+            </main>
+          )}
+
+          {page === "Настройки" && (
+            <main className="content season-page settings-page">
+              <header className="season-page-heading"><span className="season-kicker">YOUR EXPERIENCE</span><h2>⚙ Настройки</h2><p>Настрой BrainGG под себя.</p></header>
+              <section className="season-panel settings-list">
+                <article className="settings-row"><span className="settings-icon">🎵</span><div><b>Фоновая музыка</b><small>Зимний саундтрек и музыка ивентов</small></div><button className={`settings-switch ${musicEnabled ? "active" : ""}`} type="button" onClick={toggleWinterMusic}>{musicEnabled ? "Вкл." : "Выкл."}</button></article>
+                <article className="settings-row"><span className="settings-icon">🔊</span><div><b>Звуковые эффекты</b><small>Звуки кнопок и игровых действий</small></div><button className={`settings-switch ${soundEnabled ? "active" : ""}`} type="button" onClick={() => setSoundEnabled((value) => !value)}>{soundEnabled ? "Вкл." : "Выкл."}</button></article>
+              </section>
+              <p className="settings-note">Настройки действуют в текущем сеансе BrainGG.</p>
+            </main>
+          )}
+
+          {page === "Обучение" && (
+            <main className="content season-page tutorial-page">
+              <header className="season-page-heading"><span className="season-kicker">BRAIN GG GUIDE</span><h2>🎓 Обучение</h2><p>Коротко о том, как развивать свой аккаунт.</p></header>
+              <div className="tutorial-grid">
+                <article><span>🎁</span><b>1. Открывай кейсы</b><p>Выбери кейс, посмотри состав наград и открой его. Выигрыш появится в инвентаре.</p><button onClick={() => changePage("Кейсы")}>К кейсам →</button></article>
+                <article><span>⚡</span><b>2. Улучшай предметы</b><p>В апгрейдере выбери свой брейнрот и цель. Шанс победы показан до запуска.</p><button onClick={() => changePage("Апгрейдер")}>К апгрейдеру →</button></article>
+                <article><span>📋</span><b>3. Забирай награды</b><p>Заходи каждый день, выполняй задания и получай GG и XP.</p><button onClick={() => changePage("Задания")}>К квестам →</button></article>
+                <article><span>🏆</span><b>4. Попадай в топ</b><p>Опыт даёт уровни. Сравнивай свои рекорды с другими игроками.</p><button onClick={() => changePage("Рейтинг")}>Открыть рейтинг →</button></article>
+              </div>
             </main>
           )}
 
@@ -2518,7 +2689,7 @@ export default function App() {
 
           {page === "Профиль" && (
             <main className="content season-page"><header className="season-page-heading"><span className="season-kicker">PLAYER IDENTITY</span><h2>❄ Профиль игрока</h2><p>Твой путь в мире BrainGG.</p></header>
-              <section className="season-profile-card"><div className="profile-avatar">❄</div><div className="profile-identity"><h2>@{player?.username||"игрок"}</h2><p>Game ID: {player?.game_id||"—"}</p><span>Уровень {gameHub.progress?.level||1}</span></div><div className="profile-xp"><b>{Number(gameHub.progress?.xp||0).toLocaleString("ru-RU")} XP</b><div className="mission-progress"><span style={{width:`${Math.min(100,Math.max(0,(Number(gameHub.progress?.xp||0)-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)/Math.max(1,Number(gameHub.progress?.level||1)*Number(gameHub.progress?.level||1)*100-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)*100))}%`}}/></div><small>До следующего уровня: {Math.max(0,Number(gameHub.progress?.next_level_xp||100)-Number(gameHub.progress?.xp||0))} XP</small></div></section>
+              <section className="season-profile-card"><div className="profile-avatar">❄</div><div className="profile-identity"><h2>{player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок")}</h2><p>Game ID: {player?.game_id || "Не задан — добавь username в Telegram"}</p><span>Уровень {gameHub.progress?.level||1}</span></div><div className="profile-xp"><b>{Number(gameHub.progress?.xp||0).toLocaleString("ru-RU")} XP</b><div className="mission-progress"><span style={{width:`${Math.min(100,Math.max(0,(Number(gameHub.progress?.xp||0)-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)/Math.max(1,Number(gameHub.progress?.level||1)*Number(gameHub.progress?.level||1)*100-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)*100))}%`}}/></div><small>До следующего уровня: {Math.max(0,Number(gameHub.progress?.next_level_xp||100)-Number(gameHub.progress?.xp||0))} XP</small></div></section>
               <div className="profile-stat-grid"><article><small>ОТКРЫТО КЕЙСОВ</small><b>{gameHub.progress?.total_cases_opened||0}</b></article><article><small>ПРОДАНО ПРЕДМЕТОВ</small><b>{gameHub.progress?.total_sales||0}</b></article><article><small>АПГРЕЙДОВ</small><b>{gameHub.progress?.total_upgrades||0}</b></article><article><small>СЕРИЯ ВХОДОВ</small><b>{gameHub.progress?.daily_streak||0} дней</b></article></div>
             </main>
           )}
@@ -2653,7 +2824,7 @@ export default function App() {
                   <span className="admin-section-icon">⌕</span>
                   <div>
                     <h3>Найти игрока</h3>
-                    <p>Введи точный Game ID игрока.</p>
+                    <p>Введи Telegram username игрока, например @username.</p>
                   </div>
                 </div>
 
@@ -2662,7 +2833,7 @@ export default function App() {
                     className="admin-input"
                     value={adminGameId}
                     onChange={(event) => setAdminGameId(event.target.value)}
-                    placeholder="Например: 102938"
+                    placeholder="@username в Telegram"
                     autoComplete="off"
                   />
                   <button
@@ -2999,7 +3170,7 @@ export default function App() {
                 </div>
 
                 <div className="admin-log-filters">
-                  <input className="admin-input" value={adminLogQuery} onChange={(event) => setAdminLogQuery(event.target.value)} placeholder="Поиск по Game ID, предмету или админу" />
+                  <input className="admin-input" value={adminLogQuery} onChange={(event) => setAdminLogQuery(event.target.value)} placeholder="Поиск по username, предмету или админу" />
                   <select className="admin-input" value={adminLogAction} onChange={(event) => setAdminLogAction(event.target.value)}>
                     <option value="all">Все операции</option><option value="coins">Монеты GG</option><option value="cases">Бесплатные кейсы</option><option value="brainrot">Брейнроты</option>
                   </select>
