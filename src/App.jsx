@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
+import winterHomeBackground from "./assets/braingg-winter-home.jpg";
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
@@ -1915,6 +1916,9 @@ export default function App() {
 
           {page === "Главная" && (
             <main className="content home-welcome">
+              <div className="home-welcome-backdrop" aria-hidden="true">
+                <img src={winterHomeBackground} alt="" fetchPriority="high" decoding="async" />
+              </div>
               <div className="home-welcome-inner">
                 <div className="home-welcome-emblem">❄</div>
                 <p className="home-greeting">Привет, <b>{greetingLabel}!</b></p>
