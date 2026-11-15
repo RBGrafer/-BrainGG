@@ -2,19 +2,19 @@
 export const cases = [
   {
     id: 1, name: "Frostbite Case", caseName: "Truckini Case",
-    description: "Ледяной сундук с первыми редкими находками", price: 141,
+    description: "Ледяной сундук с первыми редкими находками", price: 111,
     oldPrice: 211, discount: 33, color: "orange",
     image: "/cases/truckini.webp", category: "Обычные кейсы",
   },
   {
     id: 2, name: "Aurora Case", caseName: "Summer Case",
-    description: "Сияние северного сияния скрывает награды", price: 396,
+    description: "Сияние северного сияния скрывает награды", price: 226,
     oldPrice: 594, discount: 33, color: "blue",
     image: "/cases/summer.webp", category: "Обычные кейсы",
   },
   {
     id: 3, name: "Crimson Blizzard", caseName: "Bloody Case",
-    description: "Алый мороз хранит опасные сокровища", price: 425,
+    description: "Алый мороз хранит опасные сокровища", price: 335,
     oldPrice: 637, discount: 33, color: "red",
     image: "/cases/bloody.webp", category: "Обычные кейсы",
   },
@@ -26,13 +26,13 @@ export const cases = [
   },
   {
     id: 5, name: "Glacial Legend", caseName: "Legend Case",
-    description: "Легендарные сокровища древнего ледника", price: 1133,
+    description: "Легендарные сокровища древнего ледника", price: 684,
     oldPrice: 1700, discount: 33, color: "gold",
     image: "/cases/legend.webp", category: "Rich Cases 💎", maxReward: 10860,
   },
   {
     id: 6, name: "Arctic Elite", caseName: "Elite Case",
-    description: "Элитная коллекция для самых смелых", price: 4250,
+    description: "Элитная коллекция для самых смелых", price: 3452,
     oldPrice: 6375, discount: 33, color: "elite",
     image: "/cases/elite.webp", category: "Rich Cases 💎", maxReward: 120000,
   },
@@ -48,6 +48,6 @@ export const cases = [
     description: "Один шанс на легендарный дроп", price: 59, oldPrice: 89, discount: 33,
     color: "horseman",
     image: "/cases/all-in-horseman.webp",
-    category: "All In 🎲", maxReward: 14830,
+    category: "All In 🎲", maxReward: 50000,
   },
 ];
