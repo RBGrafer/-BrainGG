@@ -829,7 +829,10 @@ body {
 /* Winter home greeting and inventory bulk actions */
 .logo { display:flex; align-items:center; gap:8px; color:#dff8ff; text-shadow:0 0 24px #67d9ff88; }
 .logo-heart { display:inline-block; filter:hue-rotate(250deg) saturate(1.25); color:#8de8ff; text-shadow:0 0 12px #74dfff,0 0 28px #42bfffaa; }
-.home-welcome { min-height: min(560px, 65vh); display:grid; place-items:center; text-align:center; position:relative; overflow:hidden; background:radial-gradient(ellipse at 50% 35%,#164a6c88 0%,transparent 58%),linear-gradient(145deg,#0d2032,#081522 72%); border-color:#73cfff38; }
+.home-welcome { min-height:min(560px,65vh); display:grid; place-items:center; text-align:center; position:relative; isolation:isolate; overflow:hidden; background:url("/braingg-winter-home.jpg") center center / cover no-repeat,linear-gradient(145deg,#0d2032,#081522 72%) !important; border-color:#73cfff55 !important; }
+.home-welcome::before { content:""; position:absolute; inset:0; z-index:0; pointer-events:none; background:radial-gradient(ellipse at 50% 47%,rgba(3,17,31,.78) 0%,rgba(3,17,31,.68) 30%,rgba(3,17,31,.30) 61%,rgba(3,17,31,.08) 100%),linear-gradient(180deg,rgba(3,14,27,.12),rgba(3,14,27,.34)); }
+.home-welcome-inner { text-shadow:0 2px 14px rgba(0,0,0,.52); }
+.home-welcome .daily-card { width:min(100%,590px); margin:24px auto 0; border-color:rgba(112,202,244,.32); background:linear-gradient(145deg,rgba(5,24,40,.91),rgba(4,17,30,.94)); box-shadow:inset 0 1px rgba(255,255,255,.06),0 14px 36px rgba(0,0,0,.28); backdrop-filter:blur(8px); }
 .home-welcome-inner { width:min(100%,680px); margin:auto; display:flex; align-items:center; flex-direction:column; position:relative; z-index:1; }
 .home-welcome-emblem { width:64px;height:64px;display:grid;place-items:center;border:1px solid #a4eaff55;border-radius:22px;background:linear-gradient(145deg,#b5efff30,#4ba9df12);color:#c8f4ff;font-size:30px;box-shadow:0 0 35px #58cfff2c,inset 0 0 20px #a8edff1a;margin-bottom:22px; }
 .home-greeting { color:#b8eaff!important; font-size:clamp(18px,3vw,24px); margin:0 0 10px!important; }
@@ -1216,7 +1219,9 @@ input, select, textarea { min-width:0; }
   .navigation button { min-height:39px; padding:9px 12px !important; font-size:11px !important; }
   .content { margin-top:12px !important; padding:13px !important; border-radius:16px !important; }
   .content h2 { font-size:clamp(19px,5vw,24px); line-height:1.25; }
-  .home-welcome { min-height:0; }
+  .home-welcome { min-height:0; background-position:center center !important; }
+  .home-welcome::before { background:radial-gradient(ellipse at 50% 46%,rgba(3,17,31,.84) 0%,rgba(3,17,31,.73) 43%,rgba(3,17,31,.34) 100%),linear-gradient(180deg,rgba(3,14,27,.16),rgba(3,14,27,.42)); }
+  .home-welcome-emblem { margin-bottom:14px; }
   .home-welcome-inner { padding:12px 2px; }
   .home-greeting { font-size:16px; overflow-wrap:anywhere; }
   .home-welcome-inner h2 { font-size:clamp(23px,6vw,30px); }
