@@ -158,6 +158,9 @@ export default function App() {
 
   const [globalEvent, setGlobalEvent] = useState(null);
   const [globalMessage, setGlobalMessage] = useState(null);
+  const [globalActivities, setGlobalActivities] = useState([]);
+  const [globalActivityLoading, setGlobalActivityLoading] = useState(false);
+  const [globalActivityError, setGlobalActivityError] = useState("");
   const [eventClock, setEventClock] = useState(Date.now());
   const [caseRewards, setCaseRewards] = useState([]);
   const [caseRewardsFor, setCaseRewardsFor] = useState("");
@@ -205,6 +208,7 @@ export default function App() {
       { label: "Достижения", page: "Достижения", icon: "🏆", description: "Открывай новые значки" },
       { label: "Рекорды", page: "Рейтинг", icon: "🥇", description: "Сравнивай свой XP с игроками" },
       { label: "Live Drops", page: "Live Drops", icon: "🔥", description: "Смотри последние выпадения" },
+      { label: "Глобальные события", page: "Глобальные события", icon: "🌍", description: "Все действия игроков в реальном времени" },
     ]},
     { title: "АККАУНТ", items: [
       { label: "Профиль", page: "Профиль", icon: "👤", description: "Уровень, XP и твоя статистика" },
@@ -777,8 +781,13 @@ export default function App() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "game_global_messages" }, (payload) => {
         if (mounted && payload.new?.message) setGlobalMessage(payload.new);
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "game_global_activity" }, (payload) => {
+        if (!mounted || !payload.new?.id) return;
+        setGlobalActivities((current) => [payload.new, ...current.filter((entry) => String(entry.id) !== String(payload.new.id))].slice(0, 60));
+      })
       .subscribe();
     loadGlobalState().catch((error) => console.warn("Global BrainGG state unavailable:", error));
+    loadGlobalActivity().catch((error) => console.warn("Global BrainGG activity unavailable:", error));
     return () => {
       mounted = false;
       supabase.removeChannel(channel);
@@ -852,6 +861,29 @@ export default function App() {
     if (!data?.success) throw new Error(data?.error || "Не удалось загрузить состояние событий");
     setGlobalEvent(data.event || null);
     return data.event || null;
+  }
+
+  async function loadGlobalActivity() {
+    setGlobalActivityLoading(true);
+    setGlobalActivityError("");
+    try {
+      const { data, error } = await supabase.from("game_global_activity")
+        .select("id, username, event_type, title, description, item_name, case_name, rarity, value_gg, success, created_at")
+        .order("created_at", { ascending: false }).limit(60);
+      if (error) throw error;
+      setGlobalActivities((current) => {
+        const merged = new Map((data || []).map((entry) => [String(entry.id), entry]));
+        current.forEach((entry) => { if (!merged.has(String(entry.id))) merged.set(String(entry.id), entry); });
+        return [...merged.values()].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 60);
+      });
+      return data || [];
+    } catch (error) {
+      console.error("Global activity loading failed:", error);
+      setGlobalActivityError("Глобальная лента пока не настроена. Примени миграцию global community events в Supabase.");
+      throw error;
+    } finally {
+      setGlobalActivityLoading(false);
+    }
   }
 
   async function loadCaseRewards(caseName) {
@@ -1435,6 +1467,7 @@ export default function App() {
     }
 
     if (["Рейтинг", "Задания", "Достижения", "Профиль", "Live Drops"].includes(nextPage)) await loadGameHub();
+    if (nextPage === "Глобальные события") await loadGlobalActivity().catch(() => {});
     if (nextPage === "История") await loadPlayerHistory();
     if (nextPage === "Промокод") {
       setPromoFeedback("");
@@ -2594,6 +2627,40 @@ export default function App() {
                   <div className="drops-info"><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small><time>{drop.created_at ? new Date(drop.created_at).toLocaleString("ru-RU") : ""}</time></div>
                   <strong>{Number(drop.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
                 </article>)}</div> : <div className="season-empty">Пока нет выпадений. Открой кейс и стань первым в ленте!</div>}
+              </section>
+            </main>
+          )}
+
+          {page === "Глобальные события" && (
+            <main className="content season-page global-activity-page">
+              <header className="season-page-heading global-activity-heading">
+                <span className="season-kicker">ONE COMMUNITY · LIVE</span>
+                <h2>🌍 Глобальные события BrainGG</h2>
+                <p>Единая лента для всех игроков. Открытия кейсов, продажи, апгрейды, награды и запуски событий появляются здесь у всех одновременно.</p>
+              </header>
+              <section className="season-panel global-activity-panel">
+                <div className="season-panel-title">
+                  <h3>События сообщества</h3>
+                  <button className="case-button" onClick={() => loadGlobalActivity().catch(() => {})} disabled={globalActivityLoading}>{globalActivityLoading ? "Загружаем..." : "↻ Обновить"}</button>
+                </div>
+                <div className="global-activity-live-note"><span className="global-activity-live-dot" /> Обновляется автоматически в реальном времени для всех игроков</div>
+                {globalActivityError ? <div className="season-empty">{globalActivityError}</div> : globalActivityLoading && !globalActivities.length ? <div className="season-empty">Загружаем общую ленту BrainGG...</div> : globalActivities.length ? (
+                  <div className="global-activity-list">
+                    {globalActivities.map((activity) => {
+                      const icons = { case_opened: "🎁", item_sold: "💰", upgrade_won: "⚡", upgrade_failed: "🧊", daily_reward: "🎄", task_reward: "📋", quiz_correct: "🧠", quiz_answered: "❔", promo_redeemed: "🎟️", event_started: "🌍", event_ended: "🏁", global_message: "📣", admin_reward: "🎁" };
+                      const actor = activity.username ? `@${activity.username}` : "Игрок BrainGG";
+                      return <article className={`global-activity-row ${activity.success === false ? "is-unsuccessful" : ""}`} key={activity.id}>
+                        <span className="global-activity-icon">{icons[activity.event_type] || "✨"}</span>
+                        <div className="global-activity-copy">
+                          <div className="global-activity-title-line"><b>{activity.title}</b><small>{actor}</small></div>
+                          {activity.description && <p>{activity.description}</p>}
+                          <time>{activity.created_at ? new Date(activity.created_at).toLocaleString("ru-RU") : "Только что"}</time>
+                        </div>
+                        {Number(activity.value_gg || 0) > 0 && <strong className="global-activity-value">{Number(activity.value_gg).toLocaleString("ru-RU")} GG</strong>}
+                      </article>;
+                    })}
+                  </div>
+                ) : <div className="season-empty">Пока нет событий. Первые действия игроков появятся здесь автоматически!</div>}
               </section>
             </main>
           )}
