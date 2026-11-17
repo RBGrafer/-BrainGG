@@ -334,6 +334,20 @@ Deno.serve(async (req) => {
       }
     };
 
+    const sendPlayerTelegramMessage = async (chatId: number | string, text: string) => {
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+        });
+        const result = await response.json();
+        if (!result?.ok) console.warn("BrainGG deposit Telegram notification failed:", result?.description || "unknown error");
+      } catch (notificationError) {
+        console.warn("BrainGG deposit Telegram notification failed:", notificationError instanceof Error ? notificationError.message : notificationError);
+      }
+    };
+
     if (body.action === "get_global_state") {
       try {
         const event = await getActiveEvent();
@@ -558,6 +572,188 @@ Deno.serve(async (req) => {
         .eq("telegram_id", telegramUser.id).maybeSingle();
       return respond({ success: true, status: order.status, balance: currentPlayer?.balance ?? null,
         stars: order.stars, gg: Number(order.gg_amount) });
+    }
+
+    // BRAINROT TRADE DEPOSITS. The client never chooses the payout amount:
+    // the database reads configured base prices and applies mutation/trait factors.
+    if (body.action === "get_brainrot_deposit_catalog") {
+      const [itemsResult, mutationsResult, traitsResult] = await Promise.all([
+        supabase.from("brainrot_deposit_catalog").select("item_key, display_name, image_key, base_value_gg, enabled, sort_order").eq("enabled", true).order("sort_order"),
+        supabase.from("brainrot_deposit_mutations").select("mutation_key, label, multiplier, display_value, sort_order").eq("enabled", true).order("sort_order"),
+        supabase.from("brainrot_deposit_traits").select("trait_key, label, multiplier, display_value, effect_note, sort_order, enabled").eq("enabled", true).not("multiplier", "is", null).order("sort_order"),
+      ]);
+      const failure = itemsResult.error || mutationsResult.error || traitsResult.error;
+      if (failure) {
+        console.error("Brainrot deposit catalog unavailable:", failure.message);
+        return respond({ error: "Каталог пополнения пока не настроен. Администратор должен применить SQL-миграцию." }, 503);
+      }
+      return respond({ success: true, items: itemsResult.data || [], mutations: mutationsResult.data || [], traits: traitsResult.data || [] });
+    }
+
+    if (body.action === "create_brainrot_deposit_request") {
+      const robloxUsername = String(body.robloxUsername || "").trim().replace(/^@/, "");
+      const brainrotKey = String(body.brainrotKey || "").trim();
+      const mutationKey = String(body.mutationKey || "normal").trim();
+      // Players cannot self-assign traits. The admin verifies actual traits from the trade later.
+      const traitKeys: string[] = [];
+      if (!/^[A-Za-z0-9_]{3,20}$/.test(robloxUsername)) return respond({ error: "Укажи корректный Roblox @username (3–20 символов, без отображаемого имени)." }, 400);
+      if (!brainrotKey || brainrotKey.length > 80 || !mutationKey || mutationKey.length > 40) return respond({ error: "Некорректные данные заявки." }, 400);
+      const { data: created, error: createError } = await supabase.rpc("create_brainrot_deposit_request", {
+        p_telegram_id: telegramUser.id,
+        p_roblox_username: robloxUsername,
+        p_brainrot_key: brainrotKey,
+        p_mutation_key: mutationKey,
+        p_trait_keys: traitKeys,
+      });
+      if (createError) {
+        const message = String(createError.message || "");
+        if (message.includes("DEPOSIT_ALREADY_ACTIVE")) return respond({ error: "У тебя уже есть активная заявка. Сначала заверши её или дождись отказа." }, 409);
+        if (message.includes("DEPOSIT_ITEM_PRICE_NOT_SET")) return respond({ error: "Для этого брейнрота администратор ещё не установил базовую цену." }, 400);
+        if (message.includes("INVALID_ROBLOX_USERNAME")) return respond({ error: "Укажи именно Roblox @username, а не отображаемое имя." }, 400);
+        if (message.includes("DEPOSIT_TRAIT_NOT_CONFIGURED")) return respond({ error: "Один из выбранных traits пока не настроен." }, 400);
+        console.error("Brainrot deposit request creation failed:", createError.message);
+        return respond({ error: "Не удалось создать заявку. Проверь выбранный предмет и попробуй ещё раз." }, 400);
+      }
+      const requestId = created?.id;
+      const { data: requestRow, error: requestReadError } = await supabase.from("brainrot_deposit_requests")
+        .select("*, brainrot_deposit_catalog(image_key)").eq("id", requestId).single();
+      if (requestReadError || !requestRow) return respond({ error: "Заявка создана, но не удалось загрузить её карточку. Обнови статус." }, 500);
+      const request = { ...requestRow, image_key: requestRow.brainrot_deposit_catalog?.image_key || brainrotKey };
+      await sendPlayerTelegramMessage(telegramUser.id,
+        `BrainGG: заявка на пополнение создана.
+Брейнрот: ${request.brainrot_name}
+Roblox: @${request.roblox_username}
+Предварительно к начислению: ${Number(request.amount_gg).toLocaleString("ru-RU")} GG
+Номер очереди: #${request.queue_number}. Дождись сообщения с назначенным аккаунтом хранения — не отправляй трейд заранее.`);
+      return respond({ success: true, request, queue_position: created?.queue_position || null });
+    }
+
+    if (body.action === "get_my_brainrot_deposit_requests") {
+      const { data: requests, error: requestsError } = await supabase.from("brainrot_deposit_requests")
+        .select("*, brainrot_deposit_catalog(image_key)").eq("telegram_id", telegramUser.id)
+        .order("created_at", { ascending: false }).limit(10);
+      if (requestsError) {
+        console.error("Player deposit requests loading failed:", requestsError.message);
+        return respond({ error: "Не удалось загрузить статус пополнения. Примени SQL-миграцию." }, 503);
+      }
+      const { data: traitRows } = await supabase.from("brainrot_deposit_traits").select("trait_key, label");
+      const traitLabels = new Map((traitRows || []).map((trait: any) => [trait.trait_key, trait.label]));
+      const mapped = await Promise.all((requests || []).map(async (row: any) => {
+        let queuePosition: number | null = null;
+        if (["queued", "waiting_trade", "trade_received"].includes(row.status)) {
+          const { count } = await supabase.from("brainrot_deposit_requests").select("id", { count: "exact", head: true })
+            .in("status", ["queued", "waiting_trade", "trade_received"]).lt("queue_number", row.queue_number);
+          queuePosition = Number(count || 0) + 1;
+        }
+        return {
+          ...row,
+          image_key: row.brainrot_deposit_catalog?.image_key || row.brainrot_key,
+          trait_labels: (row.trait_keys || []).map((key: string) => traitLabels.get(key) || key),
+          queue_position: queuePosition,
+        };
+      }));
+      return respond({ success: true, requests: mapped });
+    }
+
+    if (body.action === "admin_get_brainrot_deposits") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const [itemsResult, requestsResult, traitsResult] = await Promise.all([
+        supabase.from("brainrot_deposit_catalog").select("item_key, display_name, image_key, base_value_gg, enabled, sort_order").order("sort_order"),
+        supabase.from("brainrot_deposit_requests").select("*, brainrot_deposit_catalog(image_key)")
+          .in("status", ["queued", "waiting_trade", "trade_received"]).order("queue_number", { ascending: true }).limit(100),
+        supabase.from("brainrot_deposit_traits").select("trait_key, label, multiplier, display_value, effect_note, enabled, sort_order").order("sort_order"),
+      ]);
+      const failure = itemsResult.error || requestsResult.error || traitsResult.error;
+      if (failure) return respond({ error: "Не удалось загрузить очередь пополнений. Проверь SQL-миграцию." }, 503);
+      const traitLabels = new Map((traitsResult.data || []).map((trait: any) => [trait.trait_key, trait.label]));
+      const requests = (requestsResult.data || []).map((row: any) => ({
+        ...row,
+        image_key: row.brainrot_deposit_catalog?.image_key || row.brainrot_key,
+        trait_labels: (row.trait_keys || []).map((key: string) => traitLabels.get(key) || key),
+      }));
+      return respond({ success: true, items: itemsResult.data || [], traits: traitsResult.data || [], requests });
+    }
+
+    if (body.action === "admin_set_brainrot_deposit_price") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const itemKey = String(body.itemKey || "").trim();
+      const baseValueGg = Number(body.baseValueGg);
+      if (!itemKey || !Number.isFinite(baseValueGg) || baseValueGg < 0 || baseValueGg > 100000000) return respond({ error: "Некорректная базовая цена." }, 400);
+      const { data, error } = await supabase.rpc("admin_set_brainrot_deposit_price", { p_item_key: itemKey, p_base_value_gg: baseValueGg });
+      if (error) return respond({ error: "Не удалось сохранить цену. Проверь, что SQL-миграция применена." }, 400);
+      return respond({ success: true, item: data?.item || null });
+    }
+
+    if (body.action === "admin_assign_next_brainrot_deposit") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const { data, error } = await supabase.rpc("admin_assign_next_brainrot_deposit", { p_admin_telegram_id: telegramUser.id });
+      if (error) return respond({ error: "Не удалось назначить следующую заявку. Проверь SQL-миграцию." }, 400);
+      if (data?.empty || !data?.request) return respond({ success: true, empty: true });
+      const request = data.request;
+      await sendPlayerTelegramMessage(request.telegram_id,
+        `BrainGG: твоя очередь!
+Отправь запрос на трейд аккаунту @${request.assigned_storage_account} в Steal a Brainrot.
+Предмет: ${request.brainrot_name}
+После принятия трейда положи предмет, нажми Ready и дождись дальнейшей инструкции. Не нажимай Accept раньше времени.`);
+      return respond({ success: true, empty: false, request });
+    }
+
+    if (body.action === "admin_mark_brainrot_deposit_received") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const requestId = String(body.requestId || "");
+      const traitKeys = Array.isArray(body.traitKeys)
+        ? [...new Set(body.traitKeys.map((value: unknown) => String(value).trim()).filter(Boolean))]
+        : [];
+      if (!requestId || traitKeys.length > 40) return respond({ error: "Некорректные данные подтверждения трейда." }, 400);
+      const { data, error } = await supabase.rpc("admin_mark_brainrot_deposit_received", {
+        p_request_id: requestId,
+        p_admin_telegram_id: telegramUser.id,
+        p_trait_keys: traitKeys,
+      });
+      if (error) {
+        console.error("Brainrot deposit trade verification failed:", error.message);
+        return respond({ error: "Не удалось подтвердить предмет и traits. Проверь миграцию и выбранные traits." }, 400);
+      }
+      const request = data?.request;
+      const verifiedTraits = traitKeys.length
+        ? await supabase.from("brainrot_deposit_traits").select("label").in("trait_key", traitKeys)
+        : { data: [] };
+      const traitText = (verifiedTraits.data || []).map((row: any) => row.label).join(", ") || "без дополнительных traits";
+      if (request?.telegram_id && !data?.duplicate) await sendPlayerTelegramMessage(request.telegram_id,
+        `BrainGG: предмет ${request.brainrot_name} и его traits проверены.
+Учтённые traits: ${traitText}.
+Предварительная сумма пересчитана: ${Number(request.amount_gg || 0).toLocaleString("ru-RU")} GG.
+Дождись, пока администратор нажмёт Ready, затем нажми Accept. После полного завершения трейда администратор подтвердит начисление.`);
+      return respond({ success: true, request, amount_gg: Number(request?.amount_gg || 0), trait_labels: (verifiedTraits.data || []).map((row: any) => row.label) });
+    }
+
+    if (body.action === "admin_complete_brainrot_deposit") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const requestId = String(body.requestId || "");
+      const { data, error } = await supabase.rpc("admin_complete_brainrot_deposit", { p_request_id: requestId, p_admin_telegram_id: telegramUser.id });
+      if (error) return respond({ error: "Зачисление разрешено только после подтверждения получения предмета. Проверь статус трейда." }, 400);
+      const request = data?.request;
+      if (request?.telegram_id && !data?.duplicate) await sendPlayerTelegramMessage(request.telegram_id,
+        `Пополнение удалось :)
+Брейнрот: ${request.brainrot_name}
+Начислено: +${Number(data.amount_gg || request.amount_gg || 0).toLocaleString("ru-RU")} GG
+Новый баланс: ${Number(data.balance || 0).toLocaleString("ru-RU")} GG`);
+      if (!data?.duplicate) await recordGlobalActivity({ eventType: "brainrot_deposit", title: "Игрок пополнил баланс брейнротом", description: `${request?.brainrot_name || "Брейнрот"} · +${Number(data.amount_gg || 0).toLocaleString("ru-RU")} GG`, valueGg: Number(data.amount_gg || 0), success: true });
+      return respond({ success: true, amount_gg: Number(data.amount_gg || 0), balance: data.balance, request });
+    }
+
+    if (body.action === "admin_reject_brainrot_deposit") {
+      if (!isAdmin) return respond({ error: "Доступ запрещён" }, 403);
+      const requestId = String(body.requestId || "");
+      const reason = String(body.reason || "").trim().slice(0, 300);
+      const { data, error } = await supabase.rpc("admin_reject_brainrot_deposit", { p_request_id: requestId, p_admin_telegram_id: telegramUser.id, p_reason: reason || null });
+      if (error) return respond({ error: "Не удалось отклонить заявку. Возможно, обмен уже завершён." }, 400);
+      const request = data?.request;
+      if (request?.telegram_id && !data?.duplicate) await sendPlayerTelegramMessage(request.telegram_id,
+        `Пополнение не удалось :(
+${reason ? `Причина: ${reason}` : "Трейд отклонён или не завершён."}
+Если считаешь, что это ошибка, свяжись с администрацией BrainGG.`);
+      return respond({ success: true, request });
     }
 
     const recordProgress = async (action: string, amount = 1) => {
