@@ -1,0 +1,50 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const sourceRoot = path.join(root, 'src');
+const extensions = ['.js', '.jsx', '.ts', '.tsx', '.json', '.css', '.svg', '.png', '.webp', '.jpg', '.jpeg'];
+const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
+const files = [];
+function walk(dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full);
+    else if (sourceExtensions.has(path.extname(entry.name))) files.push(full);
+  }
+}
+walk(sourceRoot);
+const missing = [];
+const importPattern = /(?:\bimport\s+(?:[\s\S]*?\s+from\s+)?|\bexport\s+[\s\S]*?\s+from\s+|\bimport\s*\()(['"])(\.[^'"]+)\1/g;
+for (const file of files) {
+  const source = fs.readFileSync(file, 'utf8');
+  for (const match of source.matchAll(importPattern)) {
+    const specifier = match[2];
+    const target = path.resolve(path.dirname(file), specifier);
+    const candidates = path.extname(target)
+      ? [target]
+      : [target, ...extensions.map((ext) => target + ext), ...extensions.map((ext) => path.join(target, `index${ext}`))];
+    if (!candidates.some((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile())) {
+      missing.push(`${path.relative(root, file)} -> ${specifier}`);
+    }
+  }
+}
+if (missing.length) {
+  console.error(`\nBrainGG: найдено отсутствующих локальных импортов: ${missing.length}`);
+  for (const item of missing) console.error(`  - ${item}`);
+  process.exit(1);
+}
+const required = [
+  'src/assets/brainrots/v17/cappuccino-ballerina.webp',
+  'src/assets/brainrots/v17/crocodile-aviator.webp',
+  'src/assets/cases/v17/red-starter.webp',
+  'src/assets/braingg-party-home.png',
+];
+const absentRequired = required.filter((rel) => !fs.existsSync(path.join(root, rel)));
+if (absentRequired.length) {
+  console.error('\nBrainGG: отсутствуют обязательные изображения:');
+  for (const rel of absentRequired) console.error(`  - ${rel}`);
+  process.exit(1);
+}
+console.log(`BrainGG: OK — проверено ${files.length} исходных файлов, все локальные импорты и обязательные изображения найдены.`);
