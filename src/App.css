@@ -3340,3 +3340,362 @@ body[data-braingg-theme="party"] {
 .app.theme-red .settings-theme-current { border-color:rgba(255,112,132,.3); background:rgba(137,17,43,.24); color:#ffe1e6; }
 .app.theme-red .settings-theme-check { background:rgba(255,90,115,.12); color:#ffcbd3; }
 .app.theme-red .settings-theme-option:not(.active) .settings-theme-check { background:rgba(255,255,255,.05); color:#d0aeb6; }
+
+/* =========================================================
+   BrainGG v19 — Brainrot deposit flow and reliable artwork
+   ========================================================= */
+.case-artwork { position: relative; overflow: hidden; }
+.case-artwork img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.case-artwork-placeholder { display: grid; place-items: center; width: 100%; height: 100%; min-height: 120px; color: #d8c1ef; font-weight: 900; }
+
+.deposit-modal {
+  width: min(820px, calc(100vw - 24px)) !important;
+  max-width: 820px !important;
+  max-height: min(92vh, 920px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.deposit-method-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+  margin: 16px 0;
+  padding: 5px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 15px;
+  background: rgba(0,0,0,.22);
+}
+.deposit-method-tabs button {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #cdbbdc;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+.deposit-method-tabs button.active {
+  border-color: rgba(255,255,255,.14);
+  background: linear-gradient(135deg,rgba(117,77,156,.42),rgba(49,31,71,.72));
+  color: #fff;
+}
+.brainrot-deposit-flow { display: grid; gap: 14px; }
+.deposit-stepper {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 7px;
+  margin: 4px 0 2px;
+}
+.deposit-stepper > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,.025);
+  color: #a99ab7;
+}
+.deposit-stepper > div i {
+  display: grid;
+  place-items: center;
+  flex: 0 0 23px;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.08);
+  color: #d8c9e6;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 950;
+}
+.deposit-stepper > div span { overflow: hidden; font-size: 9px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.deposit-stepper > div.active { border-color: rgba(198,158,245,.36); background: rgba(135,88,181,.13); color: #fff; }
+.deposit-stepper > div.active i { background: linear-gradient(135deg,#a36bd4,#67418e); color: #fff; }
+.deposit-section-heading { display: grid; gap: 5px; margin: 3px 0 5px; }
+.deposit-section-heading b { color: #fff; font-size: 15px; }
+.deposit-section-heading small { color: #bdaecb; font-size: 11px; line-height: 1.5; }
+.deposit-brainrot-grid {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 10px;
+}
+.deposit-brainrot-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  min-height: 168px;
+  padding: 12px 10px;
+  border: 1px solid rgba(190,145,230,.17);
+  border-radius: 17px;
+  background: linear-gradient(150deg,rgba(54,35,75,.7),rgba(20,12,32,.94));
+  color: #fff;
+  text-align: center;
+  cursor: pointer;
+  transition: transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.deposit-brainrot-card:hover:not(:disabled) { transform: translateY(-2px); border-color: rgba(255,211,107,.45); }
+.deposit-brainrot-card.active { border-color: #c99cf3; background: linear-gradient(150deg,rgba(113,75,151,.48),rgba(33,18,51,.98)); box-shadow: 0 0 0 1px rgba(201,156,243,.18),0 10px 24px rgba(0,0,0,.2); }
+.deposit-brainrot-card:disabled { opacity: .45; cursor: not-allowed; }
+.deposit-brainrot-card img { width: 100%; height: 96px; object-fit: contain; filter: drop-shadow(0 7px 13px rgba(0,0,0,.28)); }
+.deposit-brainrot-card b { max-width: 100%; color: #fff; font-size: 11px; line-height: 1.35; }
+.deposit-brainrot-card small { color: #c4b3d3; font-size: 9px; line-height: 1.3; }
+.deposit-selected-mark { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #c7a0ec; color: #1c1029; font-size: 12px; font-weight: 950; }
+.deposit-next-button { width: 100%; min-height: 46px; }
+.deposit-choice-block { display: grid; gap: 10px; }
+.deposit-choice-block > b,.deposit-traits-heading b { color: #fff; font-size: 12px; }
+.deposit-mutation-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.deposit-mutation-grid button {
+  display: grid;
+  gap: 5px;
+  min-height: 55px;
+  padding: 9px 7px;
+  border: 1px solid rgba(185,145,220,.18);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+  color: #eee3f7;
+  cursor: pointer;
+}
+.deposit-mutation-grid button span { font-size: 10px; font-weight: 850; }
+.deposit-mutation-grid button small { color: #c3acd8; font-size: 9px; }
+.deposit-mutation-grid button.active { border-color: #d0a8f3; background: linear-gradient(145deg,rgba(137,91,178,.42),rgba(60,38,83,.8)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
+.deposit-trait-preview,.deposit-admin-trait-check,.deposit-admin-verified-traits {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid rgba(185,145,220,.16);
+  border-radius: 15px;
+  background: rgba(255,255,255,.025);
+}
+.deposit-traits-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 7px; }
+.deposit-traits-heading small,.deposit-admin-trait-check > small { color: #a998b7; font-size: 9px; line-height: 1.45; }
+.deposit-traits-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.deposit-trait-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(185,145,220,.14);
+  border-radius: 10px;
+  background: rgba(255,255,255,.025);
+  color: #e9dff2;
+}
+.deposit-trait-option input { width: 13px; height: 13px; flex: 0 0 13px; accent-color: #a879d4; }
+.deposit-trait-option span { min-width: 0; overflow: hidden; font-size: 9px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.deposit-trait-option b { margin-left: auto; color: #f4d89b; font-size: 9px; white-space: nowrap; }
+.deposit-trait-option.active { border-color: rgba(196,151,238,.48); background: rgba(128,83,167,.2); }
+.deposit-trait-option.disabled { opacity: .38; }
+.deposit-estimate {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid rgba(255,211,107,.24);
+  border-radius: 15px;
+  background: linear-gradient(120deg,rgba(112,78,144,.22),rgba(255,211,107,.07));
+}
+.deposit-estimate span { color: #c9b8d8; font-size: 10px; font-weight: 800; }
+.deposit-estimate b { color: #ffe3a2; font-size: 24px; font-weight: 950; }
+.deposit-estimate small { color: #b9a8c9; font-size: 9px; line-height: 1.45; }
+.deposit-actions-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 9px; }
+.deposit-actions-row button { min-height: 44px; }
+.deposit-username-label { color: #d7c8e5; font-size: 10px; font-weight: 850; }
+.deposit-username-input-wrap { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 13px; border: 1px solid rgba(187,144,226,.25); border-radius: 13px; background: rgba(8,5,15,.55); }
+.deposit-username-input-wrap > span { color: #f1d99f; font-size: 15px; font-weight: 950; }
+.deposit-username-input-wrap input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #fff; font-size: 14px; }
+.deposit-username-input-wrap:focus-within { border-color: #c69be9; box-shadow: 0 0 0 3px rgba(175,128,218,.12); }
+.deposit-review-card,.deposit-request-summary { display: flex; align-items: center; gap: 13px; padding: 12px; border: 1px solid rgba(185,145,220,.18); border-radius: 15px; background: rgba(255,255,255,.035); }
+.deposit-review-card img,.deposit-request-summary img { width: 76px; height: 76px; flex: 0 0 76px; object-fit: contain; border-radius: 12px; background: radial-gradient(circle,rgba(169,124,208,.16),transparent 72%); }
+.deposit-review-card > div,.deposit-request-summary > div { display: grid; gap: 5px; min-width: 0; }
+.deposit-review-card b,.deposit-request-summary b { color: #fff; font-size: 13px; }
+.deposit-review-card small,.deposit-request-summary small { color: #bbaacb; font-size: 10px; line-height: 1.4; }
+.deposit-review-card strong,.deposit-request-summary strong { color: #ffe1a0; font-size: 15px; }
+.deposit-muted { margin: 0; color: #a99ab7; font-size: 10px; line-height: 1.55; }
+.deposit-feedback { padding: 10px 12px; border: 1px solid rgba(174,133,212,.22); border-radius: 11px; background: rgba(103,73,133,.16); color: #e9d9f6; font-size: 11px; line-height: 1.45; }
+.deposit-feedback.error { border-color: rgba(255,211,107,.34); background: rgba(122,88,42,.16); color: #ffe1a0; }
+.deposit-loading,.deposit-empty-status { padding: 20px; border: 1px dashed rgba(185,145,220,.22); border-radius: 14px; color: #c4b3d3; text-align: center; font-size: 11px; }
+.deposit-request-status { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(185,145,220,.22); border-radius: 17px; background: linear-gradient(145deg,rgba(54,35,75,.62),rgba(18,11,29,.95)); }
+.deposit-request-status-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.deposit-request-status-top span { color: #f0dfab; font-size: 11px; font-weight: 900; }
+.deposit-request-status-top b { color: #bba4d2; font-size: 10px; }
+.deposit-request-status > p { margin: 0; color: #c7b7d7; font-size: 11px; line-height: 1.5; }
+.deposit-trade-instructions { display: grid; gap: 8px; padding: 13px; border: 1px solid rgba(255,211,107,.22); border-radius: 13px; background: rgba(125,90,47,.1); color: #e9d9f3; font-size: 10px; line-height: 1.55; }
+.deposit-trade-instructions > b { color: #ffe2a0; font-size: 12px; }
+.deposit-trade-instructions > strong { color: #fff; font-size: 16px; }
+.deposit-trade-instructions ol { display: grid; gap: 5px; margin: 0; padding-left: 18px; color: #d0c1de; }
+.deposit-success-message,.deposit-failed-message { padding: 12px; border-radius: 12px; font-size: 11px; font-weight: 850; line-height: 1.5; }
+.deposit-success-message { border: 1px solid rgba(130,211,177,.28); background: rgba(35,120,88,.13); color: #b8f0d7; }
+.deposit-failed-message { border: 1px solid rgba(255,211,107,.3); background: rgba(125,87,40,.13); color: #ffe0a0; }
+.deposit-refresh-button { width: 100%; min-height: 42px; }
+.deposit-admin-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.deposit-admin-actions > span { color: #b9a8c8; font-size: 10px; }
+.deposit-admin-request-list { display: grid; gap: 10px; }
+.deposit-admin-request { display: grid; gap: 10px; padding: 13px; border: 1px solid rgba(185,145,220,.18); border-radius: 15px; background: rgba(255,255,255,.025); }
+.deposit-admin-request-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.deposit-admin-request-head > b { color: #fff; font-size: 13px; }
+.deposit-admin-status { padding: 5px 8px; border: 1px solid rgba(196,151,238,.25); border-radius: 999px; background: rgba(133,88,171,.14); color: #e8d4f7; font-size: 9px; font-weight: 900; }
+.deposit-admin-request-meta { display: flex; flex-wrap: wrap; gap: 7px 13px; color: #b7a8c7; font-size: 9px; }
+.deposit-admin-request-total { color: #d3c1e2; font-size: 11px; }
+.deposit-admin-request-total b { color: #ffe1a0; }
+.deposit-admin-trait-check > b,.deposit-admin-verified-traits > b { color: #fff; font-size: 10px; }
+.deposit-admin-verified-traits { display: flex; flex-wrap: wrap; gap: 7px; color: #cdbbdc; font-size: 10px; }
+.deposit-admin-request-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.deposit-admin-request-actions button { min-height: 38px; padding: 0 12px; font-size: 10px; }
+.deposit-reject-button { border: 1px solid rgba(255,211,107,.3); border-radius: 11px; background: rgba(120,87,44,.22); color: #ffe1a0; font-weight: 850; }
+.deposit-admin-price-grid { display: grid; gap: 8px; }
+.deposit-admin-price-row { display: grid; grid-template-columns: 48px minmax(0,1fr) minmax(95px,130px) auto; align-items: center; gap: 10px; padding: 9px; border: 1px solid rgba(185,145,220,.14); border-radius: 12px; background: rgba(255,255,255,.025); }
+.deposit-admin-price-row img { width: 48px; height: 48px; object-fit: contain; }
+.deposit-admin-price-row > div { display: grid; gap: 3px; min-width: 0; }
+.deposit-admin-price-row > div b { color: #fff; font-size: 10px; }
+.deposit-admin-price-row > div small { color: #a998b7; font-size: 8px; }
+.deposit-admin-price-row input { min-width: 0; min-height: 36px; padding: 0 8px; }
+.deposit-admin-price-row button { min-height: 36px; padding: 0 10px; font-size: 9px; }
+.deposit-admin-queue-card .admin-data-note,.deposit-admin-prices-card .admin-data-note { color: #ad9cbd; font-size: 9px; line-height: 1.5; }
+
+/* Party Neon uses violet, indigo and champagne gold throughout. No red controls. */
+.app.theme-party {
+  --case-red:#8f63c9;
+  --case-red-light:#c29af0;
+  --ice-2:#d8b7ff;
+  --ice-3:#a878db;
+  --ice-line:rgba(191,151,235,.28);
+  --ice-panel:rgba(37,23,56,.92);
+  --ice-panel-2:rgba(52,31,76,.96);
+  --ice-muted:#cbbbdc;
+  --ice-bg:#0b0712;
+  --ice-gold:#ffe1a0;
+  --case-gold:#ffe1a0;
+}
+.app.theme-party .navigation button:hover,
+.app.theme-party .navigation button.active { border-color:rgba(255,218,143,.55) !important; background:linear-gradient(125deg,#895db2,#4c326b 78%) !important; box-shadow:0 7px 22px rgba(120,82,161,.22),inset 0 1px rgba(255,255,255,.14) !important; }
+.app.theme-party .cases-eyebrow,.app.theme-party .season-kicker,.app.theme-party .inventory-kicker,.app.theme-party .deposit-section-heading b { color:#d8b7ff !important; }
+.app.theme-party .case-detail-controls .count-button.active,.app.theme-party .case-open-main,.app.theme-party .case-skip-button,.app.theme-party .event-sale-pill,.app.theme-party .promo-redeem-button,.app.theme-party .promo-admin-submit,.app.theme-party .reward-upgrade-button {
+  border-color:rgba(255,225,160,.42) !important;
+  background:linear-gradient(120deg,#9a70c8,#63438b 58%,#3c2856) !important;
+  color:#fff !important;
+  box-shadow:0 8px 22px rgba(108,74,151,.25) !important;
+}
+.app.theme-party .case-fast-toggle input { accent-color:#b88ce6 !important; }
+.app.theme-party .case-max-badge,.app.theme-party .case-detail-max { border-color:rgba(255,232,183,.55) !important; background:linear-gradient(120deg,#ffe4a2,#b88b4d) !important; color:#2b1a3b !important; }
+.app.theme-party .case-content-item { border-left-color:#c49be9 !important; }
+.app.theme-party .case-roulette-pointer { background:#fff7df !important; box-shadow:0 0 12px #fff7df,0 0 25px #c49be9 !important; }
+.app.theme-party .upgrade-column-title > span { background:linear-gradient(135deg,#a978d8,#5e4383) !important; }
+.app.theme-party .upgrade-wheel-rotor { border-color:#9e79c6 !important; box-shadow:0 0 0 5px #20142d,0 0 35px rgba(199,157,239,.2),inset 0 0 20px #0008 !important; }
+.app.theme-party .wheel-glow { background:#b58be3 !important; }
+.app.theme-party .chance-button.active { border-color:#ffe1a0 !important; background:linear-gradient(135deg,#9d70c8,#5b3d82) !important; box-shadow:0 0 16px rgba(255,225,160,.18) !important; }
+.app.theme-party .upgrade-start-button { background:linear-gradient(135deg,#9d70c8,#5b3d82) !important; }
+.app.theme-party .admin-input:focus { border-color:#c79be9 !important; box-shadow:0 0 0 3px rgba(190,150,230,.13) !important; }
+.app.theme-party .menu-trigger:hover { border-color:#ffe1a0 !important; background:linear-gradient(145deg,#7f5aa5,#39274f) !important; }
+.app.theme-party .menu-drawer-brand > span,.app.theme-party .menu-player-avatar,.app.theme-party .leaderboard-avatar,.app.theme-party .profile-avatar,.app.theme-party .mission-icon,.app.theme-party .settings-icon,.app.theme-party .player-history-icon { border-color:rgba(255,225,160,.3) !important; background:linear-gradient(145deg,#8e68b3,#493264) !important; color:#fff2d4 !important; }
+.app.theme-party .global-event-tacos,.app.theme-party .global-event-red_fever,.app.theme-party .global-event-lucky,.app.theme-party .global-event-gold_rush,.app.theme-party .global-event-jackpot_hunt,.app.theme-party .global-event-strawberry,.app.theme-party .global-event-case_sale,.app.theme-party .global-event-power_upgrade,.app.theme-party .global-event-night_shift { background:linear-gradient(110deg,#49315f,#8d68b5 58%,#b28b54) !important; }
+.app.theme-party .home-welcome-emblem { color:#ffe1a0 !important; text-shadow:0 0 24px rgba(255,225,160,.4) !important; }
+.app.theme-party .winter-audio-toggle.is-on { border-color:rgba(255,225,160,.45) !important; background:linear-gradient(135deg,#8e67b5,#51346f) !important; color:#fff !important; }
+.app.theme-party .leaderboard-row.top-player { border-color:rgba(255,225,160,.4) !important; background:linear-gradient(100deg,rgba(138,102,174,.22),rgba(53,35,74,.45)) !important; }
+.app.theme-party .mission-progress span { background:linear-gradient(90deg,#8860b3,#d5b2f5) !important; box-shadow:0 0 12px rgba(178,135,220,.25) !important; }
+.app.theme-party .profile-identity span { color:#f7e9ff !important; background:rgba(130,93,167,.25) !important; border-color:rgba(193,153,232,.24) !important; }
+.app.theme-party .hub-feedback { color:#f3e7ff !important; background:rgba(96,69,125,.22) !important; border-color:rgba(193,153,232,.25) !important; }
+.app.theme-party .admin-metric-card { border-color:rgba(193,153,232,.24) !important; background:linear-gradient(145deg,rgba(69,47,91,.88),rgba(30,20,43,.96)) !important; }
+.app.theme-party .admin-metric-card::after { background:rgba(191,151,235,.1) !important; }
+.app.theme-party .stars-modal { border-color:rgba(194,155,232,.42) !important; background:radial-gradient(ellipse at 50% 0%,rgba(135,94,177,.25),transparent 55%),linear-gradient(145deg,#352448,#140d20 75%) !important; }
+.app.theme-party .stars-modal-close,.app.theme-party .stars-amount-input,.app.theme-party .stars-presets button { border-color:rgba(194,155,232,.26) !important; background:#21152f !important; color:#fff !important; }
+.app.theme-party .stars-modal-kicker,.app.theme-party .stars-field-label,.app.theme-party .stars-method-check { color:#d7b4fa !important; }
+.app.theme-party .stars-method-card { border-color:rgba(194,155,232,.25) !important; background:linear-gradient(110deg,#53386e,#2a1b3d) !important; }
+.app.theme-party .stars-presets button.selected { border-color:#ffe1a0 !important; background:#76559a !important; box-shadow:0 0 16px rgba(194,155,232,.2) !important; }
+.app.theme-party .quiz-card,.app.theme-party .quiz-question,.app.theme-party .quiz-option,.app.theme-party .quiz-status-grid>div,.app.theme-party .quiz-empty { border-color:rgba(194,155,232,.22) !important; background:linear-gradient(145deg,rgba(64,44,85,.94),rgba(25,16,37,.98)) !important; }
+.app.theme-party .quiz-crystal { border-color:rgba(255,225,160,.35) !important; background:radial-gradient(circle,rgba(173,133,218,.24),transparent 70%) !important; color:#fff !important; box-shadow:0 0 32px rgba(173,133,218,.16) !important; }
+.app.theme-party .promo-redeem-card { border-color:rgba(194,155,232,.3) !important; background:radial-gradient(circle at 50% 0%,rgba(145,104,183,.2),transparent 52%),linear-gradient(150deg,rgba(64,44,85,.96),rgba(25,16,37,.98)) !important; }
+.app.theme-party .promo-card-emblem { border-color:rgba(255,225,160,.32) !important; background:linear-gradient(145deg,rgba(160,119,199,.35),rgba(66,44,89,.7)) !important; }
+.app.theme-party .promo-redeem-form label,.app.theme-party .promo-admin-main span { color:#d8b7ff !important; }
+.app.theme-party .collection-card-art { background:radial-gradient(ellipse at 50% 48%,rgba(174,133,220,.18),transparent 70%),linear-gradient(145deg,rgba(65,45,86,.9),rgba(25,16,37,.95)) !important; }
+.app.theme-party .collection-card-art img { filter:drop-shadow(0 8px 15px rgba(174,133,220,.2)) !important; }
+.app.theme-party .settings-switch.active { border-color:rgba(255,225,160,.45) !important; background:rgba(129,91,163,.38) !important; color:#ffe8b5 !important; }
+.app.theme-party .case-skip-button { border-color:rgba(255,225,160,.35) !important; background:linear-gradient(120deg,#8c65b4,#4e356e) !important; color:#fff !important; box-shadow:0 0 22px rgba(164,123,205,.2) !important; }
+.app.theme-party .reward-modal { border-color:rgba(255,225,160,.35) !important; background:radial-gradient(ellipse at 50% 0%,#60437e,#2b1b3e 65%,#130d1d) !important; color:#fff !important; }
+.app.theme-party .reward-modal-kicker,.app.theme-party .reward-modal-sparkle { color:#ffe1a0 !important; }
+.app.theme-party .reward-modal-item { border-color:rgba(194,155,232,.25) !important; background:linear-gradient(155deg,#50396a,#251831) !important; }
+.app.theme-party .reward-modal-art { background:radial-gradient(circle,rgba(176,131,223,.22),transparent 70%) !important; }
+.app.theme-party .reward-modal-art img { filter:drop-shadow(0 8px 18px rgba(171,126,219,.3)) !important; }
+.app.theme-party .global-message-toast { border-color:rgba(194,155,232,.35) !important; background:linear-gradient(135deg,rgba(74,49,98,.97),rgba(27,17,40,.98)) !important; }
+.app.theme-party .global-message-toast b { color:#ffe1a0 !important; }
+.app.theme-party .upgrade-message.error,.app.theme-party .admin-feedback.error,.app.theme-party .deposit-feedback.error { border-color:rgba(255,211,107,.34) !important; background:rgba(112,82,43,.16) !important; color:#ffe1a0 !important; }
+.app.theme-party .upgrade-result.lose { border-color:rgba(193,153,232,.32) !important; background:linear-gradient(145deg,rgba(79,57,101,.88),rgba(31,20,43,.97)) !important; }
+.app.theme-party .live-pulse { background:#c49be9 !important; box-shadow:0 0 12px rgba(196,155,233,.6) !important; }
+.app.theme-party .rarity-rare,.app.theme-party .rarity-epic { --rarity-color:#bd91e8; }
+.app.theme-party .deposit-modal { border-color:rgba(194,155,232,.4) !important; background:radial-gradient(ellipse at 50% 0%,rgba(127,87,167,.24),transparent 55%),linear-gradient(145deg,#342347,#130d1e 80%) !important; color:#fff !important; }
+.app.theme-party .deposit-method-tabs,.app.theme-party .deposit-stepper > div,.app.theme-party .deposit-brainrot-card,.app.theme-party .deposit-mutation-grid button,.app.theme-party .deposit-trait-preview,.app.theme-party .deposit-trait-option,.app.theme-party .deposit-review-card,.app.theme-party .deposit-request-status,.app.theme-party .deposit-admin-request,.app.theme-party .deposit-admin-price-row { border-color:rgba(194,155,232,.2) !important; background:linear-gradient(145deg,rgba(65,44,87,.58),rgba(24,15,36,.94)) !important; }
+.app.theme-party .deposit-method-tabs button.active,.app.theme-party .deposit-stepper > div.active,.app.theme-party .deposit-brainrot-card.active,.app.theme-party .deposit-mutation-grid button.active,.app.theme-party .deposit-trait-option.active { border-color:rgba(255,225,160,.55) !important; background:linear-gradient(145deg,rgba(131,94,168,.5),rgba(48,31,68,.92)) !important; }
+.app.theme-party .deposit-stepper > div.active i,.app.theme-party .deposit-selected-mark { background:linear-gradient(135deg,#ffe1a0,#b98d54) !important; color:#291b3b !important; }
+.app.theme-party .deposit-brainrot-card img,.app.theme-party .deposit-review-card img,.app.theme-party .deposit-request-summary img,.app.theme-party .deposit-admin-price-row img { background:radial-gradient(circle,rgba(180,138,224,.2),transparent 72%) !important; }
+.app.theme-party .deposit-estimate { border-color:rgba(255,225,160,.3) !important; background:linear-gradient(120deg,rgba(116,82,151,.24),rgba(255,225,160,.07)) !important; }
+.app.theme-party .deposit-estimate b,.app.theme-party .deposit-request-summary strong,.app.theme-party .deposit-review-card strong,.app.theme-party .deposit-admin-request-total b { color:#ffe1a0 !important; }
+.app.theme-party .deposit-username-input-wrap,.app.theme-party .deposit-admin-price-row input { border-color:rgba(194,155,232,.28) !important; background:#1d142a !important; color:#fff !important; }
+.app.theme-party .deposit-trade-instructions { border-color:rgba(255,225,160,.25) !important; background:rgba(124,91,50,.12) !important; }
+.app.theme-party .deposit-trade-instructions > b { color:#ffe1a0 !important; }
+.app.theme-party .deposit-success-message { border-color:rgba(160,215,188,.28) !important; background:rgba(59,112,83,.16) !important; color:#c4eed8 !important; }
+.app.theme-party .deposit-failed-message,.app.theme-party .deposit-reject-button { border-color:rgba(255,225,160,.3) !important; background:rgba(124,91,50,.16) !important; color:#ffe1a0 !important; }
+.app.theme-party .deposit-admin-status { border-color:rgba(194,155,232,.3) !important; background:rgba(126,88,165,.2) !important; color:#ead7fb !important; }
+.app.theme-party .deposit-trait-option b { color:#ffe1a0 !important; }
+.app.theme-party .settings-theme-option.active { border-color:#ffe1a0 !important; box-shadow:0 0 0 1px rgba(255,225,160,.16),0 10px 24px rgba(0,0,0,.2) !important; }
+.app.theme-party .settings-theme-current,.app.theme-party .settings-theme-check { border-color:rgba(255,225,160,.28) !important; background:rgba(130,96,158,.22) !important; color:#ffe6b1 !important; }
+.app.theme-party .theme-preview-party { background:radial-gradient(circle at 70% 20%,rgba(255,225,160,.25),transparent 35%),linear-gradient(135deg,#302044,#0b0712) !important; }
+.app.theme-party .deposit-admin-trait-check > b,.app.theme-party .deposit-admin-verified-traits > b { color:#ffe1a0 !important; }
+.app.theme-party .deposit-trait-option.disabled { opacity:.34; }
+@media(max-width:700px) {
+  .deposit-brainrot-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .deposit-mutation-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .deposit-traits-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .deposit-stepper > div { justify-content:center; padding:8px 4px; }
+  .deposit-stepper > div span { font-size:8px; }
+  .deposit-admin-price-row { grid-template-columns:42px minmax(0,1fr) 90px; }
+  .deposit-admin-price-row img { width:42px; height:42px; }
+  .deposit-admin-price-row button { grid-column:2 / -1; }
+}
+@media(max-width:420px) {
+  .deposit-brainrot-grid { gap:7px; }
+  .deposit-brainrot-card { min-height:148px; padding:9px 7px; }
+  .deposit-brainrot-card img { height:82px; }
+  .deposit-mutation-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .deposit-stepper { gap:4px; }
+  .deposit-stepper > div { flex-direction:column; gap:4px; }
+  .deposit-actions-row { grid-template-columns:1fr; }
+}
+
+/* Party Neon: remaining legacy red accents converted to violet/champagne. */
+.app.theme-party .live-drops-bar { border-color:rgba(193,153,232,.24) !important; background:linear-gradient(100deg,rgba(69,47,91,.94),rgba(27,18,40,.96)) !important; }
+.app.theme-party .live-drop-chip { border-color:rgba(193,153,232,.18) !important; background:rgba(82,58,107,.32) !important; }
+.app.theme-party .live-drop-chip strong { color:#ffe1a0 !important; }
+.app.theme-party .event-music-notice { border-color:rgba(255,225,160,.28) !important; background:linear-gradient(120deg,#715292,#3a2851) !important; color:#fff0c7 !important; }
+.app.theme-party .stars-pay-button { border-color:rgba(255,225,160,.38) !important; background:linear-gradient(135deg,#9870c0,#583a7d) !important; color:#fff !important; }
+.app.theme-party .case-detail-controls .count-button.active { border-color:rgba(255,225,160,.5) !important; background:linear-gradient(120deg,#8d65b5,#50366f) !important; color:#fff !important; }
+.app.theme-party .inventory-sell-all { background:linear-gradient(120deg,#9470bd,#594078) !important; }
+.app.theme-party .upgrade-result.win { border-color:rgba(255,225,160,.38) !important; background:linear-gradient(145deg,rgba(103,80,125,.88),rgba(37,25,51,.97)) !important; }
+.app.theme-party .upgrade-result.lose { border-color:rgba(193,153,232,.3) !important; background:linear-gradient(145deg,rgba(67,49,87,.88),rgba(28,20,39,.97)) !important; }
+.app.theme-party .upgrade-message.error,.app.theme-party .admin-feedback.error { border-color:rgba(255,211,107,.34) !important; background:rgba(112,82,43,.16) !important; color:#ffe1a0 !important; }
+.app.theme-party .event-sale-pill { border-color:rgba(255,225,160,.4) !important; background:linear-gradient(120deg,#9270ba,#574078) !important; color:#fff !important; }
+.app.theme-party .case-theme-red,.app.theme-party .case-theme-scarlet,.app.theme-party .case-theme-blood,.app.theme-party .case-theme-vault,.app.theme-party .case-theme-royal,.app.theme-party .case-theme-crown,.app.theme-party .case-theme-strawberry,.app.theme-party .case-theme-headless { border-color:rgba(193,153,232,.24) !important; }
+.app.theme-party .reward-modal .reward-upgrade-button { background:linear-gradient(120deg,#9670bd,#5c407b) !important; }
+.app.theme-party .settings-theme-option.active { border-color:#ffe1a0 !important; }
+.app.theme-party .deposit-status.status-rejected,.app.theme-party .deposit-admin-status.status-rejected { border-color:rgba(255,211,107,.3) !important; background:rgba(126,91,45,.15) !important; color:#ffe1a0 !important; }
+.app.theme-party .deposit-admin-status.status-completed { border-color:rgba(151,216,186,.28) !important; background:rgba(53,116,82,.14) !important; color:#c6f0d9 !important; }
+.app.theme-party .deposit-admin-status.status-waiting_trade,.app.theme-party .deposit-admin-status.status-trade_received { border-color:rgba(193,153,232,.3) !important; background:rgba(128,89,168,.18) !important; color:#ead7fb !important; }
+.app.theme-party .winter-snow > .snowflake { display:none !important; }
+.app.theme-party .strawberry-mutation-pill { border-color:rgba(211,174,247,.34) !important; background:linear-gradient(120deg,rgba(133,91,175,.32),rgba(75,48,104,.4)) !important; color:#ead8ff !important; }
+.app.theme-party .case-content-item.rarity-rare,.app.theme-party .case-roulette-item.rarity-rare.is-winner { border-left-color:#b48adf !important; background:linear-gradient(180deg,rgba(111,78,145,.78),rgba(34,22,49,.98)) !important; }
+
+/* Keep the optional Red & White theme internally consistent for the deposit flow. */
+.app.theme-red .deposit-method-tabs button.active,
+.app.theme-red .deposit-stepper > div.active,
+.app.theme-red .deposit-brainrot-card.active,
+.app.theme-red .deposit-mutation-grid button.active,
+.app.theme-red .deposit-trait-option.active { border-color:rgba(255,119,140,.5) !important; background:linear-gradient(145deg,rgba(157,22,51,.5),rgba(54,10,24,.94)) !important; }
+.app.theme-red .deposit-stepper > div.active i,.app.theme-red .deposit-selected-mark { background:linear-gradient(135deg,#ff9aaa,#bd2444) !important; color:#fff !important; }
+.app.theme-red .deposit-estimate { border-color:rgba(255,119,140,.28) !important; background:linear-gradient(120deg,rgba(141,22,47,.24),rgba(255,255,255,.03)) !important; }
+.app.theme-red .deposit-estimate b,.app.theme-red .deposit-request-summary strong,.app.theme-red .deposit-review-card strong,.app.theme-red .deposit-admin-request-total b { color:#fff !important; }
+.app.theme-red .deposit-trade-instructions { border-color:rgba(255,119,140,.22) !important; background:rgba(125,22,48,.12) !important; }
+.app.theme-red .deposit-trade-instructions > b { color:#ffc5cf !important; }
+.app.theme-red .deposit-reject-button,.app.theme-red .deposit-failed-message { border-color:rgba(255,119,140,.3) !important; background:rgba(126,16,42,.2) !important; color:#ffc5cf !important; }
