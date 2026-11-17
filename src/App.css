@@ -3699,3 +3699,270 @@ body[data-braingg-theme="party"] {
 .app.theme-red .deposit-trade-instructions { border-color:rgba(255,119,140,.22) !important; background:rgba(125,22,48,.12) !important; }
 .app.theme-red .deposit-trade-instructions > b { color:#ffc5cf !important; }
 .app.theme-red .deposit-reject-button,.app.theme-red .deposit-failed-message { border-color:rgba(255,119,140,.3) !important; background:rgba(126,16,42,.2) !important; color:#ffc5cf !important; }
+
+/* =========================================================
+   Party Neon final polish: violet / indigo / champagne only.
+   This block intentionally comes last to override legacy red
+   declarations from the original Red & White theme.
+   ========================================================= */
+.app.theme-party {
+  --case-red:#8d68b5;
+  --case-red-light:#c7a8e8;
+  --ice-0:#fffaff;
+  --ice-1:#f0e5fb;
+  --ice-2:#d8b7ff;
+  --ice-3:#a77bd5;
+  --ice-line:rgba(193,153,232,.28);
+  --ice-panel:rgba(43,29,62,.92);
+  --ice-panel-2:rgba(57,38,80,.96);
+  --ice-muted:#cbbbdc;
+  --ice-bg:#0b0712;
+  --ice-gold:#ffe1a0;
+  --case-gold:#ffe1a0;
+}
+
+/* Keep event overlays in the selected Party Neon palette too. */
+body[data-braingg-theme="party"][data-braingg-event] {
+  background:
+    radial-gradient(ellipse at 50% -18%,rgba(133,91,175,.28),transparent 58%),
+    radial-gradient(ellipse at 8% 72%,rgba(76,105,145,.13),transparent 42%),
+    linear-gradient(155deg,#241535 0%,#130d20 52%,#08050e 100%) !important;
+  background-attachment:fixed !important;
+}
+.app.theme-party.event-theme-tacos::before,
+.app.theme-party.event-theme-red_fever::before,
+.app.theme-party.event-theme-lucky::before,
+.app.theme-party.event-theme-gold_rush::before,
+.app.theme-party.event-theme-jackpot_hunt::before,
+.app.theme-party.event-theme-strawberry::before,
+.app.theme-party.event-theme-case_sale::before,
+.app.theme-party.event-theme-power_upgrade::before,
+.app.theme-party.event-theme-night_shift::before {
+  background-image:radial-gradient(rgba(216,183,255,.12) 1px,transparent 1px) !important;
+  background-size:34px 34px !important;
+}
+
+/* Case detail hero — remove the old burgundy/red panel completely. */
+.app.theme-party .case-detail-summary {
+  border-color:rgba(193,153,232,.32) !important;
+  background:
+    radial-gradient(circle at 92% 8%,rgba(173,132,219,.22),transparent 36%),
+    linear-gradient(155deg,rgba(65,45,87,.98),rgba(26,17,40,.99)) !important;
+  box-shadow:0 16px 34px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.06) !important;
+}
+.app.theme-party .case-detail-kicker { color:#d8b7ff !important; }
+.app.theme-party .case-detail-summary h2 { color:#fff8ed !important; }
+.app.theme-party .case-detail-summary p { color:#d4c4e7 !important; }
+.app.theme-party .case-detail-quick-stats > div {
+  border-color:rgba(193,153,232,.24) !important;
+  background:linear-gradient(145deg,rgba(89,64,116,.3),rgba(35,23,51,.58)) !important;
+}
+.app.theme-party .case-detail-quick-stats small { color:#c9b3df !important; }
+.app.theme-party .case-detail-quick-stats b { color:#fff7e7 !important; }
+.app.theme-party .case-back-button,
+.app.theme-party .case-fast-toggle {
+  border-color:rgba(193,153,232,.3) !important;
+  background:linear-gradient(145deg,rgba(67,47,91,.94),rgba(31,21,47,.98)) !important;
+  color:#eadcf8 !important;
+}
+.app.theme-party .case-back-button:hover {
+  border-color:rgba(255,225,160,.55) !important;
+  background:linear-gradient(145deg,#76569a,#3b2855) !important;
+  color:#fff6dc !important;
+}
+.app.theme-party .case-detail-controls .count-button,
+.app.theme-party .case-detail-controls .case-fast-toggle {
+  border-color:rgba(193,153,232,.28) !important;
+  background:linear-gradient(145deg,#3c2a53,#21152f) !important;
+  color:#e8dcf5 !important;
+}
+.app.theme-party .case-detail-controls .count-button.active {
+  border-color:rgba(255,225,160,.58) !important;
+  background:linear-gradient(120deg,#9873bd,#60447f) !important;
+  color:#fff !important;
+}
+.app.theme-party .case-detail-max,
+.app.theme-party .case-max-badge {
+  border-color:rgba(255,235,190,.62) !important;
+  background:linear-gradient(120deg,#ffe7ad,#b99661) !important;
+  color:#2b1d3b !important;
+}
+.app.theme-party .case-detail-visual,
+.app.theme-party .case-card-art,
+.app.theme-party .case-card-art.case-artwork {
+  border-color:rgba(193,153,232,.3) !important;
+  background:radial-gradient(ellipse at 50% 42%,rgba(169,125,213,.28),transparent 68%),linear-gradient(145deg,#3a2850,#1b122b) !important;
+}
+.app.theme-party .case-detail-visual::after,
+.app.theme-party .case-card-art::after {
+  background:radial-gradient(circle,rgba(166,125,213,.3),transparent 70%) !important;
+}
+.app.theme-party .case-detail-art-frame img,
+.app.theme-party .case-card-art img,
+.app.theme-party .case-card-art.case-artwork img {
+  filter:drop-shadow(0 12px 24px rgba(166,125,213,.28)) !important;
+}
+.app.theme-party .case-card-reference::before {
+  background:linear-gradient(110deg,transparent 25%,rgba(215,190,245,.1) 48%,transparent 70%) !important;
+}
+.app.theme-party .case-card-reference,
+.app.theme-party .case-card-reference:hover {
+  border-color:rgba(193,153,232,.28) !important;
+  background:linear-gradient(155deg,rgba(59,40,80,.96),rgba(22,14,34,.99)) !important;
+}
+.app.theme-party .case-card-open-label {
+  border-color:rgba(255,225,160,.35) !important;
+  background:linear-gradient(120deg,#8f6bb7,#523a70) !important;
+  color:#fff !important;
+}
+
+/* Case roulette and contents. */
+.app.theme-party .case-opening-stage {
+  border-color:rgba(193,153,232,.34) !important;
+  background:radial-gradient(circle at top,rgba(173,132,219,.2),transparent 42%),linear-gradient(180deg,#30203f,#160e22) !important;
+}
+.app.theme-party .case-opening-stage::before {
+  background:linear-gradient(105deg,transparent 38%,rgba(216,183,255,.1) 50%,transparent 62%) !important;
+}
+.app.theme-party .case-opening-stage-header span { color:#d8b7ff !important; }
+.app.theme-party .case-opening-stage.is-spinning .case-opening-stage-header span {
+  color:#ffe1a0 !important;
+  text-shadow:0 0 16px rgba(255,225,160,.35) !important;
+}
+.app.theme-party .case-roulette-stack .case-roulette-viewport,
+.app.theme-party .case-roulette-stack .case-roulette-strip {
+  border-color:rgba(193,153,232,.3) !important;
+  background:linear-gradient(90deg,#170f23,#3b2852 50%,#170f23) !important;
+  box-shadow:inset 0 0 30px rgba(166,125,213,.13) !important;
+}
+.app.theme-party .case-roulette-stack.is-rolling .case-roulette-viewport {
+  border-color:rgba(216,183,255,.52) !important;
+  box-shadow:inset 0 0 32px rgba(166,125,213,.2),0 0 18px rgba(166,125,213,.12) !important;
+}
+.app.theme-party .case-roulette-stack .case-roulette-item {
+  border-color:rgba(193,153,232,.2) !important;
+  background:linear-gradient(180deg,rgba(82,60,108,.86),rgba(31,21,46,.98)) !important;
+}
+.app.theme-party .case-roulette-stack .case-roulette-item > img {
+  background:radial-gradient(circle,rgba(166,125,213,.22),transparent 72%) !important;
+  filter:drop-shadow(0 8px 18px rgba(166,125,213,.25)) !important;
+}
+.app.theme-party .case-roulette-stack .case-roulette-item.is-winner,
+.app.theme-party .case-roulette-stack .case-roulette-item.rarity-rare.is-winner,
+.app.theme-party .case-roulette-stack .case-roulette-item.rarity-epic.is-winner {
+  border-color:rgba(255,225,160,.55) !important;
+  background:linear-gradient(180deg,rgba(129,94,163,.94),rgba(53,35,76,.99)) !important;
+  box-shadow:inset 0 0 26px rgba(255,225,160,.15),0 0 24px rgba(188,151,232,.2) !important;
+}
+.app.theme-party .case-roulette-stack .case-roulette-item.rarity-legendary.is-winner,
+.app.theme-party .case-roulette-stack .case-roulette-item.rarity-mythic.is-winner,
+.app.theme-party .case-roulette-stack .case-roulette-item.rarity-secret.is-winner,
+.app.theme-party .case-roulette-stack .case-roulette-item.rarity-og.is-winner {
+  border-color:rgba(255,225,160,.65) !important;
+  background:linear-gradient(180deg,rgba(139,111,81,.92),rgba(57,42,65,.99)) !important;
+}
+.app.theme-party .case-roulette-stack .case-roulette-pointer {
+  background:#fff5d8 !important;
+  box-shadow:0 0 12px #fff5d8,0 0 25px #c49be9 !important;
+}
+.app.theme-party .case-roulette-row-label {
+  border-color:rgba(193,153,232,.32) !important;
+  background:rgba(31,20,46,.9) !important;
+  color:#eadcf8 !important;
+}
+.app.theme-party .case-contents-panel,
+.app.theme-party .case-payment-summary > div,
+.app.theme-party .case-content-item {
+  border-color:rgba(193,153,232,.25) !important;
+  background:linear-gradient(145deg,rgba(69,48,92,.92),rgba(26,17,40,.98)) !important;
+}
+.app.theme-party .case-content-item { border-left-color:#c49be9 !important; }
+.app.theme-party .case-contents-event-note {
+  border-color:rgba(193,153,232,.3) !important;
+  background:rgba(111,80,145,.2) !important;
+  color:#e6d7f6 !important;
+}
+.app.theme-party .case-skip-button {
+  border-color:rgba(255,225,160,.38) !important;
+  background:linear-gradient(120deg,#8d68b5,#50386e) !important;
+  color:#fff !important;
+}
+
+/* Remaining legacy red UI accents elsewhere in Party Neon. */
+.app.theme-party .stars-symbol { color:#ffe1a0 !important; }
+.app.theme-party .case-roulette-viewport.is-rare-winner,
+.app.theme-party .case-roulette-viewport.is-rare-winner .case-roulette-item.is-winner { background:linear-gradient(145deg,#73578f,#3a2a50) !important; }
+.app.theme-party .quiz-reward-pill { border-color:rgba(255,225,160,.28) !important; background:rgba(130,96,158,.22) !important; color:#ffe1a0 !important; }
+.app.theme-party .quiz-option.incorrect,
+.app.theme-party .quiz-feedback { border-color:rgba(193,153,232,.3) !important; background:rgba(91,67,119,.22) !important; color:#eadcf8 !important; }
+.app.theme-party .rarity-og { box-shadow:inset 0 0 0 1px rgba(255,225,160,.35) !important; }
+.app.theme-party .mutation-strawberry-image { filter:drop-shadow(0 5px 12px rgba(166,125,213,.2)) !important; }
+.app.theme-party .admin-event-card,
+.app.theme-party .admin-event-card.is-active,
+.app.theme-party .admin-event-tacos,
+.app.theme-party .admin-event-strawberry {
+  border-color:rgba(193,153,232,.28) !important;
+  background:linear-gradient(145deg,rgba(65,45,87,.9),rgba(26,17,40,.97)) !important;
+  box-shadow:0 0 18px rgba(166,125,213,.12) !important;
+}
+.app.theme-party .admin-event-stop-button,
+.app.theme-party .promo-admin-disable,
+.app.theme-party .menu-close {
+  border-color:rgba(193,153,232,.3) !important;
+  background:rgba(102,76,132,.24) !important;
+  color:#eadcf8 !important;
+}
+.app.theme-party .promo-feedback.error,
+.app.theme-party .upgrade-message.error,
+.app.theme-party .admin-feedback.error,
+.app.theme-party .deposit-feedback.error {
+  border-color:rgba(255,225,160,.3) !important;
+  background:rgba(113,87,54,.18) !important;
+  color:#ffe1a0 !important;
+}
+.app.theme-party .global-activity-row.is-unsuccessful { border-color:rgba(193,153,232,.22) !important; background:rgba(91,67,119,.16) !important; }
+.app.theme-party .admin-inventory-thumb { background:radial-gradient(circle,rgba(166,125,213,.22),transparent 72%) !important; }
+.app.theme-party .profile-stat-grid article,
+.app.theme-party .collection-summary article,
+.app.theme-party .collection-card,
+.app.theme-party .drops-row,
+.app.theme-party .player-history-row,
+.app.theme-party .mission-card,
+.app.theme-party .promo-admin-row,
+.app.theme-party .settings-streamer-row .settings-icon {
+  border-color:rgba(193,153,232,.22) !important;
+  background:linear-gradient(145deg,rgba(62,44,82,.78),rgba(27,18,40,.95)) !important;
+}
+.app.theme-party .home-stats-grid small,
+.app.theme-party .home-panel-heading .season-kicker,
+.app.theme-party .cases-overview-grid small,
+.app.theme-party .upgrade-overview-grid small { color:#d8c4eb !important; }
+.app.theme-party .upgrade-content .upgrade-middle,
+.app.theme-party .upgrade-content .actual-chance-info,
+.app.theme-party .upgrade-content .upgrade-selection-summary,
+.app.theme-party .inventory-hero {
+  border-color:rgba(193,153,232,.24) !important;
+  background:linear-gradient(155deg,rgba(65,45,87,.92),rgba(24,16,37,.98)) !important;
+}
+.app.theme-party .inventory-hero-icon,
+.app.theme-party .inventory-art,
+.app.theme-party .brainrot-thumb,
+.app.theme-party .case-roulette-item > img {
+  background:radial-gradient(circle,rgba(166,125,213,.22),transparent 72%) !important;
+}
+.app.theme-party .inventory-hero-icon img,
+.app.theme-party .inventory-art img { filter:drop-shadow(0 10px 20px rgba(166,125,213,.24)) !important; }
+.app.theme-party .case-card-reference-button:focus-visible,
+.app.theme-party .case-open-main:focus-visible,
+.app.theme-party .case-skip-button:focus-visible,
+.app.theme-party .home-action-card:focus-visible,
+.app.theme-party .upgrade-item:focus-visible { outline-color:#ffe1a0 !important; }
+.app.theme-party .case-content-item.rarity-legendary,
+.app.theme-party .reward-upgrade-all-note { color:#ffe1a0 !important; }
+.app.theme-party .case-content-item.rarity-legendary { border-left-color:#ffe1a0 !important; }
+.app.theme-party .upgrade-result.lose { border-color:rgba(193,153,232,.3) !important; background:linear-gradient(145deg,rgba(67,49,87,.88),rgba(28,20,39,.97)) !important; }
+.app.theme-party .strawberry-mutation-pill { border-color:rgba(211,174,247,.34) !important; background:linear-gradient(120deg,rgba(133,91,175,.32),rgba(75,48,104,.4)) !important; color:#ead8ff !important; }
+.app.theme-party .global-event-strawberry,
+.app.theme-party .global-event-case_sale {
+  background:linear-gradient(110deg,#49315f,#8d68b5 58%,#b28b54) !important;
+}
