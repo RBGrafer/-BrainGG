@@ -5,6 +5,7 @@ import { supabase } from "./supabase.js";
 import redHomeBackground from "./assets/braingg-red-home.svg";
 
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
+const DISABLED_PAGES = new Set(["Коллекция", "Достижения", "Глобальные события"]);
 const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Live Drops", "Глобальные события", "История", "Промокод", "Задания", "Достижения", "Админка"]);
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
@@ -56,32 +57,51 @@ function getCaseReelOffset(position) {
   return -(safePosition * itemWidth + itemWidth / 2);
 }
 
-// Local BrainGG character artwork. No emoji placeholders or fragile remote hotlinks.
+// Original BrainGG character artwork. All game cards use local image files (never emoji placeholders).
 const BRAINROT_ART = [
-  { match: ["ballerina cappuccina"], image: "/brainrots/mascot-1.webp" },
-  { match: ["bombardiro crocodilo"], image: "/brainrots/mascot-2.webp" },
-  { match: ["cappuccino assassino"], image: "/brainrots/mascot-3.webp" },
-  { match: ["los tralaleritos"], image: "/brainrots/mascot-5.webp" },
-  { match: ["noobini pizzanini"], image: "/brainrots/mascot-6.webp" },
-  { match: ["tralalero tralala", "dragon cannelloni", "dragon canneloni"], image: "/brainrots/mascot-7.webp" },
-  { match: ["trippi troppi"], image: "/brainrots/mascot-8.webp" },
-  { match: ["strawberry elephant"], image: "/brainrots/character-14.webp" },
-  { match: ["headless horseman"], image: "/brainrots/character-6.webp" },
-  { match: ["john pork"], image: "/brainrots/character-7.webp" },
-  { match: ["meowl"], image: "/brainrots/character-11.webp" },
-  { match: ["skibidi toilet"], image: "/brainrots/character-13.webp" },
-  { match: ["la grande combinasion"], image: "/brainrots/character-10.webp" },
-  { match: ["lirili larila", "brr brr patapim"], image: "/brainrots/character-9.webp" },
+  { match: ["ballerina cappuccina", "cappuccina"], image: "/brainrots/v17/cappuccino-ballerina.webp" },
+  { match: ["bombardiro crocodilo", "bombardiro"], image: "/brainrots/v17/crocodile-aviator.webp" },
+  { match: ["cappuccino assassino", "assassino"], image: "/brainrots/v17/ninja-espresso.webp" },
+  { match: ["los tralaleritos", "tralaleritos"], image: "/brainrots/v17/slime-squad.webp" },
+  { match: ["noobini pizzanini", "pizzanini"], image: "/brainrots/v17/pizza-golem.webp" },
+  { match: ["tralalero tralala", "dragon cannelloni", "dragon canneloni"], image: "/brainrots/v17/ice-dragon.webp" },
+  { match: ["trippi troppi"], image: "/brainrots/v17/roller-shrimp.webp" },
+  { match: ["strawberry elephant"], image: "/brainrots/v17/strawberry-rhino.webp" },
+  { match: ["headless horseman"], image: "/brainrots/v17/mushroom-knight.webp" },
+  { match: ["john pork"], image: "/brainrots/v17/masked-coffee-bean.webp" },
+  { match: ["meowl"], image: "/brainrots/v17/electric-sheep.webp" },
+  { match: ["skibidi toilet"], image: "/brainrots/v17/toast-crab.webp" },
+  { match: ["la grande combinasion"], image: "/brainrots/v17/pineapple-elephant.webp" },
+  { match: ["lirili larila", "brr brr patapim"], image: "/brainrots/v17/cactus-jellyfish.webp" },
+  { match: ["arcadragon", "dragon"], image: "/brainrots/v17/gecko-pilot.webp" },
+  { match: ["fishino clownino", "shrimp"], image: "/brainrots/v17/roller-shrimp.webp" },
+];
+const BRAINROT_FALLBACK_ART = [
+  "cappuccino-ballerina", "crocodile-aviator", "ninja-espresso", "pineapple-elephant",
+  "ice-dragon", "cactus-jellyfish", "pizza-golem", "gecko-pilot",
+  "roller-shrimp", "slime-squad", "masked-coffee-bean", "mushroom-knight",
+  "strawberry-rhino", "toast-crab", "raccoon-vendor", "electric-sheep",
 ];
 
 function brainrotImage(item) {
-  const name = String(item?.item_name || item?.name || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const name = String(item?.item_name || item?.name || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim();
   const local = BRAINROT_ART.find((entry) => entry.match.some((key) => name.includes(key)))?.image;
   if (local) return `${import.meta.env.BASE_URL}${local.replace(/^\/+/, "")}`;
-  // Every unlisted brainrot still gets its own deterministic local illustration.
+  // Stable fallback keeps every unknown database item associated with a real local illustration.
   const hash = [...name].reduce((value, char) => ((value * 31) + char.charCodeAt(0)) >>> 0, 7);
-  const fallback = name ? `brainrots/character-${(hash % 16) + 1}.webp` : "brainrots/character-3.webp";
-  return `${import.meta.env.BASE_URL}${fallback}`;
+  const fallback = BRAINROT_FALLBACK_ART[hash % BRAINROT_FALLBACK_ART.length] || BRAINROT_FALLBACK_ART[0];
+  return `${import.meta.env.BASE_URL}brainrots/v17/${fallback}.webp`;
+}
+
+function rarityClassName(value) {
+  const rarity = String(value || "common").toLowerCase();
+  if (rarity.includes("og")) return "rarity-og";
+  if (rarity.includes("secret") || rarity.includes("секрет")) return "rarity-secret";
+  if (rarity.includes("mythic") || rarity.includes("мифик") || rarity.includes("мифич")) return "rarity-mythic";
+  if (rarity.includes("legend") || rarity.includes("легендар")) return "rarity-legendary";
+  if (rarity.includes("epic") || rarity.includes("эпич")) return "rarity-epic";
+  if (rarity.includes("rare") || rarity.includes("редк")) return "rarity-rare";
+  return "rarity-common";
 }
 
 function caseImageSrc(item) {
@@ -137,7 +157,7 @@ export default function App() {
   const [streamerModeFeedback, setStreamerModeFeedback] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [openCount, setOpenCount] = useState(1);
-  const [fastOpen, setFastOpen] = useState(true);
+  const [fastOpen, setFastOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState(null);
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -228,9 +248,12 @@ export default function App() {
       { label: "Обучение", page: "Обучение", icon: "🎓", description: "Как играть и что делать" },
     ]},
   ];
-  const visibleMenuGroups = streamerMode
-    ? menuGroups.map((group) => ({ ...group, items: group.items.filter((item) => !STREAMER_RESTRICTED_PAGES.has(item.page)) })).filter((group) => group.items.length > 0)
-    : menuGroups;
+  const visibleMenuGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !DISABLED_PAGES.has(item.page) && !(streamerMode && STREAMER_RESTRICTED_PAGES.has(item.page))),
+    }))
+    .filter((group) => group.items.length > 0);
   const [customError, setCustomError] = useState("");
 
   // Состояние защищённой админ-панели BrainGG
@@ -258,6 +281,10 @@ export default function App() {
   const [adminEventFeedback, setAdminEventFeedback] = useState("");
   const [adminEventFeedbackError, setAdminEventFeedbackError] = useState(false);
   const [adminGameId, setAdminGameId] = useState("");
+
+  useEffect(() => {
+    if (DISABLED_PAGES.has(page)) setPage("Главная");
+  }, [page]);
   const [adminPlayer, setAdminPlayer] = useState(null);
   const [adminInventory, setAdminInventory] = useState([]);
   const [adminSearchLoading, setAdminSearchLoading] = useState(false);
@@ -1592,14 +1619,20 @@ export default function App() {
     const makeReel = (winner, rowIndex) => {
       const pool = caseRewards.length ? caseRewards : [];
       const fallback = ["Noobini Pizzanini", "Lirili Larila", "Trippi Troppi", "Ballerina Cappuccina", "Cappuccino Assassino", "Bombardiro Crocodilo"];
-      const cards = Array.from({ length:  41 }, (_, index) => {
+      const cards = Array.from({ length: 53 }, (_, index) => {
         const source = pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
         return source
-          ? { item_name: source.item_name, value_gg: source.value_gg, image: source.image || source.image_url || source.photo_url }
-          : { item_name: fallback[(index + rowIndex) % fallback.length], value_gg: 0 };
+          ? {
+              item_name: source.item_name,
+              value_gg: source.value_gg,
+              rarity: source.rarity,
+              mutation: source.mutation || null,
+              image: source.image || source.image_url || source.photo_url,
+            }
+          : { item_name: fallback[(index + rowIndex) % fallback.length], value_gg: 0, rarity: "Обычный" };
       });
-      // Each reel has its own winner slot; a small offset makes multi-open spins feel natural.
-      const winnerIndex = 34 + (rowIndex % 2);
+      // Each purchased case has its own winner position and slightly staggered stop.
+      const winnerIndex = 40 + (rowIndex * 2);
       cards[winnerIndex] = { ...winner, image: winner.image || winner.image_url || winner.photo_url };
       return { id: `reel-${rowIndex}`, cards, winnerIndex, position: 0, revealed: false };
     };
@@ -1645,7 +1678,8 @@ export default function App() {
         setSkipAvailable(true);
         await nextFrame();
         setReelRows((current) => current.map((row) => ({ ...row, position: row.winnerIndex })));
-        for (let elapsed = 0; elapsed < 5600 && !skipRequestedRef.current; elapsed += 100) await wait(100);
+        const maxSpinMs = 6700 + Math.max(0, rewards.length - 1) * 240;
+        for (let elapsed = 0; elapsed < maxSpinMs && !skipRequestedRef.current; elapsed += 100) await wait(100);
         setReelRows((current) => current.map((row) => ({ ...row, revealed: true })));
       }
 
@@ -1976,6 +2010,19 @@ export default function App() {
     opacity: 0.28 + ((index * 11) % 55) / 100,
     drift: `${((index * 17) % 100) - 50}px`,
   }));
+  const featuredInventory = [...inventory].sort((a, b) => Number(b.value_gg || 0) - Number(a.value_gg || 0)).slice(0, 4);
+  const homeActionCards = streamerMode
+    ? [
+        { page: "Задания", title: "Задания", description: "Забирай награды за активность", metric: `${gameHub.tasks?.length || 0} миссий` },
+        { page: "Викторина", title: "Викторина", description: "Отвечай быстро и зарабатывай GG", metric: `${quizStatus.remaining || 0} попыток` },
+        { page: "Настройки", title: "Настройки", description: "Управляй звуком и режимами", metric: musicEnabled ? "Музыка включена" : "Музыка выключена" },
+      ]
+    : [
+        { page: "Кейсы", title: "Кейсы", description: "Открывай обновлённые кейсы с плавной рулеткой", metric: `${cases.length} кейсов` },
+        { page: "Апгрейдер", title: "Апгрейдер", description: "Честный 10-секундный апгрейдер без подкрутов", metric: selectedUpgrade ? "Выбран предмет" : "Готов к запуску" },
+        { page: "Инвентарь", title: "Инвентарь", description: "Смотри лучшие брейнроты в красивых карточках", metric: `${inventory.length} предметов` },
+      ];
+  const totalCaseMaxReward = cases.reduce((max, item) => Math.max(max, Number(item.maxReward || 0)), 0);
 
   return (
     <div className={`app ${!streamerMode && globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
@@ -2090,9 +2137,9 @@ export default function App() {
             <div className="live-drops-heading"><span className="live-pulse" /> <b>LIVE DROPS</b><small>ПОСЛЕДНИЕ ВЫПАДЕНИЯ</small></div>
             <div className="live-drops-track">
               {liveDrops.length ? liveDrops.map((drop) => (
-                <article className="live-drop-chip" key={drop.id}>
+                <article className={`live-drop-chip ${rarityClassName(drop.rarity)}`} key={drop.id}>
                   <div className="live-drop-art"><img className={drop.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(drop)} alt={drop.item_name || "Brainrot"} loading="lazy" /></div>
-                  <div><b>{drop.item_name}{drop.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b><small>{drop.username ? `@${drop.username}` : "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
+                  <div><b>{drop.item_name}{drop.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY</span> : null}</b><small>{drop.username ? `@${drop.username}` : "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
                   {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
                 </article>
               )) : <div className="live-drops-empty">Здесь появятся реальные выигрыши после открытия кейса</div>}
@@ -2111,8 +2158,42 @@ export default function App() {
                 <p className="home-greeting">Привет, <b>{greetingLabel}!</b></p>
                 <h2>Добро пожаловать в BrainGG!</h2>
                 <p>{streamerMode ? "Собирай коллекцию, проходи викторины и выполняй задания сообщества." : "Открывай кейсы, собирай персонажей и улучшай свою коллекцию."}</p>
-                <p className="home-luck">{streamerMode ? "Трансляция в безопасном режиме просмотра" : "Удачи!"}</p>
-                <button className="main-button" onClick={() => changePage(streamerMode ? "Коллекция" : "Кейсы")}>{streamerMode ? "Открыть коллекцию 📚" : "Смотреть кейсы 🎁"}</button>
+                <p className="home-luck">{streamerMode ? "Трансляция в безопасном режиме просмотра" : "Обновлённый Red & White сезон уже активен"}</p>
+                <div className="home-cta-row">
+                  <button className="main-button" onClick={() => changePage(streamerMode ? "Инвентарь" : "Кейсы")}>{streamerMode ? "Открыть коллекцию" : "Смотреть кейсы"}</button>
+                  {!streamerMode && <button className="case-button" onClick={() => changePage("Апгрейдер")}>Перейти в апгрейдер</button>}
+                </div>
+                <section className="home-stats-grid">
+                  <article><small>Баланс</small><b>{Number(player?.balance || 0).toLocaleString("ru-RU")} GG</b></article>
+                  <article><small>Инвентарь</small><b>{inventory.length} предметов</b></article>
+                  <article><small>Стрик</small><b>{gameHub.progress?.daily_streak || 0} дней</b></article>
+                  <article><small>Топ-кейс</small><b>{totalCaseMaxReward ? `${totalCaseMaxReward.toLocaleString("ru-RU")} GG` : "—"}</b></article>
+                </section>
+                <section className="home-actions-panel">
+                  <div className="home-panel-heading"><span className="season-kicker">QUICK ACTIONS</span><h3>Главные режимы</h3></div>
+                  <div className="home-actions-grid">
+                    {homeActionCards.map((item) => (
+                      <button key={item.page} className="home-action-card" onClick={() => changePage(item.page)}>
+                        <div><b>{item.title}</b><p>{item.description}</p></div>
+                        <span>{item.metric}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                {!streamerMode && featuredInventory.length > 0 && (
+                  <section className="home-featured-panel">
+                    <div className="home-panel-heading"><span className="season-kicker">HOT BRAINROTS</span><h3>Лучшие предметы в инвентаре</h3></div>
+                    <div className="home-featured-grid">
+                      {featuredInventory.map((item) => (
+                        <article key={item.id} className={`home-featured-card ${rarityClassName(item.rarity)}`}>
+                          <img src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
+                          <div><b>{item.item_name}</b><small>{item.rarity || "Обычный"}</small></div>
+                          <strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 <section className="season-card daily-card">
                   <div><span className="season-kicker">DAILY REWARD</span><h3>Ежедневная награда</h3><p>Заходи каждый день и увеличивай серию посещений.</p></div>
                   <div className="daily-streak">✦ {gameHub.progress?.daily_streak || 0} дней подряд</div>
@@ -2134,15 +2215,23 @@ export default function App() {
                     ← Назад к кейсам
                   </button>
 
-                  <div className={`case-detail-visual case-theme-${selectedCase.color}`}>
+                  <div className="case-detail-hero">
+                    <div className={`case-detail-visual case-theme-${selectedCase.color}`}>
                     <CaseArtwork item={selectedCase} className="case-detail-art-frame" alt={selectedCase.name} />
-                    {selectedCase.maxReward && (
-                      <span className="case-detail-max">До {selectedCase.maxReward.toLocaleString("ru-RU")} GG</span>
-                    )}
-                  </div>
-
-                  <div className="case-detail-name">
-                    <span>Кейс: <b>{selectedCase.name}</b></span>
+                      {selectedCase.maxReward && (
+                        <span className="case-detail-max">До {selectedCase.maxReward.toLocaleString("ru-RU")} GG</span>
+                      )}
+                    </div>
+                    <div className="case-detail-summary">
+                      <span className="case-detail-kicker">BRAINROT CASER</span>
+                      <h2>{selectedCase.name}</h2>
+                      <p>{selectedCase.description}. Обновлённая рулетка работает плавно, быстро и с акцентом на картинках брейнротов.</p>
+                      <div className="case-detail-quick-stats">
+                        <div><small>Цена</small><b>{effectiveCasePrice(selectedCase, globalEvent?.event_name).toLocaleString("ru-RU")} GG</b></div>
+                        <div><small>Категория</small><b>{selectedCase.category}</b></div>
+                        <div><small>Макс. награда</small><b>{selectedCase.maxReward ? `${selectedCase.maxReward.toLocaleString("ru-RU")} GG` : "—"}</b></div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="case-detail-controls">
@@ -2168,6 +2257,11 @@ export default function App() {
                     </label>
                   </div>
 
+                  <div className={`case-opening-stage ${opening && !fastOpen ? "is-spinning" : ""}`}>
+                    <div className="case-opening-stage-header">
+                      <span>{opening ? "ОТКРЫВАЕМ КЕЙС..." : "ГОТОВО К ПРОКРУТКЕ"}</span>
+                      <b>{openCount === 1 ? "1 линия" : `${openCount} линии`}</b>
+                    </div>
                   <div className={`case-roulette-stack ${opening ? "is-rolling" : ""}`} aria-live="polite">
                     {(reelRows.length ? reelRows : Array.from({ length: openCount }, (_, rowIndex) => ({
                       id: `preview-${rowIndex}`,
@@ -2182,20 +2276,21 @@ export default function App() {
                           className="case-roulette-strip"
                           style={{
                             "--reel-offset": `${getCaseReelOffset(row.position)}px`,
-                            "--reel-duration": `${5.0 + rowIndex * 0.18}s`,
+                            "--reel-duration": `${6.1 + rowIndex * 0.22}s`,
+                            transitionDelay: `${rowIndex * 110}ms`,
                           }}
                         >
                           {row.cards.map((reward, index) => {
                             const isWinner = index === row.winnerIndex;
                             return (
                               <div
-                                className={`case-roulette-item ${row.revealed && isWinner ? "is-winner" : ""}`}
+                                className={`case-roulette-item ${rarityClassName(reward.rarity)} ${row.revealed && isWinner ? "is-winner" : ""}`}
                                 key={`${reward.item_name}-${rowIndex}-${index}`}
                                 data-drop-name={isWinner ? reward.item_name : undefined}
                                 aria-label={isWinner ? `Фактический дроп: ${reward.item_name}` : undefined}
                               >
                                 <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} loading="lazy" />
-                                <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
+                                <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
                                 {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
                               </div>
                             );
@@ -2208,7 +2303,8 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  {opening && skipAvailable && <button className="case-skip-button" onClick={() => { skipRequestedRef.current = true; setSkipAvailable(false); }}>Пропустить анимацию ❯❯</button>}
+                  </div>
+                  {opening && skipAvailable && <button className="case-skip-button" onClick={() => { skipRequestedRef.current = true; setSkipAvailable(false); }}>Пропустить анимацию</button>}
 
                   {(() => {
                     const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
@@ -2231,7 +2327,7 @@ export default function App() {
                     {opening ? "Открываем..." : caseRewardsLoading || caseRewardsFor !== selectedCase.caseName ? "Загружаем дроп..." : (() => {
                       const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
                       const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
-                      return `Крутить · ${(effectiveCasePrice(selectedCase, globalEvent?.event_name) * paidCount).toLocaleString("ru-RU")} GG`;
+                      return `ОТКРЫТЬ КЕЙС · ${(effectiveCasePrice(selectedCase, globalEvent?.event_name) * paidCount).toLocaleString("ru-RU")} GG`;
                     })()}
                   </button>
 
@@ -2241,8 +2337,8 @@ export default function App() {
                     <div className="rewards-list case-last-rewards">
                       <h3>🎉 Твои выпадения</h3>
                       {lastRewards.map((reward, index) => (
-                        <div className="reward-item" key={`${reward.item_name}-${index}`}>
-                          <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b><span>{reward.rarity}</span>
+                        <div className={`reward-item ${rarityClassName(reward.rarity)}`} key={`${reward.item_name}-${index}`}>
+                          <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b><span>{reward.rarity}</span>
                         </div>
                       ))}
                     </div>
@@ -2259,7 +2355,7 @@ export default function App() {
                     <div className="case-contents-grid">
                       {caseRewardsLoading && caseRewardsFor === selectedCase.caseName && <p className="case-contents-caption">Загружаем полный список наград...</p>}
                       {caseRewardsFor === selectedCase.caseName && caseRewards.map((item, index) => (
-                        <div className="case-content-item" key={`${item.item_name}-${index}`}>
+                        <div className={`case-content-item ${rarityClassName(item.rarity)}`} key={`${item.item_name}-${index}`}>
                           <img className="brainrot-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
                           <div className="case-content-info"><b>{item.item_name}</b><small>{item.rarity || "Награда"} · {Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small><em>{Number(item.drop_chance_percent || 0).toFixed(2)}% шанс</em></div>
                         </div>
@@ -2272,12 +2368,17 @@ export default function App() {
                 <>
                   <div className="cases-page-heading">
                     <div>
-                      <span className="cases-eyebrow">BRAINROT CASER</span>
-                      <h2>Кейсы</h2>
-                      <p>Открывай кейсы, собирай коллекцию и забирай редкие награды</p>
+                      <span className="cases-eyebrow">RED & WHITE CASES</span>
+                      <h2>Кейсы BrainGG</h2>
+                      <p>Полностью обновлённое открытие кейсов: плавная рулетка, большие карточки и брейнроты с нормальными картинками без эмодзи.</p>
                     </div>
-                    <div className="cases-balance-chip">🟡 {Number(player?.balance || 0).toLocaleString("ru-RU")} GG</div>
+                    <div className="cases-balance-chip">Баланс · {Number(player?.balance || 0).toLocaleString("ru-RU")} GG</div>
                   </div>
+                  <section className="cases-overview-grid">
+                    <article><small>Всего кейсов</small><b>{cases.length}</b><p>Все открываются в новом стиле.</p></article>
+                    <article><small>Макс. награда</small><b>{totalCaseMaxReward.toLocaleString("ru-RU")} GG</b><p>Топовый потенциальный дроп сезона.</p></article>
+                    <article><small>Открытие</small><b>Плавная рулетка</b><p>С фокусом на карточках, дропах и честном финале.</p></article>
+                  </section>
 
                   {["Обычные кейсы", "Премиум", "All In"].map((category) => (
                     <section className="case-category-section" key={category}>
@@ -2285,7 +2386,7 @@ export default function App() {
                       <div className="case-grid case-grid-reference">
                         {cases.filter((item) => item.category === category).map((item) => (
                           <article className={`case-card case-card-reference case-theme-${item.color}`} key={item.id}>
-                            {item.maxReward && <span className="case-max-badge">до {item.maxReward.toLocaleString("ru-RU")} 🟡</span>}
+                            {item.maxReward && <span className="case-max-badge">до {item.maxReward.toLocaleString("ru-RU")} GG</span>}
                             <button
                               type="button"
                               className="case-card-reference-button"
@@ -2306,7 +2407,7 @@ export default function App() {
                                 <div className="case-price-row">
                                   <span>Цена:</span>
                                   {item.oldPrice && <del>{item.oldPrice.toLocaleString("ru-RU")}</del>}
-                                  <b>{effectiveCasePrice(item, globalEvent?.event_name).toLocaleString("ru-RU")} 🟡 GG</b>{globalEvent?.event_name === "case_sale" && <em className="event-sale-pill">ИВЕНТ −25%</em>}
+                                  <b>{effectiveCasePrice(item, globalEvent?.event_name).toLocaleString("ru-RU")} GG</b>{globalEvent?.event_name === "case_sale" && <em className="event-sale-pill">ИВЕНТ −25%</em>}
                                   {item.discount && <em>-{item.discount}%</em>}
                                 </div>
                                 <span className="case-card-open-label">Открыть ›</span>
@@ -2326,14 +2427,19 @@ export default function App() {
             <main className="content upgrade-content">
               <div className="upgrade-heading">
                 <div>
-                  <h2>⚡ Апгрейдер BrainGG</h2>
+                  <h2>Апгрейдер BrainGG</h2>
                   <p>
-                    Выбери своего брейнрота и цель, которую хочешь получить!
+                    Выбери свой брейнрот, задай цель и запусти честную 10-секундную анимацию со случайной стрелкой без подкрутов.
                   </p>
                 </div>
 
-                <div className="upgrade-badge">UPGRADE</div>
+                <div className="upgrade-badge">10 SEC FAIR SPIN</div>
               </div>
+              <section className="upgrade-overview-grid">
+                <article><small>Твой инвентарь</small><b>{inventory.length}</b><p>Любой предмет можно отправить на апгрейд.</p></article>
+                <article><small>Доступно целей</small><b>{availableTargets.length}</b><p>Система подбирает все возможные цели выше или рядом по стоимости.</p></article>
+                <article><small>Принцип</small><b>Честная стрелка</b><p>Сервер отдаёт результат, а UI красиво доводит его до финала за 10 секунд.</p></article>
+              </section>
 
               {inventoryLoading || targetsLoading ? (
                 <div className="upgrade-empty">
@@ -2373,18 +2479,14 @@ export default function App() {
                         {inventory.map((item) => (
                           <button
                             key={item.id}
-                            className={
-                              selectedUpgrade?.id === item.id
-                                ? "upgrade-item selected"
-                                : "upgrade-item"
-                            }
+                            className={`upgrade-item ${rarityClassName(item.rarity)} ${selectedUpgrade?.id === item.id ? "selected" : ""}`}
                             disabled={upgradeLoading}
                             onClick={() => chooseSource(item)}
                           >
                             <img className={`upgrade-item-emoji-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
 
                             <span className="upgrade-item-info">
-                              <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b>
+                              <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY</span> : null}</b>
 
                               <small
                                 style={{
@@ -2509,11 +2611,7 @@ export default function App() {
                         {availableTargets.map((item) => (
                           <button
                             key={item.item_name}
-                            className={
-                              targetItem === item.item_name
-                                ? "upgrade-item target-item selected"
-                                : "upgrade-item target-item"
-                            }
+                            className={`upgrade-item target-item ${rarityClassName(item.rarity)} ${targetItem === item.item_name ? "selected" : ""}`}
                             disabled={upgradeLoading}
                             onClick={() => {
                               if (targetItem !== item.item_name) setUpgradeAnimatedChance(0);
@@ -2638,7 +2736,7 @@ export default function App() {
 
           {page === "Инвентарь" && (
             <main className="content inventory-page">
-              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Моя коллекция</h2><p>{streamerMode ? "Просматривай свою коллекцию в режиме трансляции" : "Все твои брейнроты — в одном месте"}</p></div><div className="inventory-hero-icon">🧠</div></div>
+              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Моя коллекция</h2><p>{streamerMode ? "Просматривай свою коллекцию в режиме трансляции" : "Все твои брейнроты — в одном месте"}</p></div><div className="inventory-hero-icon">{featuredInventory[0] ? <img src={brainrotImage(featuredInventory[0])} alt={featuredInventory[0].item_name} loading="lazy" /> : <span>✦</span>}</div></div>
               <div className="inventory-stats">{streamerMode ? <><div><small>Предметов в коллекции</small><b>{inventory.length}</b></div><div><small>Видов редкости</small><b>{new Set(inventory.map((item) => item.rarity || "Обычный")).size}</b></div><div><small>Режим</small><b>Просмотр</b></div></> : <><div><small>Предметов</small><b>{inventory.length}</b></div><div><small>Общая стоимость</small><b>{inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0).toLocaleString("ru-RU")} <i>GG</i></b></div><div><small>Средняя стоимость</small><b>{inventory.length?Math.round(inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0)/inventory.length).toLocaleString("ru-RU"):0} <i>GG</i></b></div></>}</div>
               {inventoryLoading && <div className="inventory-state"><div className="inventory-loader">✦</div><b>Собираем коллекцию...</b></div>}
               {inventoryError && <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div>}
@@ -2646,7 +2744,7 @@ export default function App() {
                 <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option>{!streamerMode && <><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></>}</select>{!streamerMode && <button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button>}</div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" /><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 {streamerMode ? "Клубничная" : "Клубничная ×2.5"}</span> : null}</h3>{!streamerMode && <div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div>}<p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div>{!streamerMode ? <div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${(Number(item.value_gg||0) * (globalEvent?.event_name === "gold_rush" ? 2 : 1)).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div> : <div className="streamer-readonly-label">Только просмотр во время трансляции</div>}</article>
+                  <article className={`inventory-card ${rarityClassName(item.rarity)}`} key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" /><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">{streamerMode ? "STRAWBERRY" : "STRAWBERRY ×2.5"}</span> : null}</h3>{!streamerMode && <div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div>}<p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div>{!streamerMode ? <div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${(Number(item.value_gg||0) * (globalEvent?.event_name === "gold_rush" ? 2 : 1)).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div> : <div className="streamer-readonly-label">Только просмотр во время трансляции</div>}</article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
@@ -2665,7 +2763,7 @@ export default function App() {
               {inventoryLoading ? <div className="inventory-state"><div className="inventory-loader">✦</div><b>Загружаем альбом...</b></div> : inventoryError ? <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div> : inventory.length ? <div className="collection-grid">
                 {inventory.map((item) => <article className="collection-card" key={`${item.item_name}-${item.mutation || "normal"}`}>
                   <div className="collection-card-art"><img src={brainrotImage(item)} alt={item.item_name} loading="lazy" /></div>
-                  <div className="collection-card-info"><b>{item.item_name}</b><small>{item.rarity || "Обычный"}{item.mutation === "strawberry" ? " · 🍓 Strawberry" : ""}</small>{!streamerMode && <strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>}</div>
+                  <div className="collection-card-info"><b>{item.item_name}</b><small>{item.rarity || "Обычный"}{item.mutation === "strawberry" ? " · STRAWBERRY" : ""}</small>{!streamerMode && <strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>}</div>
                 </article>)}
               </div> : <div className="inventory-state"><div className="inventory-empty-icon">📚</div><h3>Альбом пока пуст</h3><p>{streamerMode ? "Выполняй задания и участвуй в викторине, чтобы развивать профиль." : "Открой первый кейс, чтобы добавить первого брейнрота."}</p><button className="main-button" onClick={() => changePage(streamerMode ? "Задания" : "Кейсы")}>{streamerMode ? "К заданиям" : "К кейсам"}</button></div>}
             </main>
@@ -2789,7 +2887,7 @@ export default function App() {
               <header className="season-page-heading"><span className="season-kicker">BRAIN GG GUIDE</span><h2>🎓 Обучение</h2><p>Коротко о том, как развивать свой аккаунт.</p></header>
               <div className="tutorial-grid">
                 {streamerMode ? <>
-                  <article><span>📚</span><b>1. Просматривай коллекцию</b><p>Показывай собранных персонажей без отображения внутренней стоимости.</p><button onClick={() => changePage("Коллекция")}>К коллекции →</button></article>
+                  <article><span>📚</span><b>1. Просматривай инвентарь</b><p>Смотри всех собранных персонажей в виде красивых карточек с картинками.</p><button onClick={() => changePage("Инвентарь")}>К инвентарю →</button></article>
                   <article><span>🧠</span><b>2. Играй в викторину</b><p>Проверяй знания и отвечай на вопросы.</p><button onClick={() => changePage("Викторина")}>К викторине →</button></article>
                   <article><span>📋</span><b>3. Выполняй задания</b><p>Развивай игровой профиль через задания и ежедневную активность.</p><button onClick={() => changePage("Задания")}>К заданиям →</button></article>
                   <article><span>🏆</span><b>4. Смотри рейтинг</b><p>Показывай прогресс и место в сообществе.</p><button onClick={() => changePage("Рейтинг")}>Открыть рейтинг →</button></article>
@@ -3133,7 +3231,7 @@ export default function App() {
                         {adminInventory.map((item) => (
                           <div className="admin-inventory-row" key={item.id}>
                             <img className="admin-inventory-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
-                            <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
+                            <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
                             <small>{item.rarity}</small>
                             <strong>{item.value_gg} GG</strong>
                           </div>
@@ -3364,11 +3462,11 @@ export default function App() {
             <h2 id="case-reward-title">Твой выигрыш!</h2>
             <div className={`reward-modal-grid ${lastRewards.length > 1 ? "multi" : ""}`}>
               {lastRewards.map((reward, index) => (
-                <article className="reward-modal-item" key={`${reward.item_name}-${index}`}>
+                <article className={`reward-modal-item ${rarityClassName(reward.rarity)}`} key={`${reward.item_name}-${index}`}>
                   <div className="reward-modal-art"><img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} /></div>
                   <h3>{reward.item_name || reward.name}</h3>
                   <span className={`reward-modal-rarity ${reward.rarity === "OG" ? "rarity-og" : ""}`}>{reward.rarity || "Brainrot"}</span>
-                  {reward.mutation === "strawberry" && <span className="strawberry-mutation-pill">🍓 Клубничная мутация · ×2.5</span>}
+                  {reward.mutation === "strawberry" && <span className="strawberry-mutation-pill">STRAWBERRY мутация · ×2.5</span>}
                   <strong>{Number(reward.value_gg || reward.sold_price || 0).toLocaleString("ru-RU")} GG</strong>
                 </article>
               ))}
