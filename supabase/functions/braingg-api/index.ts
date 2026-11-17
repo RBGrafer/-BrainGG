@@ -39,6 +39,13 @@ const ALLOWED_CASES = [
   "Legendary Case",
 ] as const;
 
+// Special cases are free while the corresponding Telegram condition is met.
+// Their reward pools reuse existing cases to preserve the current drop engine.
+const SPECIAL_CASES = {
+  nick: { displayName: "NICK CASE", rewardCaseName: "Truckini Case" },
+  free: { displayName: "FREE CASE", rewardCaseName: "Summer Case" },
+} as const;
+
 function toHex(buffer: ArrayBuffer) {
   return Array.from(new Uint8Array(buffer))
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -346,6 +353,52 @@ Deno.serve(async (req) => {
       } catch (notificationError) {
         console.warn("BrainGG deposit Telegram notification failed:", notificationError instanceof Error ? notificationError.message : notificationError);
       }
+    };
+
+    const getSpecialCaseAccess = async () => {
+      const profileName = `${String(telegramUser.first_name || "")} ${String(telegramUser.last_name || "")}`.toLowerCase();
+      const nickAllowed = profileName.includes("@brain_gg_bot");
+      const nick = {
+        allowed: nickAllowed,
+        reason: nickAllowed
+          ? "@Brain_GG_Bot найден в имени или фамилии Telegram."
+          : "Добавь @Brain_GG_Bot в имя или фамилию Telegram, затем обнови проверку.",
+      };
+
+      let free = {
+        allowed: false,
+        reason: "Подпишись на Telegram-канал @Brainrot_GG.",
+        checkAvailable: true,
+      };
+      try {
+        const memberResponse = await fetch(`https://api.telegram.org/bot${botToken}/getChatMember`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: "@Brainrot_GG", user_id: telegramUser.id }),
+        });
+        const memberPayload = await memberResponse.json();
+        if (!memberResponse.ok || !memberPayload?.ok || !memberPayload?.result) {
+          throw new Error(memberPayload?.description || "Telegram getChatMember failed");
+        }
+        const member = memberPayload.result;
+        const isMember = ["creator", "administrator", "member"].includes(String(member.status || ""))
+          || (member.status === "restricted" && member.is_member === true);
+        free = {
+          allowed: isMember,
+          reason: isMember
+            ? "Подписка на @Brainrot_GG подтверждена."
+            : "Подпишись на @Brainrot_GG — кейс доступен только подписчикам.",
+          checkAvailable: true,
+        };
+      } catch (membershipError) {
+        console.warn("BrainGG special-case channel membership check failed:", membershipError instanceof Error ? membershipError.message : membershipError);
+        free = {
+          allowed: false,
+          reason: "Не удалось проверить подписку. Добавь бота BrainGG в администраторы канала @Brainrot_GG.",
+          checkAvailable: false,
+        };
+      }
+      return { nick, free };
     };
 
     if (body.action === "get_global_state") {
@@ -1280,6 +1333,11 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       return respond({ success: true, items: targets });
     }
 
+    if (body.action === "get_special_case_access") {
+      const access = await getSpecialCaseAccess();
+      return respond({ success: true, access });
+    }
+
     if (body.action === "get_case_rewards") {
       const rawCaseName = typeof body.caseName === "string" ? body.caseName.trim() : "";
       const caseName = ALLOWED_CASES.find((name) => name.toLowerCase() === rawCaseName.toLowerCase());
@@ -1361,6 +1419,92 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
         success: upgradeWon,
       });
       return respond({ success: true, result: upgradeResult });
+    }
+
+    // SPECIAL CASES: server-side eligibility + a temporary free-case credit.
+    if (body.action === "open_special_case") {
+      const specialCaseType = String(body.specialCaseType || "").trim() as keyof typeof SPECIAL_CASES;
+      if (!Object.prototype.hasOwnProperty.call(SPECIAL_CASES, specialCaseType)) {
+        return respond({ error: "Неизвестный специальный кейс." }, 400);
+      }
+      const specialCase = SPECIAL_CASES[specialCaseType];
+
+      const access = await getSpecialCaseAccess();
+      const requirement = access[specialCaseType];
+      if (!requirement.allowed) return respond({ error: requirement.reason }, 403);
+
+      const { error: grantError } = await supabase.rpc("grant_special_case_credit", {
+        p_telegram_id: telegramUser.id,
+        p_case_name: specialCase.rewardCaseName,
+      });
+      if (grantError) {
+        console.error("Special case credit grant failed:", grantError.message);
+        return respond({ error: "Специальные кейсы ещё не подключены к базе. Примени SQL-файл special-case-credits.sql из архива и повтори попытку." }, 503);
+      }
+
+      const { data, error } = await supabase.rpc("open_case", {
+        p_telegram_id: telegramUser.id,
+        p_case_name: specialCase.rewardCaseName,
+      });
+      if (error) {
+        const { error: rollbackError } = await supabase.rpc("revoke_special_case_credit", {
+          p_telegram_id: telegramUser.id,
+          p_case_name: specialCase.rewardCaseName,
+        });
+        if (rollbackError) console.error("Special case credit rollback failed:", rollbackError.message);
+        console.error("Special case opening failed:", error.message);
+        return respond({ error: "Не удалось открыть специальный кейс. Попробуй ещё раз." }, 400);
+      }
+
+      let openedReward: any = data || {};
+      if (typeof data === "string") {
+        try { openedReward = JSON.parse(data); } catch { openedReward = {}; }
+      }
+      if (!openedReward || typeof openedReward !== "object" || openedReward?.success === false) {
+        const { error: rollbackError } = await supabase.rpc("revoke_special_case_credit", {
+          p_telegram_id: telegramUser.id,
+          p_case_name: specialCase.rewardCaseName,
+        });
+        if (rollbackError) console.error("Special case credit rollback failed:", rollbackError.message);
+        return respond({ error: String(openedReward?.error || "Не удалось открыть специальный кейс.") }, 400);
+      }
+
+      await recordProgress("open_case", 1);
+      const dropItemName = String(openedReward.item_name || openedReward.name || "").trim();
+      if (dropItemName) {
+        await recordGlobalActivity({
+          eventType: "case_opened",
+          title: "Открыл специальный кейс",
+          description: `${dropItemName} · ${specialCase.displayName}${openedReward.mutation === "strawberry" ? " · 🍓 Strawberry ×2.5" : ""}`,
+          itemName: dropItemName,
+          caseName: specialCase.displayName,
+          rarity: openedReward.rarity || null,
+          valueGg: Number(openedReward.value_gg || openedReward.sold_price || 0),
+          success: true,
+        });
+        const { error: dropInsertError } = await supabase.from("game_live_drops").insert({
+          telegram_id: telegramUser.id,
+          item_name: dropItemName,
+          rarity: openedReward.rarity || null,
+          value_gg: Number(openedReward.value_gg || openedReward.sold_price || 0),
+          case_name: specialCase.displayName,
+          mutation: openedReward.mutation || null,
+        });
+        if (dropInsertError) console.error("Special live drop event insert failed:", dropInsertError.message);
+      }
+
+      let credits;
+      try {
+        credits = await getFreeCaseCredits(supabase, telegramUser.id);
+      } catch {
+        credits = { free_case_credits: [], free_cases_total: 0 };
+      }
+
+      return respond({
+        success: true,
+        result: { ...openedReward, case_name: specialCase.displayName },
+        ...credits,
+      });
     }
 
     // ОТКРЫТИЕ КЕЙСА
