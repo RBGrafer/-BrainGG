@@ -1666,3 +1666,268 @@ body[data-braingg-event] { transition: background .5s ease; }
   .settings-streamer-row .settings-icon { flex-basis: 38px; width: 38px; height: 38px; }
   .streamer-blocked-panel { margin: 18px auto; padding: 22px 16px; }
 }
+
+/* =========================================================
+   BrainGG v16 — unified red / white visual system
+   ========================================================= */
+:root {
+  --ice-0: #fff7f8;
+  --ice-1: #ffe3e8;
+  --ice-2: #ff9dac;
+  --ice-3: #ff536d;
+  --ice-line: rgba(255, 93, 115, .24);
+  --ice-panel: rgba(46, 8, 18, .88);
+  --ice-panel-2: rgba(67, 11, 26, .94);
+  --ice-muted: #e2c5cb;
+  --ice-bg: #100408;
+  --ice-gold: #fff;
+  --case-gold: #fff;
+  color-scheme: dark;
+}
+html { background: #100408 !important; }
+body {
+  color: #fff7f8 !important;
+  background:
+    radial-gradient(ellipse at 50% -18%, rgba(217, 20, 52, .34), transparent 56%),
+    radial-gradient(ellipse at 4% 62%, rgba(119, 12, 35, .22), transparent 36%),
+    linear-gradient(155deg, #1b060d 0%, #100408 50%, #080306 100%) !important;
+  background-attachment: fixed;
+}
+.app::before {
+  opacity: .2;
+  background-image: linear-gradient(rgba(255, 230, 234, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 230, 234, .035) 1px, transparent 1px);
+}
+.header {
+  border: 1px solid rgba(255, 96, 117, .3) !important;
+  background: linear-gradient(110deg, rgba(53, 8, 19, .97), rgba(23, 5, 11, .94)) !important;
+  box-shadow: 0 12px 35px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.06), 0 0 28px rgba(222,28,58,.09) !important;
+}
+.logo, .header-brand-copy .logo { color: #fff !important; text-shadow: 0 0 22px rgba(255, 57, 83, .48) !important; }
+.logo-heart { color: #ff5268 !important; filter: none !important; text-shadow: 0 0 14px #ff5268, 0 0 28px rgba(255, 48, 78, .65) !important; }
+.balance, .cases-balance-chip {
+  border: 1px solid rgba(255, 100, 120, .38) !important;
+  background: linear-gradient(145deg, #5a0d20, #260710) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 28px rgba(222, 26, 58, .14), inset 0 1px rgba(255,255,255,.1) !important;
+}
+.navigation button {
+  border-color: rgba(255, 108, 128, .2) !important;
+  background: rgba(43, 8, 17, .9) !important;
+  color: #e9cbd0 !important;
+}
+.navigation button:hover, .navigation button.active {
+  border-color: #ff697d !important;
+  background: linear-gradient(125deg, #f22b48, #a90e2a 78%) !important;
+  color: #fff !important;
+  box-shadow: 0 7px 22px rgba(238, 35, 67, .25), inset 0 1px rgba(255,255,255,.17) !important;
+}
+.content, .cases-page {
+  border-color: rgba(255, 96, 117, .24) !important;
+  background: linear-gradient(145deg, rgba(42, 8, 17, .97), rgba(17, 5, 9, .98)) !important;
+  box-shadow: 0 20px 70px rgba(0,0,0,.34), inset 0 1px rgba(255,255,255,.04) !important;
+}
+.content h1, .content h2, .content h3, .content h4 { color: #fff !important; }
+.content p, .content small, .case-card-details p, .case-contents-caption { color: #dfc1c7; }
+.main-button, .case-button, .inventory-sell-all, .admin-refresh-button, .admin-grant-button, .case-open-main, .case-card-open-label {
+  border: 1px solid rgba(255, 198, 205, .26) !important;
+  background: linear-gradient(115deg, #f3314f, #c31334 58%, #870b25) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 24px rgba(223, 24, 58, .2), inset 0 1px rgba(255,255,255,.17) !important;
+}
+.main-button:hover:not(:disabled), .case-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+  box-shadow: 0 0 26px rgba(255, 67, 92, .32) !important;
+}
+.topup-trigger {
+  border-color: rgba(255, 122, 139, .55) !important;
+  background: linear-gradient(135deg, #e82b49, #8e1029) !important;
+  color: #fff !important;
+  box-shadow: 0 0 22px rgba(255, 56, 85, .2) !important;
+}
+.case-card-reference {
+  border-color: rgba(255, 100, 120, .23) !important;
+  background: linear-gradient(155deg, rgba(68, 13, 27, .96), rgba(27, 6, 13, .99)) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.32), inset 0 1px rgba(255,255,255,.05) !important;
+}
+.case-card-reference:hover { border-color: rgba(255, 116, 134, .72) !important; box-shadow: 0 17px 34px rgba(0,0,0,.38), 0 0 24px rgba(235, 34, 65, .16) !important; }
+.case-card-art, .case-detail-visual {
+  border-color: rgba(255, 105, 126, .2) !important;
+  background: radial-gradient(ellipse at 50% 45%, rgba(227, 35, 66, .28), transparent 68%), linear-gradient(145deg, #390b19, #17050b) !important;
+}
+.case-card-art img, .case-detail-art-frame img { filter: drop-shadow(0 8px 18px rgba(255, 64, 91, .2)) !important; }
+.case-card-details h4, .case-content-item b, .case-roulette-item b { color: #fff !important; }
+.case-card-details p, .case-price-row, .case-contents-caption { color: #e2c5cb !important; }
+.case-price-row b, .case-price-row strong, .case-card-details b, .case-content-item small, .case-payment-summary b { color: #fff !important; }
+.case-payment-summary > div, .case-content-item, .case-contents-panel {
+  border-color: rgba(255, 103, 124, .2) !important;
+  background: linear-gradient(140deg, rgba(65, 12, 26, .9), rgba(26, 6, 13, .96)) !important;
+}
+.case-content-item { border-left-color: #ff536c !important; }
+.case-roulette-viewport, .case-roulette-strip {
+  border-color: rgba(255, 110, 130, .3) !important;
+  background: linear-gradient(90deg, #19060c, #4a0c1d 50%, #19060c) !important;
+  box-shadow: inset 0 0 28px rgba(237, 37, 69, .1) !important;
+}
+.case-roulette-item { border-color: rgba(255, 133, 149, .16) !important; background: linear-gradient(180deg, rgba(79, 17, 34, .78), rgba(25, 6, 13, .9)) !important; }
+.case-roulette-item.is-winner { background: linear-gradient(180deg, rgba(196, 30, 57, .62), rgba(67, 8, 22, .95)) !important; box-shadow: inset 0 0 26px rgba(255, 117, 139, .18), 0 0 24px rgba(255, 61, 90, .16) !important; }
+.case-roulette-pointer { background: #fff !important; box-shadow: 0 0 12px #fff, 0 0 25px #ff6077 !important; }
+.case-max-badge, .case-detail-max { background: linear-gradient(120deg, #f23a55, #8f1028) !important; color: #fff !important; border-color: rgba(255, 220, 226, .35) !important; }
+.event-sale-pill { display: inline-flex; align-items: center; margin-left: 5px; padding: 3px 6px; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; background: #b80f31; color: #fff; font-size: 8px; font-style: normal; font-weight: 950; letter-spacing: .4px; }
+.upgrade-content, .admin-content { background: radial-gradient(ellipse at 50% 35%, rgba(180, 18, 48, .2), transparent 58%), rgba(24, 5, 11, .98) !important; }
+.upgrade-arena, .upgrade-empty, .upgrade-selection-summary, .rewards-list, .admin-panel-card, .opening-panel {
+  border-color: rgba(255, 102, 123, .22) !important;
+  background: linear-gradient(145deg, rgba(55, 10, 24, .94), rgba(21, 5, 11, .98)) !important;
+}
+.upgrade-item, .admin-inventory-row, .admin-history-row {
+  border-color: rgba(255, 108, 128, .18) !important;
+  background: rgba(45, 8, 19, .9) !important;
+}
+.upgrade-item:hover:not(:disabled), .upgrade-item.selected, .target-item.selected {
+  border-color: #ff6b80 !important;
+  background: linear-gradient(120deg, rgba(133, 18, 42, .9), rgba(53, 8, 20, .96)) !important;
+  box-shadow: 0 0 18px rgba(255, 63, 91, .18) !important;
+}
+.upgrade-column-title > span { background: linear-gradient(135deg, #f32d4c, #9e102b) !important; }
+.target-title > span { background: linear-gradient(135deg, #fff, #e8cdd2) !important; color: #7c1025 !important; }
+.upgrade-item-emoji-image { filter: drop-shadow(0 4px 8px rgba(255, 66, 94, .3)) !important; }
+.upgrade-wheel-rotor { border-color: #a72a43 !important; box-shadow: 0 0 0 5px #20060d, 0 0 35px rgba(255, 69, 95, .18), inset 0 0 20px #0008 !important; }
+.wheel-glow { background: #ff3657 !important; opacity: .2 !important; }
+.wheel-inner { border-color: #8e3045 !important; background: radial-gradient(circle, #4b1020, #17050b 75%) !important; }
+.wheel-chance { text-shadow: 0 0 18px rgba(255, 129, 147, .45) !important; }
+.chance-button { border-color: rgba(255, 112, 132, .24) !important; background: #350b18 !important; color: #f7dfe3 !important; }
+.chance-button.active { border-color: #ff8293 !important; background: linear-gradient(135deg, #e92e4b, #8e1029) !important; box-shadow: 0 0 16px rgba(255, 56, 85, .22) !important; }
+.upgrade-start-button { background: linear-gradient(135deg, #f3314f, #a80f2d) !important; }
+.upgrade-badge, .admin-secure-badge { border-color: rgba(255, 123, 141, .35) !important; background: rgba(114, 15, 38, .42) !important; color: #ffe7ea !important; }
+.admin-input, .admin-input option { border-color: rgba(255, 112, 132, .25) !important; background: #1c060d !important; color: #fff !important; }
+.admin-input:focus { border-color: #ff657b !important; box-shadow: 0 0 0 3px rgba(255, 53, 82, .12) !important; }
+.admin-refresh-button { border-color: rgba(255, 112, 132, .25) !important; background: #4a0d20 !important; color: #ffe9ec !important; }
+.admin-feedback.success { border-color: rgba(83, 224, 157, .45) !important; background: rgba(13, 66, 43, .5) !important; }
+.admin-event-card { border-color: rgba(255, 107, 127, .22) !important; background: rgba(48, 8, 19, .7) !important; }
+.admin-event-card.is-active { border-color: rgba(255, 124, 143, .85) !important; box-shadow: 0 0 22px rgba(255, 55, 86, .17) !important; }
+.inventory-card {
+  border-color: rgba(255, 105, 126, .24) !important;
+  background: linear-gradient(155deg, #4a1021, #1b060d 76%) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.32), inset 0 1px rgba(255,255,255,.06) !important;
+}
+.inventory-card:hover { border-color: rgba(255, 133, 149, .7) !important; box-shadow: 0 16px 32px rgba(0,0,0,.42), 0 0 24px rgba(255, 53, 83, .18) !important; }
+.inventory-card-info h3, .inventory-card-top, .inventory-value { color: #fff !important; }
+.inventory-card-info p { color: #d5b6bd !important; }
+.inventory-card-actions .case-button { border-color: rgba(255, 115, 134, .25) !important; background: #4b1021 !important; color: #fff !important; }
+.menu-trigger { border-color: rgba(255, 108, 128, .3) !important; background: linear-gradient(145deg, #5a1023, #260710) !important; color: #fff !important; }
+.menu-trigger:hover { border-color: #ff7185 !important; background: linear-gradient(145deg, #a81534, #5b0b20) !important; }
+.menu-drawer { border-right-color: rgba(255, 104, 125, .3) !important; background: radial-gradient(ellipse at 5% 0%, rgba(190, 24, 54, .2), transparent 42%), linear-gradient(180deg, #240711 0%, #15050b 58%, #090307 100%) !important; }
+.menu-drawer-head, .menu-drawer-footer { border-color: rgba(255, 110, 130, .18) !important; }
+.menu-drawer-brand > span, .menu-player-avatar { border-color: rgba(255, 120, 139, .32) !important; background: linear-gradient(145deg, #a91a37, #4a0d1f) !important; color: #fff !important; }
+.menu-drawer-brand b, .menu-player-identity b, .menu-item-copy b { color: #fff !important; }
+.menu-drawer-brand small, .menu-player-identity small, .menu-group h3, .menu-item-copy small { color: #d0aeb6 !important; }
+.menu-player-card { border-color: rgba(255, 108, 128, .22) !important; background: linear-gradient(125deg, rgba(85, 14, 33, .84), rgba(35, 7, 17, .92)) !important; }
+.menu-item { border-color: rgba(255, 111, 131, .16) !important; background: linear-gradient(145deg, rgba(65, 12, 28, .92), rgba(30, 6, 15, .96)) !important; color: #fff !important; }
+.menu-item:hover, .menu-item.active { border-color: rgba(255, 115, 134, .72) !important; background: linear-gradient(145deg, rgba(173, 22, 53, .8), rgba(75, 9, 28, .98)) !important; box-shadow: 0 0 18px rgba(255, 56, 85, .15) !important; }
+.menu-item-icon { border-color: rgba(255, 120, 139, .18) !important; background: rgba(31, 5, 13, .7) !important; }
+.global-event-banner { border-color: rgba(255, 220, 225, .24) !important; box-shadow: 0 14px 34px rgba(0,0,0,.3), 0 0 24px rgba(255, 57, 87, .12) !important; }
+.global-event-tacos, .global-event-red_fever { background: linear-gradient(110deg, #9d102c, #e62d4b) !important; }
+.global-event-lucky, .global-event-gold_rush, .global-event-jackpot_hunt { background: linear-gradient(110deg, #5c1023, #c01a3b) !important; }
+.global-event-strawberry, .global-event-case_sale { background: linear-gradient(110deg, #8e1530, #e83c59) !important; }
+.global-event-power_upgrade { background: linear-gradient(110deg, #4b0b1c, #b31636) !important; }
+.global-event-night_shift { background: linear-gradient(110deg, #1d0711, #661329) !important; }
+.app.event-theme-tacos::before, .app.event-theme-red_fever::before { background-image: radial-gradient(rgba(255, 105, 125, .15) 1px, transparent 1px) !important; background-size: 32px 32px !important; }
+.app.event-theme-lucky::before, .app.event-theme-gold_rush::before, .app.event-theme-jackpot_hunt::before { background-image: radial-gradient(rgba(255, 223, 227, .12) 1px, transparent 1px) !important; background-size: 36px 36px !important; }
+.app.event-theme-strawberry::before, .app.event-theme-case_sale::before, .app.event-theme-power_upgrade::before, .app.event-theme-night_shift::before { background-image: radial-gradient(rgba(255, 130, 148, .12) 1px, transparent 1px) !important; background-size: 30px 30px !important; }
+.upgrade-pointer-rotator.is-spinning { animation: upgradePointerOrbit 10s cubic-bezier(.08, .76, .08, 1) both !important; }
+@keyframes upgradePointerOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(calc(1800deg + var(--upgrade-stop-angle, 0deg))); }
+}
+.upgrade-pointer-head { filter: drop-shadow(0 3px 8px #000) drop-shadow(0 0 7px rgba(255, 255, 255, .75)) !important; }
+.event-music-notice { border-color: rgba(255, 119, 138, .4) !important; background: rgba(86, 11, 30, .92) !important; color: #fff !important; }
+.case-contents-event-note { border-color: rgba(255, 105, 125, .3) !important; background: rgba(101, 12, 34, .35) !important; color: #ffe8eb !important; }
+@media (max-width: 900px) { .admin-event-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 600px) { .admin-event-grid { grid-template-columns: 1fr !important; } }
+.home-welcome { border-color: rgba(255, 100, 120, .28) !important; background: linear-gradient(145deg, rgba(49, 8, 20, .96), rgba(17, 5, 10, .98)) !important; }
+.home-welcome-backdrop::after { background: linear-gradient(90deg, rgba(31, 5, 13, .88), rgba(31, 5, 13, .25) 58%, rgba(31, 5, 13, .5)) !important; }
+.home-welcome-emblem { color: #ff536d !important; text-shadow: 0 0 24px rgba(255, 65, 94, .5) !important; }
+.home-welcome .season-card, .daily-card { border-color: rgba(255, 108, 128, .22) !important; background: linear-gradient(140deg, rgba(80, 13, 31, .84), rgba(33, 6, 15, .95)) !important; }
+.winter-audio-toggle { border-color: rgba(255, 110, 130, .26) !important; background: rgba(59, 10, 24, .88) !important; color: #fff !important; }
+.winter-audio-toggle.is-on { border-color: #ff7084 !important; background: linear-gradient(135deg, #b9193b, #5b0b20) !important; }
+.snowflake { background: #fff !important; box-shadow: 0 0 8px rgba(255, 255, 255, .9), 0 0 18px rgba(255, 77, 104, .38) !important; }
+body[data-braingg-event="tacos"], body[data-braingg-event="red_fever"] { background: radial-gradient(ellipse at 50% -18%, rgba(220, 25, 56, .32), transparent 58%), linear-gradient(155deg, #3b0716 0%, #1b060d 48%, #090307 100%) !important; background-attachment: fixed !important; }
+body[data-braingg-event="lucky"], body[data-braingg-event="gold_rush"], body[data-braingg-event="jackpot_hunt"] { background: radial-gradient(ellipse at 50% -18%, rgba(255, 87, 112, .3), transparent 58%), linear-gradient(155deg, #3a0716 0%, #21060e 48%, #090307 100%) !important; background-attachment: fixed !important; }
+body[data-braingg-event="strawberry"], body[data-braingg-event="case_sale"] { background: radial-gradient(ellipse at 50% -18%, rgba(244, 61, 93, .34), transparent 58%), linear-gradient(155deg, #46091b 0%, #240711 48%, #0b0307 100%) !important; background-attachment: fixed !important; }
+body[data-braingg-event="power_upgrade"] { background: radial-gradient(ellipse at 50% -18%, rgba(255, 42, 74, .32), transparent 58%), linear-gradient(155deg, #310713 0%, #1a050c 48%, #080306 100%) !important; background-attachment: fixed !important; }
+body[data-braingg-event="night_shift"] { background: radial-gradient(ellipse at 50% -18%, rgba(116, 18, 48, .3), transparent 58%), linear-gradient(155deg, #15040b 0%, #0d0307 48%, #050204 100%) !important; background-attachment: fixed !important; }
+.brainrot-thumb, .case-roulette-item > img { background: radial-gradient(circle, rgba(255, 75, 102, .18), transparent 72%) !important; filter: drop-shadow(0 4px 10px rgba(255, 57, 87, .2)) !important; }
+.inventory-art { background: radial-gradient(circle, rgba(255, 65, 93, .18), transparent 70%), linear-gradient(145deg, #4a1021, #1b060d) !important; }
+.drops-art, .live-drop-art { background: radial-gradient(circle, rgba(255, 70, 98, .18), transparent 72%), linear-gradient(145deg, #4a1021, #1b060d) !important; border-color: rgba(255, 108, 128, .2) !important; }
+.admin-inventory-thumb { width: 42px; height: 42px; flex: 0 0 42px; object-fit: contain; filter: drop-shadow(0 4px 9px rgba(255, 57, 87, .24)); }
+/* Secondary sections follow the same red/white palette. */
+.season-page-heading, .season-panel, .season-profile-card, .season-card {
+  border-color: rgba(255, 101, 123, .22) !important;
+  background: radial-gradient(ellipse at 90% 0%, rgba(218, 28, 61, .16), transparent 48%), linear-gradient(145deg, rgba(53, 10, 24, .96), rgba(19, 5, 11, .98)) !important;
+}
+.season-kicker { color: #ff8b9b !important; }
+.season-page-heading h2, .season-panel h3, .profile-identity h2, .daily-card h3 { color: #fff !important; }
+.season-page-heading p, .season-panel p, .profile-identity p, .profile-xp small, .daily-card p { color: #d8b9c0 !important; }
+.leaderboard-row, .profile-stat-grid article, .daily-card, .collection-summary article, .drops-row, .player-history-row, .settings-row {
+  border-color: rgba(255, 105, 126, .17) !important;
+  background: rgba(58, 10, 25, .58) !important;
+}
+.leaderboard-row.top-player { border-color: rgba(255, 126, 145, .45) !important; background: linear-gradient(100deg, rgba(184, 23, 54, .26), rgba(60, 8, 22, .45)) !important; }
+.leaderboard-place, .leaderboard-row > strong, .profile-stat-grid b, .collection-summary b { color: #fff !important; }
+.leaderboard-avatar, .profile-avatar, .mission-icon, .settings-icon, .player-history-icon {
+  border-color: rgba(255, 115, 134, .3) !important;
+  background: linear-gradient(145deg, #a81b3b, #4a0b1e) !important;
+  color: #fff !important;
+}
+.leaderboard-user b, .mission-info > b, .profile-stat-grid small, .collection-summary small, .drops-info b, .player-history-info b, .settings-row b { color: #fff !important; }
+.leaderboard-user small, .mission-info small, .mission-reward small, .profile-stat-grid small, .drops-info small, .player-history-info small, .settings-row small { color: #d0aeb6 !important; }
+.mission-card { border-top-color: rgba(255, 109, 130, .18) !important; }
+.mission-progress { background: rgba(14, 3, 8, .82) !important; }
+.mission-progress span { background: linear-gradient(90deg, #d71f43, #ff8394) !important; box-shadow: 0 0 12px rgba(255, 72, 101, .28) !important; }
+.mission-reward > b, .profile-xp > b, .daily-streak { color: #fff !important; }
+.profile-identity span { color: #ffe8eb !important; background: rgba(167, 18, 48, .28) !important; border-color: rgba(255, 113, 133, .24) !important; }
+.hub-feedback { color: #ffe8eb !important; background: rgba(126, 13, 40, .34) !important; border-color: rgba(255, 113, 133, .25) !important; }
+.admin-metric-card { border-color: rgba(255, 105, 126, .22) !important; background: linear-gradient(145deg, rgba(77, 13, 31, .88), rgba(29, 6, 14, .96)) !important; }
+.admin-metric-card::after { background: rgba(255, 73, 101, .1) !important; }
+.admin-metric-card small, .admin-metric-card em { color: #d6b4bc !important; }
+.admin-metric-card strong { color: #fff !important; }
+.live-drops-bar { border-color: rgba(255, 106, 126, .22) !important; background: linear-gradient(100deg, rgba(72, 12, 29, .94), rgba(27, 6, 14, .94)) !important; }
+.live-drops-heading, .live-drop-chip b { color: #fff !important; }
+.live-drops-heading small, .live-drop-chip small, .live-drops-empty { color: #d2b2ba !important; }
+.live-drop-chip { border-color: rgba(255, 110, 130, .17) !important; background: rgba(77, 13, 32, .6) !important; }
+.live-drop-chip strong { color: #fff !important; }
+.stars-modal { border-color: rgba(255, 111, 131, .42) !important; background: radial-gradient(ellipse at 50% 0%, rgba(194, 28, 59, .28), transparent 55%), linear-gradient(145deg, #3b0b1b, #14050b 75%) !important; color: #fff !important; }
+.stars-modal-close, .stars-amount-input, .stars-presets button { border-color: rgba(255, 115, 134, .26) !important; background: #250711 !important; color: #fff !important; }
+.stars-modal-kicker, .stars-field-label, .stars-method-check { color: #ff9aaa !important; }
+.stars-method-card { border-color: rgba(255, 109, 129, .25) !important; background: linear-gradient(110deg, #5a1025, #280813) !important; }
+.stars-method-card small, .stars-rate-note, .stars-wager-note { color: #d9bac2 !important; }
+.stars-presets button.selected { border-color: #ff8798 !important; background: #8f1530 !important; box-shadow: 0 0 16px rgba(255, 61, 91, .2) !important; }
+.quiz-card, .quiz-question, .quiz-option, .quiz-status-grid > div, .quiz-empty { border-color: rgba(255, 107, 127, .22) !important; background: linear-gradient(145deg, rgba(62, 10, 26, .94), rgba(23, 5, 12, .98)) !important; }
+.quiz-question, .quiz-option, .quiz-card h3, .quiz-status-grid b { color: #fff !important; }
+.quiz-crystal { border-color: rgba(255, 117, 137, .35) !important; background: radial-gradient(circle, rgba(255, 65, 96, .24), transparent 70%) !important; color: #fff !important; box-shadow: 0 0 32px rgba(255, 52, 85, .16) !important; }
+.promo-redeem-card { border-color: rgba(255, 107, 127, .3) !important; background: radial-gradient(circle at 50% 0%, rgba(208, 28, 61, .2), transparent 52%), linear-gradient(150deg, rgba(64, 10, 27, .96), rgba(21, 5, 12, .98)) !important; }
+.promo-card-emblem { border-color: rgba(255, 115, 135, .32) !important; background: linear-gradient(145deg, rgba(196, 29, 61, .35), rgba(72, 9, 28, .7)) !important; }
+.promo-redeem-card h3, .promo-admin-main b { color: #fff !important; }
+.promo-redeem-card > p, .promo-rules, .promo-admin-main small { color: #d3b3bb !important; }
+.promo-redeem-form label, .promo-admin-main span { color: #ff9aaa !important; }
+.promo-redeem-button, .promo-admin-submit { border-color: rgba(255, 190, 199, .24) !important; background: linear-gradient(135deg, #ed2f4e, #9d102c) !important; color: #fff !important; }
+.promo-admin-row { border-color: rgba(255, 107, 127, .2) !important; background: rgba(55, 9, 23, .68) !important; }
+.collection-summary article, .collection-card { border-color: rgba(255, 105, 126, .22) !important; background: linear-gradient(155deg, rgba(66, 11, 27, .95), rgba(22, 5, 12, .98)) !important; }
+.collection-card-art { background: radial-gradient(ellipse at 50% 48%, rgba(255, 70, 99, .18), transparent 70%), linear-gradient(145deg, rgba(73, 11, 29, .9), rgba(18, 5, 11, .95)) !important; }
+.collection-card-art img { filter: drop-shadow(0 8px 15px rgba(255, 67, 96, .2)) !important; }
+.collection-card-info b, .collection-card-info strong { color: #fff !important; }
+.collection-card-info small { color: #d1afb7 !important; }
+.settings-row { border-bottom-color: rgba(255, 105, 126, .16) !important; }
+.settings-switch { border-color: rgba(255, 108, 128, .24) !important; background: rgba(67, 11, 27, .65) !important; color: #f7dfe3 !important; }
+.settings-switch.active { border-color: rgba(255, 131, 149, .52) !important; background: rgba(165, 19, 49, .55) !important; color: #fff !important; }
+.settings-streamer-row .settings-icon { border-color: rgba(255, 110, 130, .3) !important; background: rgba(111, 13, 38, .42) !important; }
+.case-skip-button { border-color: rgba(255, 197, 205, .3) !important; background: linear-gradient(120deg, #ef3150, #8d1029) !important; color: #fff !important; box-shadow: 0 0 22px rgba(255, 56, 85, .2) !important; }
+.reward-modal { border-color: rgba(255, 111, 131, .48) !important; background: radial-gradient(ellipse at 50% 0%, #6a1730, #280812 65%, #110409) !important; color: #fff !important; }
+.reward-modal-kicker, .reward-modal-sparkle { color: #ffb0bc !important; }
+.reward-modal-item { border-color: rgba(255, 116, 136, .25) !important; background: linear-gradient(155deg, #5a1025, #230710) !important; }
+.reward-modal-art { background: radial-gradient(circle, rgba(255, 71, 100, .22), transparent 70%) !important; }
+.reward-modal-art img { filter: drop-shadow(0 8px 18px rgba(255, 64, 95, .34)) !important; }
+.reward-modal-rarity, .reward-modal-note { color: #e4c3ca !important; }
+.reward-modal-item strong { color: #fff !important; }
+.global-message-toast { border-color: rgba(255, 110, 130, .35) !important; background: linear-gradient(135deg, rgba(84, 12, 32, .97), rgba(26, 5, 13, .98)) !important; }
+.global-message-toast b { color: #ff9aaa !important; }
+.global-message-toast p { color: #fff !important; }
