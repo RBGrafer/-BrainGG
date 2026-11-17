@@ -132,6 +132,29 @@ const BRAINROT_FALLBACK_ART = [
   artRollerShrimp, artSlimeSquad, artMaskedCoffeeBean, artMushroomKnight,
   artStrawberryRhino, artToastCrab, artRaccoonVendor, artElectricSheep,
 ];
+const DEPOSIT_BRAINROT_DISPLAY_NAMES = {
+  "cookie-batter": "Tang Tang Keletang",
+  "monocycle-rider": "Tic Tac Sahur",
+  "blue-letter-squad": "Los 67",
+  "tuff-toucan": "Tuff Toucan",
+  "pizza-sauce-duo": "Pizza And Ranch",
+  "rose-and-bear": "Rosey And Teddy",
+  "haunted-house": "La Casa Boo",
+  "rico-dinero": "Rico Dinero",
+  "ghost-pumpkin": "Spooky And Pumpkin",
+  "golden-dragon": "Dragon Cannelloni",
+  "ice-yeti-atm": "Yetimatic",
+  "bone-cage-monster": "Dug Dug Dug",
+  "arcade-monster": "Arcadopus",
+  "flying-clock-character": "La Grande Combinasion",
+  "pixel-duo": "Garama And Madungdung",
+};
+
+function depositBrainrotName(item, fallback = "Брейнрот") {
+  const key = String(item?.image_key || item?.item_key || item?.brainrot_key || "");
+  return DEPOSIT_BRAINROT_DISPLAY_NAMES[key] || item?.display_name || item?.brainrot_name || fallback;
+}
+
 const DEPOSIT_BRAINROT_IMAGES = {
   "cookie-batter": depCookieBatter,
   "monocycle-rider": depMonocycleRider,
@@ -2466,8 +2489,8 @@ export default function App() {
                   <div className="deposit-section-heading"><b>1. Выбери брейнрота</b><small>Выбери предмет, который передашь через трейд в Steal a Brainrot.</small></div>
                   {depositLoading && depositCatalog.length === 0 ? <div className="deposit-loading">Загружаем каталог...</div> : <div className="deposit-brainrot-grid">
                     {depositCatalog.map((item) => <button type="button" key={item.item_key} className={`deposit-brainrot-card ${depositSelectedItemKey === item.item_key ? "active" : ""}`} disabled={!item.enabled} onClick={() => { setDepositSelectedItemKey(item.item_key); setDepositError(""); }}>
-                      <img src={depositBrainrotImage(item)} onError={handleBrainrotImageError} alt={item.display_name} />
-                      <b>{item.display_name}</b>
+                      <img src={depositBrainrotImage(item)} onError={handleBrainrotImageError} alt={depositBrainrotName(item)} />
+                      <b>{depositBrainrotName(item)}</b>
                       <small>{Number(item.base_value_gg || 0) > 0 ? `${Number(item.base_value_gg).toLocaleString("ru-RU")} GG · база` : "Цена ещё не задана"}</small>
                       {depositSelectedItemKey === item.item_key && <span className="deposit-selected-mark">✓</span>}
                     </button>)}
@@ -2492,7 +2515,7 @@ export default function App() {
                   <div className="deposit-section-heading"><b>3. Укажи Roblox @username</b><small>Нужен именно логин Roblox, не отображаемое имя.</small></div>
                   <label className="deposit-username-label" htmlFor="deposit-roblox-username">Roblox username</label>
                   <div className="deposit-username-input-wrap"><span>@</span><input id="deposit-roblox-username" value={depositRobloxUsername} onChange={(event) => setDepositRobloxUsername(event.target.value.replace(/^@/, ""))} placeholder="your_username" maxLength={20} autoComplete="off" /></div>
-                  <div className="deposit-review-card"><img src={depositBrainrotImage(selectedDepositItem)} onError={handleBrainrotImageError} alt={selectedDepositItem?.display_name || "Брейнрот"} /><div><b>{selectedDepositItem?.display_name}</b><small>{selectedDepositMutation?.label} · traits проверит администратор в трейде</small><strong>от {depositEstimatedAmount.toLocaleString("ru-RU")} GG</strong></div></div>
+                  <div className="deposit-review-card"><img src={depositBrainrotImage(selectedDepositItem)} onError={handleBrainrotImageError} alt={depositBrainrotName(selectedDepositItem)} /><div><b>{depositBrainrotName(selectedDepositItem)}</b><small>{selectedDepositMutation?.label} · traits проверит администратор в трейде</small><strong>от {depositEstimatedAmount.toLocaleString("ru-RU")} GG</strong></div></div>
                   <p className="deposit-muted">После создания заявки ты попадёшь в очередь. Не отправляй трейд, пока бот не сообщит назначенный аккаунт хранения.</p>
                   <div className="deposit-actions-row"><button className="case-button" onClick={() => setDepositStep(2)}>← Назад</button><button className="main-button" disabled={depositLoading || !/^[A-Za-z0-9_]{3,20}$/.test(depositRobloxUsername.replace(/^@/, "")) || depositEstimatedAmount <= 0} onClick={submitBrainrotDeposit}>{depositLoading ? "Создаём заявку..." : "Создать заявку"}</button></div>
                 </>}
@@ -2501,7 +2524,7 @@ export default function App() {
                   <div className="deposit-section-heading"><b>4. Статус пополнения</b><small>Следи за очередью и инструкциями прямо здесь. Бот также отправит уведомление в Telegram.</small></div>
                   {depositRequest ? <article className={`deposit-request-status status-${depositRequest.status}`}>
                     <div className="deposit-request-status-top"><span>{depositStatusLabels[depositRequest.status] || depositRequest.status}</span><b>#{depositRequest.queue_number || "—"}</b></div>
-                    <div className="deposit-request-summary"><img src={depositBrainrotImage({ image_key: depositRequest.image_key || depositRequest.brainrot_key })} onError={handleBrainrotImageError} alt={depositRequest.brainrot_name} /><div><b>{depositRequest.brainrot_name}</b><small>@{depositRequest.roblox_username} · {depositRequest.mutation_key}</small><strong>+{Number(depositRequest.amount_gg || 0).toLocaleString("ru-RU")} GG</strong></div></div>
+                    <div className="deposit-request-summary"><img src={depositBrainrotImage({ image_key: depositRequest.image_key || depositRequest.brainrot_key })} onError={handleBrainrotImageError} alt={depositBrainrotName(depositRequest, depositRequest.brainrot_name)} /><div><b>{depositBrainrotName(depositRequest, depositRequest.brainrot_name)}</b><small>@{depositRequest.roblox_username} · {depositRequest.mutation_key}</small><strong>+{Number(depositRequest.amount_gg || 0).toLocaleString("ru-RU")} GG</strong></div></div>
                     {depositRequest.status === "queued" && <p>Заявка в очереди. Перед отправкой трейда дождись назначения одного из аккаунтов BrainGG_Storage.</p>}
                     {depositRequest.status === "waiting_trade" && <div className="deposit-trade-instructions"><b>Твоя очередь! Отправь трейд на аккаунт:</b><strong>@{depositRequest.assigned_storage_account}</strong><ol><li>Зайди в Steal a Brainrot.</li><li>Отправь запрос на трейд указанному аккаунту.</li><li>После принятия положи выбранного брейнрота с выбранной мутацией.</li><li>Нажми Ready и дождись проверки предмета и traits администратором.</li><li>Когда администратор тоже нажмёт Ready и сообщит об этом, нажми Accept.</li></ol></div>}
                     {depositRequest.status === "trade_received" && <div className="deposit-trade-instructions"><b>Предмет и traits проверены!</b><p>Финальная сумма пересчитана: <strong>{Number(depositRequest.amount_gg || 0).toLocaleString("ru-RU")} GG</strong>. Дождись, пока администратор нажмёт Ready, затем нажми Accept. После полного завершения трейда администратор подтвердит начисление.</p>{(depositRequest.trait_labels || []).length > 0 && <small>Учтённые traits: {depositRequest.trait_labels.join(", ")}</small>}</div>}
@@ -3705,7 +3728,7 @@ export default function App() {
                     {adminDepositFeedback && <div className="admin-feedback success" role="status">{adminDepositFeedback}</div>}
                     {adminDepositLoading ? <p className="admin-muted">Загружаем очередь...</p> : adminDepositRequests.length === 0 ? <p className="admin-muted">Активных заявок пока нет.</p> : <div className="deposit-admin-request-list">
                       {adminDepositRequests.map((request) => <article className="deposit-admin-request" key={request.id}>
-                        <div className="deposit-admin-request-head"><b>{request.brainrot_name}</b><span className={`deposit-admin-status status-${request.status}`}>{depositStatusLabels[request.status] || request.status}</span></div>
+                        <div className="deposit-admin-request-head"><b>{depositBrainrotName(request, request.brainrot_name)}</b><span className={`deposit-admin-status status-${request.status}`}>{depositStatusLabels[request.status] || request.status}</span></div>
                         <div className="deposit-admin-request-meta"><span>Игрок: @{request.roblox_username}</span><span>Telegram ID: {request.telegram_id}</span><span>Заявка #{request.queue_number}</span></div>
                         <div className="deposit-admin-request-meta"><span>Мутация: {request.mutation_key}</span><span>Traits: {(request.trait_labels || request.trait_keys || []).join(", ") || "нет"}</span><span>База: {Number(request.base_value_gg || 0).toLocaleString("ru-RU")} GG</span></div>
                         <div className="deposit-admin-request-total">К начислению: <b>{Number(request.amount_gg || 0).toLocaleString("ru-RU")} GG</b>{request.assigned_storage_account && <span> · Аккаунт: @{request.assigned_storage_account}</span>}</div>
@@ -3725,9 +3748,9 @@ export default function App() {
                     <div className="admin-section-title"><span className="admin-section-icon">🪙</span><div><h3>Базовые цены брейнротов</h3><p>Задай цену каждого предмета в GG. Мутации и выбранные traits будут применяться автоматически.</p></div></div>
                     <div className="deposit-admin-price-grid">
                       {adminDepositCatalog.map((item) => <div className="deposit-admin-price-row" key={item.item_key}>
-                        <img src={depositBrainrotImage(item)} onError={handleBrainrotImageError} alt={item.display_name} />
-                        <div><b>{item.display_name}</b><small>{item.item_key}</small></div>
-                        <input className="admin-input" type="number" min="0" step="0.01" value={adminDepositPriceDrafts[item.item_key] ?? item.base_value_gg ?? 0} onChange={(event) => setAdminDepositPriceDrafts((current) => ({ ...current, [item.item_key]: event.target.value }))} aria-label={`Базовая цена ${item.display_name}`} />
+                        <img src={depositBrainrotImage(item)} onError={handleBrainrotImageError} alt={depositBrainrotName(item)} />
+                        <div><b>{depositBrainrotName(item)}</b><small>{item.item_key}</small></div>
+                        <input className="admin-input" type="number" min="0" step="0.01" value={adminDepositPriceDrafts[item.item_key] ?? item.base_value_gg ?? 0} onChange={(event) => setAdminDepositPriceDrafts((current) => ({ ...current, [item.item_key]: event.target.value }))} aria-label={`Базовая цена ${depositBrainrotName(item)}`} />
                         <button type="button" className="case-button" disabled={adminDepositBusy} onClick={() => saveAdminDepositPrice(item.item_key)}>Сохранить</button>
                       </div>)}
                     </div>
