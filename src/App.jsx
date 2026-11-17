@@ -2,21 +2,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
-import winterHomeBackground from "./assets/braingg-winter-home.jpg";
+import redHomeBackground from "./assets/braingg-red-home.svg";
 
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
 const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Live Drops", "Глобальные события", "История", "Промокод", "Задания", "Достижения", "Админка"]);
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
-  "Truckini Case": "Frostbite Case",
-  "Summer Case": "Aurora Case",
-  "Bloody Case": "Crimson Blizzard",
-  "Crafting Case": "Iceforge Case",
-  "Legend Case": "Glacial Legend",
-  "Elite Case": "Arctic Elite",
-  "All In Strawberry Elephant": "All In Strawberry Elephant",
-  "All In Headless Horseman": "All In Headless Horseman",
+  "Truckini Case": "Red Starter",
+  "Summer Case": "Scarlet Drop",
+  "Bloody Case": "Bloodline",
+  "Crafting Case": "Crimson Vault",
+  "Legend Case": "Royal Red",
+  "Elite Case": "White Crown",
+  "All In Strawberry Elephant": "All In: Strawberry",
+  "All In Headless Horseman": "All In: Headless",
 };
 function displayCaseName(value) {
   const key = String(value || "");
@@ -56,53 +56,44 @@ function getCaseReelOffset(position) {
   return -(safePosition * itemWidth + itemWidth / 2);
 }
 
-// Official/game-style reference artwork for the named Steal a Brainrot characters.
+// Local BrainGG character artwork. No emoji placeholders or fragile remote hotlinks.
 const BRAINROT_ART = [
-  { match: ["skibidi toilet"], image: "https://img.g4mmo.com/images/class/steal%20a%20brainrot%20Skibidi%20Toilet-095404.png" },
-  { match: ["john pork"], image: "https://nmomkdgujymyytwdbgsf.supabase.co/storage/v1/object/public/brainrot-assets/images/0.37983365394187085.webp" },
-  { match: ["headless horseman"], image: "https://www.bloxah.com/uploads/images/goods/steal-a-brainrot/all-server-headless-horseman.png?v=1" },
-  { match: ["meowl"], image: "https://gamebox.biz/wp-content/uploads/2025/10/meowl-myaovl-v-ukradi-breynrot-steal-a-brainrot-kak-poluchit-i-ego-harakteristiki.webp" },
-  { match: ["strawberry elephant"], image: "https://sabapi.voxelvalues.com/uploads/compressed_1758353786097_52w553.png" },
-  { match: ["dragon cannelloni", "dragon canneloni"], image: "https://bloxskins.com/cdn/shop/files/New_Dragon_Canneloni.png?v=1774435470" },
-  { match: ["la grande combinasion"], image: "https://cdn.shopify.com/s/files/1/0815/2068/9482/files/2E5Nv3x.png?v=1754504186" },
+  { match: ["ballerina cappuccina"], image: "/brainrots/mascot-1.webp" },
+  { match: ["bombardiro crocodilo"], image: "/brainrots/mascot-2.webp" },
+  { match: ["cappuccino assassino"], image: "/brainrots/mascot-3.webp" },
+  { match: ["los tralaleritos"], image: "/brainrots/mascot-5.webp" },
+  { match: ["noobini pizzanini"], image: "/brainrots/mascot-6.webp" },
+  { match: ["tralalero tralala", "dragon cannelloni", "dragon canneloni"], image: "/brainrots/mascot-7.webp" },
+  { match: ["trippi troppi"], image: "/brainrots/mascot-8.webp" },
+  { match: ["strawberry elephant"], image: "/brainrots/character-14.webp" },
+  { match: ["headless horseman"], image: "/brainrots/character-6.webp" },
+  { match: ["john pork"], image: "/brainrots/character-7.webp" },
+  { match: ["meowl"], image: "/brainrots/character-11.webp" },
+  { match: ["skibidi toilet"], image: "/brainrots/character-13.webp" },
+  { match: ["la grande combinasion"], image: "/brainrots/character-10.webp" },
+  { match: ["lirili larila", "brr brr patapim"], image: "/brainrots/character-9.webp" },
 ];
 
 function brainrotImage(item) {
-  const supplied = item?.image || item?.image_url || item?.photo_url || item?.avatar_url;
-  if (supplied) return supplied;
   const name = String(item?.item_name || item?.name || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-  return BRAINROT_ART.find((entry) => entry.match.some((key) => name.includes(key)))?.image || "";
+  const local = BRAINROT_ART.find((entry) => entry.match.some((key) => name.includes(key)))?.image;
+  if (local) return `${import.meta.env.BASE_URL}${local.replace(/^\/+/, "")}`;
+  // Every unlisted brainrot still gets its own deterministic local illustration.
+  const hash = [...name].reduce((value, char) => ((value * 31) + char.charCodeAt(0)) >>> 0, 7);
+  const fallback = name ? `brainrots/character-${(hash % 16) + 1}.webp` : "brainrots/character-3.webp";
+  return `${import.meta.env.BASE_URL}${fallback}`;
 }
 
-function caseImageSrc(item, fallback = false) {
-  const filename = String(item?.image || "").split("/").pop();
-  if (!filename) return "";
-  const stem = filename.replace(/\.(webp|png|jpe?g|svg)$/i, "");
-  const asset = fallback ? `${stem.replace(/-arctic$/, "")}-arctic.svg` : filename;
-  return `${import.meta.env.BASE_URL}cases/${asset}`;
+function caseImageSrc(item) {
+  const filename = String(item?.image || "").replace(/^\/+/, "");
+  return filename ? `${import.meta.env.BASE_URL}${filename}` : "";
 }
 
 function CaseArtwork({ item, className = "", alt }) {
-  const [failed, setFailed] = useState(false);
-  const [fallbackFailed, setFallbackFailed] = useState(false);
-  const primary = caseImageSrc(item);
-  const fallback = caseImageSrc(item, true);
+  const image = caseImageSrc(item);
   return (
-    <div className={`${className} case-artwork ${failed && fallbackFailed ? "case-artwork-missing" : ""}`}>
-      {!fallbackFailed ? (
-        <img
-          src={failed ? fallback : primary}
-          alt={alt || item?.name || "Изображение кейса"}
-          loading="eager"
-          decoding="async"
-          onError={() => {
-            if (!failed && fallback && fallback !== primary) setFailed(true);
-            else setFallbackFailed(true);
-          }}
-        />
-      ) : (
-        <span className="case-artwork-placeholder">Изображение кейса</span>
-      )}
+    <div className={`${className} case-artwork`}>
+      {image ? <img src={image} alt={alt || item?.name || "Изображение кейса"} loading="eager" decoding="async" /> : <span className="case-artwork-placeholder">Изображение кейса</span>}
     </div>
   );
 }
@@ -122,8 +113,19 @@ function calculateUpgradeChance(source, target, luckMultiplier = 1) {
 
   return Math.min(
     90,
-    Math.max(0.1, (sourcePrice / targetPrice) * 100 * Math.max(1, Number(luckMultiplier) || 1))
+    Math.max(0.1, Math.sqrt(sourcePrice / targetPrice) * 100 * Math.max(1, Number(luckMultiplier) || 1))
   );
+}
+
+function upgradeEventMultiplier(eventName) {
+  if (eventName === "lucky") return 2;
+  if (eventName === "power_upgrade") return 1.5;
+  return 1;
+}
+
+function effectiveCasePrice(item, eventName) {
+  const base = Math.max(1, Number(item?.price || 0));
+  return eventName === "case_sale" ? Math.max(1, Math.floor(base * 0.75)) : base;
 }
 
 export default function App() {
@@ -307,8 +309,8 @@ export default function App() {
     try {
       tg.ready?.();
       tg.expand?.();
-      tg.setHeaderColor?.("#071827");
-      tg.setBackgroundColor?.("#071827");
+      tg.setHeaderColor?.("#2a0710");
+      tg.setBackgroundColor?.("#2a0710");
     } catch (error) {
       console.warn("Telegram WebApp viewport setup failed:", error);
     }
@@ -418,31 +420,63 @@ export default function App() {
     setMusicNotice("");
 
     if (eventName === "tacos") {
-      // A licensed copy of the requested recording can be added at this public asset path.
-      const audio = new Audio(`${import.meta.env.BASE_URL}audio/its-raining-tacos.mp3`);
-      audio.loop = true;
-      audio.volume = 0.48;
-      audio.addEventListener("error", () => {
-        setMusicNotice("Добавь лицензированный трек в public/audio/its-raining-tacos.mp3, чтобы включить оригинальную песню.");
-      }, { once: true });
-      eventAudioRef.current = audio;
-      audio.play().then(() => setMusicNotice("")).catch(() => {
-        setMusicNotice("Если музыка не запустилась, нажми «♫ Музыка». Для оригинальной песни нужен файл public/audio/its-raining-tacos.mp3.");
-      });
+      // Original playful taco-event loop synthesized locally with Web Audio.
+      // It does not depend on a missing MP3 or use the copyrighted song recording.
+      const ctx = getAudioContext();
+      if (!ctx) { setMusicNotice("Браузер не поддерживает Web Audio."); return; }
+      const melody = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880, 698.46, 523.25, 659.25, 783.99, 1046.5, 880, 783.99, 659.25, 587.33];
+      const bass = [130.81, 130.81, 164.81, 164.81, 196, 196, 164.81, 164.81];
+      let step = 0;
+      const tone = (frequency, when, duration, volume, wave = "square") => {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = wave === "square" ? 2400 : 1800;
+        oscillator.type = wave;
+        oscillator.frequency.setValueAtTime(frequency, when);
+        gain.gain.setValueAtTime(0.0001, when);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.00015, volume), when + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+        oscillator.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+        oscillator.start(when); oscillator.stop(when + duration + 0.025);
+      };
+      const playStep = () => {
+        if (ctx.state !== "running") return;
+        const now = ctx.currentTime + 0.02;
+        const note = melody[step % melody.length];
+        tone(note, now, 0.13, 0.026, "square");
+        if (step % 2 === 0) tone(note * 2, now + 0.012, 0.09, 0.008, "triangle");
+        if (step % 4 === 0) {
+          tone(bass[Math.floor(step / 2) % bass.length], now, 0.34, 0.025, "triangle");
+          const kick = ctx.createOscillator();
+          const kickGain = ctx.createGain();
+          kick.type = "sine";
+          kick.frequency.setValueAtTime(145, now);
+          kick.frequency.exponentialRampToValueAtTime(48, now + 0.12);
+          kickGain.gain.setValueAtTime(0.08, now);
+          kickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+          kick.connect(kickGain); kickGain.connect(ctx.destination);
+          kick.start(now); kick.stop(now + 0.16);
+        }
+        step += 1;
+      };
+      ctx.resume().then(() => { setMusicNotice(""); playStep(); }).catch(() => setMusicNotice("Нажми «♫ Музыка», чтобы разрешить воспроизведение."));
+      eventMusicTimerRef.current = window.setInterval(playStep, 150);
       return;
     }
 
     const ctx = getAudioContext();
     if (!ctx) return;
     const tracks = {
-      lucky: {
-        notes: [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.00, 698.46, 523.25, 659.25, 783.99, 1046.5],
-        bass: [130.81, 164.81, 196.00, 164.81], stepMs: 330, volume: 0.022, bassVolume: 0.009, wave: "triangle",
-      },
-      strawberry: {
-        notes: [392.00, 493.88, 587.33, 493.88, 440.00, 523.25, 587.33, 440.00],
-        bass: [98.00, 123.47, 146.83, 123.47], stepMs: 560, volume: 0.009, bassVolume: 0.004, wave: "sine",
-      },
+      lucky: { notes: [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880, 698.46, 523.25, 659.25, 783.99, 1046.5], bass: [130.81, 164.81, 196, 164.81], stepMs: 330, volume: 0.022, bassVolume: 0.009, wave: "triangle" },
+      strawberry: { notes: [392, 493.88, 587.33, 493.88, 440, 523.25, 587.33, 440], bass: [98, 123.47, 146.83, 123.47], stepMs: 560, volume: 0.009, bassVolume: 0.004, wave: "sine" },
+      red_fever: { notes: [440, 523.25, 659.25, 783.99, 659.25, 587.33, 523.25, 659.25], bass: [110, 130.81, 164.81, 130.81], stepMs: 250, volume: 0.018, bassVolume: 0.008, wave: "sawtooth" },
+      gold_rush: { notes: [783.99, 987.77, 1174.66, 987.77, 880, 1046.5, 1318.5, 1046.5], bass: [98, 123.47, 146.83, 123.47], stepMs: 300, volume: 0.018, bassVolume: 0.008, wave: "triangle" },
+      case_sale: { notes: [659.25, 783.99, 880, 783.99, 659.25, 587.33, 659.25, 783.99], bass: [130.81, 146.83, 164.81, 146.83], stepMs: 340, volume: 0.016, bassVolume: 0.007, wave: "sine" },
+      power_upgrade: { notes: [329.63, 493.88, 659.25, 783.99, 987.77, 783.99, 659.25, 987.77], bass: [82.41, 98, 123.47, 98], stepMs: 230, volume: 0.02, bassVolume: 0.009, wave: "triangle" },
+      jackpot_hunt: { notes: [523.25, 659.25, 783.99, 1046.5, 1318.5, 1046.5, 1567.98, 1318.5], bass: [65.41, 98, 130.81, 98], stepMs: 280, volume: 0.021, bassVolume: 0.01, wave: "triangle" },
+      night_shift: { notes: [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 349.23], bass: [65.41, 73.42, 82.41, 73.42], stepMs: 520, volume: 0.008, bassVolume: 0.006, wave: "sine" },
     };
     const track = tracks[eventName];
     if (!track) return;
@@ -877,13 +911,13 @@ export default function App() {
 
   useEffect(() => {
     const eventName = globalEvent?.event_name || "";
-    const colors = { tacos: "#3b1b0c", lucky: "#102a16", strawberry: "#3b1020" };
+    const colors = { tacos: "#4a0a1b", lucky: "#5d0c20", strawberry: "#7a0e2a", red_fever: "#6a0a1f", gold_rush: "#5a0b1d", case_sale: "#820d29", power_upgrade: "#6e0d24", jackpot_hunt: "#7d0b29", night_shift: "#15050b" };
     if (eventName && !streamerMode) {
       document.body.dataset.brainggEvent = eventName;
       try { window.Telegram?.WebApp?.setBackgroundColor?.(colors[eventName]); } catch { /* Telegram theme is optional. */ }
     } else {
       delete document.body.dataset.brainggEvent;
-      try { window.Telegram?.WebApp?.setBackgroundColor?.("#071827"); } catch { /* Telegram theme is optional. */ }
+      try { window.Telegram?.WebApp?.setBackgroundColor?.("#2a0710"); } catch { /* Telegram theme is optional. */ }
     }
     return () => { delete document.body.dataset.brainggEvent; };
   }, [globalEvent?.event_name, streamerMode]);
@@ -1437,7 +1471,7 @@ export default function App() {
       .filter((item) => item.item_name !== source.item_name)
       .map((item) => ({
         ...item,
-        actualChance: calculateUpgradeChance(source, item, globalEvent?.event_name === "lucky" ? 2 : 1),
+        actualChance: calculateUpgradeChance(source, item, upgradeEventMultiplier(globalEvent?.event_name)),
       }))
       .filter((item) => item.actualChance > 0);
 
@@ -1736,7 +1770,6 @@ export default function App() {
       setActionMessage("Сначала выбери свой брейнрот и цель для улучшения.");
       return;
     }
-
     if (!initData()) {
       setActionMessage("Ошибка: открой BrainGG через Telegram.");
       return;
@@ -1745,56 +1778,48 @@ export default function App() {
     setUpgradeLoading(true);
     setUpgradeWheelAnimating(false);
     setUpgradeSpinWon(null);
+    setUpgradePointerAngle(0);
+    setUpgradePointerVisible(true);
     playUiSound("upgrade");
     setUpgradeResult(null);
-    setActionMessage("Отправляем запрос на улучшение...");
+    setActionMessage("Проверяем апгрейд на сервере...");
 
     try {
-      const { data, error } = await supabase.functions.invoke(
-        "braingg-api",
-        {
-          body: {
-            initData: initData(),
-            action: "upgrade_item",
-            inventoryId: selectedUpgrade.id,
-            targetItem,
-          },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: {
+          initData: initData(),
+          action: "upgrade_item",
+          inventoryId: selectedUpgrade.id,
+          targetItem,
+        },
+      });
 
       if (error) {
         let details = error.message || "Ошибка сервера";
-
         if (error.context) {
           try {
             const response = error.context.clone();
             const body = await response.json();
             details = body.error || body.message || JSON.stringify(body);
-          } catch {
-            // Оставляем исходное сообщение ошибки.
-          }
+          } catch { /* keep the original message */ }
         }
-
         throw new Error(details);
       }
-
       if (!data?.success || !data?.result?.success) {
-        throw new Error(
-          data?.error ||
-          data?.result?.error ||
-          data?.message ||
-          "Сервер не подтвердил улучшение"
-        );
+        throw new Error(data?.error || data?.result?.error || data?.message || "Сервер не подтвердил улучшение");
       }
 
       const result = data.result;
       const won = result.won === true;
       if (won && (result.inventory_verified !== true || !result.awarded_inventory_id)) {
-        throw new Error("Сервер сообщил о победе, но не подтвердил выдачу предмета. Примени последнюю SQL-миграцию апгрейдера.");
+        throw new Error("Сервер сообщил о победе, но не подтвердил выдачу предмета. Проверь SQL-миграцию BrainGG v16.");
       }
-      // Use the chance returned by the database transaction, not a client-side
-      // estimate, so the visible green sector is exactly the one used by the roll.
       const serverChance = normalizeUpgradeChance(result.chance, actualChance);
+      const stopAngle = Number(result.spin_angle);
+      if (!Number.isFinite(stopAngle) || stopAngle < 0 || stopAngle >= 360) {
+        throw new Error("Сервер не вернул корректный случайный угол апгрейдера. Обнови SQL-миграцию BrainGG v16.");
+      }
+
       const confirmedResult = {
         ...result,
         won,
@@ -1802,47 +1827,27 @@ export default function App() {
         target_item: result.target_item || targetItem,
       };
 
-      // Keep the green wedge fixed at the top. Stage the pointer at the
-      // authoritative result sector while invisible, then animate exactly one
-      // 360-degree orbit around the wheel's center.
-      const stopAngle = won ? 0 : 180;
-      setUpgradeWheelAnimating(false);
+      // The server has already made the roll from this exact angle. The UI keeps
+      // the outcome hidden for ten seconds, then the pointer settles at that angle.
       setUpgradeAnimatedChance(serverChance);
-      setUpgradeSpinWon(won);
-
-      if (upgradePointerAngle !== stopAngle) {
-        setUpgradePointerVisible(false);
-        await new Promise((resolve) => setTimeout(resolve, 140));
-        setUpgradePointerAngle(stopAngle);
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        setUpgradePointerVisible(true);
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
-
+      setUpgradePointerAngle(stopAngle);
+      setActionMessage("Стрелка уже получила честный результат сервера. Ждём остановки — 10 секунд...");
       setUpgradeWheelAnimating(true);
-      setActionMessage("Результат подтверждён сервером. Стрелка делает ровно один оборот и показывает итог.");
-
-      await new Promise((resolve) => setTimeout(resolve, 2850));
+      await new Promise((resolve) => window.setTimeout(resolve, 10000));
       setUpgradeWheelAnimating(false);
-
+      setUpgradeSpinWon(won);
       setUpgradeResult(confirmedResult);
+      setActionMessage(won ? "Есть! Сервер подтвердил победу — предмет добавлен в инвентарь." : "В этот раз не повезло. Результат определён случайным углом сервера.");
       playUiSound(won ? "win" : "lose");
 
-      setPlayer((previous) => ({
-        ...previous,
-        balance: result.balance,
-      }));
-
+      setPlayer((previous) => previous ? { ...previous, balance: result.balance ?? previous.balance } : previous);
       await loadInventory();
-
       setSelectedUpgrade(null);
       setTargetItem("");
       setMobileUpgradeList("source");
     } catch (error) {
       console.error("Ошибка апгрейда:", error);
-      setActionMessage(
-        await friendlyActionError(error, null, "Не удалось выполнить апгрейд. Попробуй ещё раз.")
-      );
+      setActionMessage(await friendlyActionError(error, null, "Не удалось выполнить апгрейд. Попробуй ещё раз."));
     } finally {
       setUpgradeLoading(false);
       setUpgradeWheelAnimating(false);
@@ -1855,7 +1860,7 @@ export default function App() {
   );
 
   const actualChance = selectedUpgrade && selectedTarget
-    ? calculateUpgradeChance(selectedUpgrade, selectedTarget, globalEvent?.event_name === "lucky" ? 2 : 1)
+    ? calculateUpgradeChance(selectedUpgrade, selectedTarget, upgradeEventMultiplier(globalEvent?.event_name))
     : 0;
 
   useEffect(() => {
@@ -1904,7 +1909,7 @@ export default function App() {
     .map((item) => ({
       ...item,
       actualChance: selectedUpgrade
-        ? calculateUpgradeChance(selectedUpgrade, item, globalEvent?.event_name === "lucky" ? 2 : 1)
+        ? calculateUpgradeChance(selectedUpgrade, item, upgradeEventMultiplier(globalEvent?.event_name))
         : null,
     }));
 
@@ -1942,9 +1947,15 @@ export default function App() {
     : 0;
   const eventRemainingLabel = `${Math.floor(eventRemainingSeconds / 60)}:${String(eventRemainingSeconds % 60).padStart(2, "0")}`;
   const eventPresentation = {
-    tacos: { title: "IT'S RAINING TACOS", subtitle: "Тако падают с неба — наслаждайся событием!", emoji: "🌮", particle: "🌮" },
+    tacos: { title: "IT'S RAINING TACOS", subtitle: "Тако падают с неба · оригинальная музыка события", emoji: "🌮", particle: "🌮" },
     lucky: { title: "LUCKY DAY!", subtitle: "Удача ×2 в кейсах и апгрейдере", emoji: "🍀", particle: "🍀" },
     strawberry: { title: "STRAWBERRY DAY!", subtitle: "5% шанс клубничной мутации · цена ×2.5", emoji: "🍓", particle: "🍓" },
+    red_fever: { title: "RED FEVER", subtitle: "Шанс редких и выше редких дропов ×1.5", emoji: "🔥", particle: "✦" },
+    gold_rush: { title: "GOLD RUSH", subtitle: "Продавай брейнротов и получай ×2 GG", emoji: "💰", particle: "✦" },
+    case_sale: { title: "CASE SALE", subtitle: "Все кейсы дешевле на 25%", emoji: "🏷️", particle: "✦" },
+    power_upgrade: { title: "POWER UPGRADE", subtitle: "Шанс апгрейда увеличен в 1.5 раза", emoji: "⚡", particle: "⚡" },
+    jackpot_hunt: { title: "JACKPOT HUNT", subtitle: "Легендарные, мифические и OG дропы ×3 по весу", emoji: "👑", particle: "✦" },
+    night_shift: { title: "NIGHT SHIFT", subtitle: "Ночная атмосфера и отдельный саундтрек", emoji: "🌙", particle: "✦" },
   };
   const activeEventPresentation = globalEvent?.event_name ? eventPresentation[globalEvent.event_name] : null;
   const eventParticles = Array.from({ length: 30 }, (_, index) => ({
@@ -1981,12 +1992,12 @@ export default function App() {
             <span aria-hidden="true">☰</span>
           </button>
           <div className="header-brand-copy">
-            <div className="logo"><span className="logo-heart">💜</span> BrainGG</div>
+            <div className="logo"><span className="logo-heart">✦</span> BrainGG</div>
             <span className="header-page-name">{page === "Главная" ? "Игровой центр" : page}</span>
           </div>
         </div>
         <div className="header-wallet">
-          <button className={`winter-audio-toggle ${musicEnabled ? "is-on" : ""}`} onClick={toggleWinterMusic} title={globalEvent?.event_name ? "Музыка текущего ивента" : "Фоновая зимняя музыка"}>{musicEnabled ? "♫ Музыка вкл." : "♫ Музыка"}</button>
+          <button className={`winter-audio-toggle ${musicEnabled ? "is-on" : ""}`} onClick={toggleWinterMusic} title={globalEvent?.event_name ? "Музыка текущего ивента" : "Фоновая музыка BrainGG"}>{musicEnabled ? "♫ Музыка вкл." : "♫ Музыка"}</button>
           <button className={`winter-audio-toggle ${soundEnabled ? "is-on" : ""}`} onClick={() => setSoundEnabled((value) => !value)} title="Звуковые эффекты">{soundEnabled ? "🔊 Звуки" : "🔇 Звуки"}</button>
           {!streamerMode && <>
             <div className="balance">🪙 {player ? player.balance : 0} GG</div>
@@ -2001,7 +2012,7 @@ export default function App() {
         <button className="menu-backdrop" type="button" aria-label="Закрыть меню" onClick={() => setMenuOpen(false)} />
         <aside className="menu-drawer" id="braingg-navigation" aria-label="BrainGG navigation">
           <div className="menu-drawer-head">
-            <div className="menu-drawer-brand"><span>❄</span><div><b>BrainGG</b><small>Все режимы и разделы</small></div></div>
+            <div className="menu-drawer-brand"><span>✦</span><div><b>BrainGG</b><small>Все режимы и разделы</small></div></div>
             <button className="menu-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Закрыть">×</button>
           </div>
           <div className="menu-player-card">
@@ -2025,7 +2036,7 @@ export default function App() {
               <div className="menu-items"><button type="button" className={`menu-item ${page === "Админка" ? "active" : ""}`} onClick={() => changePage("Админка")}><span className="menu-item-icon">🛠</span><span className="menu-item-copy"><b>Админка</b><small>Инструменты управления</small></span><span className="menu-item-arrow">›</span></button></div>
             </section>}
           </nav>
-          <div className="menu-drawer-footer"><span>❄ ARCTIC SEASON</span><small>BrainGG · Игровой центр</small></div>
+          <div className="menu-drawer-footer"><span>✦ RED & WHITE SEASON</span><small>BrainGG · Игровой центр</small></div>
         </aside>
       </>}
 
@@ -2080,7 +2091,7 @@ export default function App() {
             <div className="live-drops-track">
               {liveDrops.length ? liveDrops.map((drop) => (
                 <article className="live-drop-chip" key={drop.id}>
-                  <div className="live-drop-art">{brainrotImage(drop) ? <img className={drop.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>❄</span>}</div>
+                  <div className="live-drop-art"><img className={drop.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(drop)} alt={drop.item_name || "Brainrot"} loading="lazy" /></div>
                   <div><b>{drop.item_name}{drop.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b><small>{drop.username ? `@${drop.username}` : "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
                   {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
                 </article>
@@ -2093,18 +2104,18 @@ export default function App() {
           {page === "Главная" && (
             <main className="content home-welcome">
               <div className="home-welcome-backdrop" aria-hidden="true">
-                <img src={winterHomeBackground} alt="" fetchPriority="high" decoding="async" />
+                <img src={redHomeBackground} alt="" fetchPriority="high" decoding="async" />
               </div>
               <div className="home-welcome-inner">
-                <div className="home-welcome-emblem">❄</div>
+                <div className="home-welcome-emblem">✦</div>
                 <p className="home-greeting">Привет, <b>{greetingLabel}!</b></p>
                 <h2>Добро пожаловать в BrainGG!</h2>
                 <p>{streamerMode ? "Собирай коллекцию, проходи викторины и выполняй задания сообщества." : "Открывай кейсы, собирай персонажей и улучшай свою коллекцию."}</p>
                 <p className="home-luck">{streamerMode ? "Трансляция в безопасном режиме просмотра" : "Удачи!"}</p>
                 <button className="main-button" onClick={() => changePage(streamerMode ? "Коллекция" : "Кейсы")}>{streamerMode ? "Открыть коллекцию 📚" : "Смотреть кейсы 🎁"}</button>
                 <section className="season-card daily-card">
-                  <div><span className="season-kicker">ARCTIC DAILY</span><h3>Ежедневная награда</h3><p>Заходи каждый день и увеличивай серию посещений.</p></div>
-                  <div className="daily-streak">❄ {gameHub.progress?.daily_streak || 0} дней подряд</div>
+                  <div><span className="season-kicker">DAILY REWARD</span><h3>Ежедневная награда</h3><p>Заходи каждый день и увеличивай серию посещений.</p></div>
+                  <div className="daily-streak">✦ {gameHub.progress?.daily_streak || 0} дней подряд</div>
                   <button className="main-button" disabled={dailyClaimLoading || gameHub.dailyClaimed} onClick={claimDailyReward}>{dailyClaimLoading ? "Получаем..." : gameHub.dailyClaimed ? "Уже получено сегодня" : "Забрать награду"}</button>
                 </section>
                 {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
@@ -2183,18 +2194,7 @@ export default function App() {
                                 data-drop-name={isWinner ? reward.item_name : undefined}
                                 aria-label={isWinner ? `Фактический дроп: ${reward.item_name}` : undefined}
                               >
-                                {brainrotImage(reward) ? (
-                                  <img
-                                    className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""}
-                                    src={brainrotImage(reward)}
-                                    alt={reward.item_name}
-                                    loading="lazy"
-                                    onError={(event) => {
-                                      event.currentTarget.style.display = "none";
-                                      event.currentTarget.parentElement.classList.add("has-image-error");
-                                    }}
-                                  />
-                                ) : <span>🧠</span>}
+                                <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} loading="lazy" />
                                 <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
                                 {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
                               </div>
@@ -2218,7 +2218,7 @@ export default function App() {
                       <div className="case-payment-summary">
                         <div><span>Бесплатно доступно</span><b>{freeCount}</b></div>
                         <div><span>Бесплатных открытий</span><b>{freeToUse}</b></div>
-                        <div><span>К оплате</span><b>{(paidCount * selectedCase.price).toLocaleString("ru-RU")} GG</b></div>
+                        <div><span>К оплате</span><b>{(paidCount * effectiveCasePrice(selectedCase, globalEvent?.event_name)).toLocaleString("ru-RU")} GG</b></div>
                       </div>
                     );
                   })()}
@@ -2231,7 +2231,7 @@ export default function App() {
                     {opening ? "Открываем..." : caseRewardsLoading || caseRewardsFor !== selectedCase.caseName ? "Загружаем дроп..." : (() => {
                       const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
                       const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
-                      return `Крутить · ${(selectedCase.price * paidCount).toLocaleString("ru-RU")} GG`;
+                      return `Крутить · ${(effectiveCasePrice(selectedCase, globalEvent?.event_name) * paidCount).toLocaleString("ru-RU")} GG`;
                     })()}
                   </button>
 
@@ -2253,11 +2253,14 @@ export default function App() {
                     <p className="case-contents-caption">Полный список наград именно из этого кейса · шанс рассчитан по весам дропа</p>
                     {globalEvent?.event_name === "lucky" && <p className="case-contents-event-note">🍀 LUCKY DAY: шансы всех редкостей выше обычной увеличены в 2 раза.</p>}
                     {globalEvent?.event_name === "strawberry" && <p className="case-contents-event-note">🍓 STRAWBERRY DAY: дополнительно действует 5% шанс клубничной мутации с ценой ×2.5.</p>}
+                    {globalEvent?.event_name === "red_fever" && <p className="case-contents-event-note">🔥 RED FEVER: вес всех редкостей выше обычной увеличен в 1.5 раза.</p>}
+                    {globalEvent?.event_name === "jackpot_hunt" && <p className="case-contents-event-note">👑 JACKPOT HUNT: вес легендарных, мифических и OG наград увеличен в 3 раза.</p>}
+                    {globalEvent?.event_name === "case_sale" && <p className="case-contents-event-note">🏷️ CASE SALE: цена каждого открытия снижена на 25%.</p>}
                     <div className="case-contents-grid">
                       {caseRewardsLoading && caseRewardsFor === selectedCase.caseName && <p className="case-contents-caption">Загружаем полный список наград...</p>}
                       {caseRewardsFor === selectedCase.caseName && caseRewards.map((item, index) => (
                         <div className="case-content-item" key={`${item.item_name}-${index}`}>
-                          {brainrotImage(item) ? <img className="brainrot-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>{["🧌", "🐉", "🐘", "🧟", "🐻", "🐲"][index % 6]}</span>}
+                          <img className="brainrot-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
                           <div className="case-content-info"><b>{item.item_name}</b><small>{item.rarity || "Награда"} · {Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small><em>{Number(item.drop_chance_percent || 0).toFixed(2)}% шанс</em></div>
                         </div>
                       ))}
@@ -2276,7 +2279,7 @@ export default function App() {
                     <div className="cases-balance-chip">🟡 {Number(player?.balance || 0).toLocaleString("ru-RU")} GG</div>
                   </div>
 
-                  {["Обычные кейсы", "Rich Cases 💎", "All In 🎲"].map((category) => (
+                  {["Обычные кейсы", "Премиум", "All In"].map((category) => (
                     <section className="case-category-section" key={category}>
                       <h3>{category}</h3>
                       <div className="case-grid case-grid-reference">
@@ -2303,7 +2306,7 @@ export default function App() {
                                 <div className="case-price-row">
                                   <span>Цена:</span>
                                   {item.oldPrice && <del>{item.oldPrice.toLocaleString("ru-RU")}</del>}
-                                  <b>{item.price.toLocaleString("ru-RU")} 🟡 GG</b>
+                                  <b>{effectiveCasePrice(item, globalEvent?.event_name).toLocaleString("ru-RU")} 🟡 GG</b>{globalEvent?.event_name === "case_sale" && <em className="event-sale-pill">ИВЕНТ −25%</em>}
                                   {item.discount && <em>-{item.discount}%</em>}
                                 </div>
                                 <span className="case-card-open-label">Открыть ›</span>
@@ -2378,7 +2381,7 @@ export default function App() {
                             disabled={upgradeLoading}
                             onClick={() => chooseSource(item)}
                           >
-                            {brainrotImage(item) ? <img className={`upgrade-item-emoji-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="upgrade-item-emoji">🧠</span>}
+                            <img className={`upgrade-item-emoji-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
 
                             <span className="upgrade-item-info">
                               <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 Клубничная</span> : null}</b>
@@ -2425,10 +2428,10 @@ export default function App() {
 
                         <div
                           className={`upgrade-pointer-positioner${upgradePointerVisible ? "" : " is-hidden"}`}
-                          style={{ transform: `rotate(${upgradePointerAngle}deg)` }}
+                          style={{ transform: "rotate(0deg)" }}
                           aria-hidden="true"
                         >
-                          <div className={`upgrade-pointer-rotator${upgradeWheelAnimating ? " is-spinning" : ""}`}>
+                          <div className={`upgrade-pointer-rotator${upgradeWheelAnimating ? " is-spinning" : ""}`} style={{ "--upgrade-stop-angle": `${upgradePointerAngle}deg`, transform: upgradeWheelAnimating ? undefined : `rotate(${upgradePointerAngle}deg)` }}>
                             <svg className="upgrade-pointer-head" viewBox="0 0 36 44" focusable="false" aria-hidden="true">
                               <path d="M18 41 L3 5 Q18 -2 33 5 Z" fill="#f5fdff" stroke="#245c78" strokeWidth="2.5" strokeLinejoin="round" />
                             </svg>
@@ -2458,9 +2461,8 @@ export default function App() {
                       </div>
 
                       <p className="chance-explanation">
-                        Кнопка подберёт брейнрота с наиболее близким
-                        настоящим шансом. Вероятность зависит от стоимости
-                        предметов.
+                        Шанс рассчитывается по стоимости предметов и серверному коэффициенту события.
+                        После запуска сервер выбирает случайный угол, а стрелка показывает исход за 10 секунд.
                       </p>
 
                       {selectedTarget && (
@@ -2524,7 +2526,7 @@ export default function App() {
                               setActionMessage("");
                             }}
                           >
-                            {brainrotImage(item) ? <img className="upgrade-item-emoji-image" src={brainrotImage(item)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span className="upgrade-item-emoji">🧠</span>}
+                            <img className="upgrade-item-emoji-image" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
 
                             <span className="upgrade-item-info">
                               <b>{item.item_name}</b>
@@ -2611,7 +2613,7 @@ export default function App() {
                         </p>
 
                         <small>
-                          Настоящий шанс: {upgradeResult.chance}%
+                          Шанс победы: {upgradeResult.chance}% · случайный угол: {Number(upgradeResult.spin_angle).toFixed(1)}°
                         </small>
                       </div>
                     </div>
@@ -2636,19 +2638,19 @@ export default function App() {
 
           {page === "Инвентарь" && (
             <main className="content inventory-page">
-              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Ледяное хранилище</h2><p>{streamerMode ? "Просматривай свою коллекцию в режиме трансляции" : "Все твои брейнроты — в одном месте"}</p></div><div className="inventory-hero-icon">❄️</div></div>
+              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Моя коллекция</h2><p>{streamerMode ? "Просматривай свою коллекцию в режиме трансляции" : "Все твои брейнроты — в одном месте"}</p></div><div className="inventory-hero-icon">🧠</div></div>
               <div className="inventory-stats">{streamerMode ? <><div><small>Предметов в коллекции</small><b>{inventory.length}</b></div><div><small>Видов редкости</small><b>{new Set(inventory.map((item) => item.rarity || "Обычный")).size}</b></div><div><small>Режим</small><b>Просмотр</b></div></> : <><div><small>Предметов</small><b>{inventory.length}</b></div><div><small>Общая стоимость</small><b>{inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0).toLocaleString("ru-RU")} <i>GG</i></b></div><div><small>Средняя стоимость</small><b>{inventory.length?Math.round(inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0)/inventory.length).toLocaleString("ru-RU"):0} <i>GG</i></b></div></>}</div>
-              {inventoryLoading && <div className="inventory-state"><div className="inventory-loader">❄</div><b>Собираем коллекцию...</b></div>}
+              {inventoryLoading && <div className="inventory-state"><div className="inventory-loader">✦</div><b>Собираем коллекцию...</b></div>}
               {inventoryError && <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div>}
               {!inventoryLoading && !inventoryError && inventory.length > 0 && (<>
                 <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option>{!streamerMode && <><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></>}</select>{!streamerMode && <button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button>}</div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/>{brainrotImage(item) ? <img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}<i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 {streamerMode ? "Клубничная" : "Клубничная ×2.5"}</span> : null}</h3>{!streamerMode && <div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div>}<p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div>{!streamerMode ? <div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${Number(item.value_gg||0).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div> : <div className="streamer-readonly-label">Только просмотр во время трансляции</div>}</article>
+                  <article className="inventory-card" key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" /><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 {streamerMode ? "Клубничная" : "Клубничная ×2.5"}</span> : null}</h3>{!streamerMode && <div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div>}<p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div>{!streamerMode ? <div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${(Number(item.value_gg||0) * (globalEvent?.event_name === "gold_rush" ? 2 : 1)).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div> : <div className="streamer-readonly-label">Только просмотр во время трансляции</div>}</article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
-              {!inventoryLoading&&!inventoryError&&inventory.length===0&&<div className="inventory-state"><div className="inventory-empty-icon">❄️</div><h3>Хранилище пока пустое</h3><p>{streamerMode ? "Продолжай собирать коллекцию через задания и викторину." : "Открой первый кейс — и здесь появится твоя коллекция."}</p><button className="main-button" onClick={()=>changePage(streamerMode ? "Задания" : "Кейсы")}>{streamerMode ? "Перейти к заданиям" : "Перейти к кейсам"}</button></div>}
+              {!inventoryLoading&&!inventoryError&&inventory.length===0&&<div className="inventory-state"><div className="inventory-empty-icon">✦</div><h3>Хранилище пока пустое</h3><p>{streamerMode ? "Продолжай собирать коллекцию через задания и викторину." : "Открой первый кейс — и здесь появится твоя коллекция."}</p><button className="main-button" onClick={()=>changePage(streamerMode ? "Задания" : "Кейсы")}>{streamerMode ? "Перейти к заданиям" : "Перейти к кейсам"}</button></div>}
             </main>
           )}
 
@@ -2660,9 +2662,9 @@ export default function App() {
                 {!streamerMode && <article><small>Общая стоимость</small><b>{inventory.reduce((sum, item) => sum + Number(item.value_gg || 0), 0).toLocaleString("ru-RU")} GG</b></article>}
                 <article><small>Видов редкости</small><b>{new Set(inventory.map((item) => item.rarity || "Обычный")).size}</b></article>
               </div>
-              {inventoryLoading ? <div className="inventory-state"><div className="inventory-loader">❄</div><b>Загружаем альбом...</b></div> : inventoryError ? <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div> : inventory.length ? <div className="collection-grid">
+              {inventoryLoading ? <div className="inventory-state"><div className="inventory-loader">✦</div><b>Загружаем альбом...</b></div> : inventoryError ? <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div> : inventory.length ? <div className="collection-grid">
                 {inventory.map((item) => <article className="collection-card" key={`${item.item_name}-${item.mutation || "normal"}`}>
-                  <div className="collection-card-art">{brainrotImage(item) ? <img src={brainrotImage(item)} alt={item.item_name} loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}</div>
+                  <div className="collection-card-art"><img src={brainrotImage(item)} alt={item.item_name} loading="lazy" /></div>
                   <div className="collection-card-info"><b>{item.item_name}</b><small>{item.rarity || "Обычный"}{item.mutation === "strawberry" ? " · 🍓 Strawberry" : ""}</small>{!streamerMode && <strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>}</div>
                 </article>)}
               </div> : <div className="inventory-state"><div className="inventory-empty-icon">📚</div><h3>Альбом пока пуст</h3><p>{streamerMode ? "Выполняй задания и участвуй в викторине, чтобы развивать профиль." : "Открой первый кейс, чтобы добавить первого брейнрота."}</p><button className="main-button" onClick={() => changePage(streamerMode ? "Задания" : "Кейсы")}>{streamerMode ? "К заданиям" : "К кейсам"}</button></div>}
@@ -2671,9 +2673,9 @@ export default function App() {
 
           {page === "Рейтинг" && (
             <main className="content season-page">
-              <header className="season-page-heading"><span className="season-kicker">GLOBAL LEADERBOARD</span><h2>❄ Глобальный рейтинг</h2><p>Игроки с самым высоким опытом BrainGG.</p></header>
+              <header className="season-page-heading"><span className="season-kicker">GLOBAL LEADERBOARD</span><h2>✦ Глобальный рейтинг</h2><p>Игроки с самым высоким опытом BrainGG.</p></header>
               <section className="season-panel"><div className="season-panel-title"><h3>Таблица лидеров</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>↻ Обновить</button></div>
-                {hubLoading ? <p>Загружаем рейтинг...</p> : (gameHub.leaderboard || []).length ? <div className="leaderboard-list">{gameHub.leaderboard.map((entry,index)=><article className={`leaderboard-row ${index<3?"top-player":""}`} key={`${entry.game_id||entry.username}-${index}`}><b className="leaderboard-place">{index===0?"👑":`#${index+1}`}</b><div className="leaderboard-avatar">{index<3?"❄":"♙"}</div><div className="leaderboard-user"><b>{streamerMode ? `Игрок #${index + 1}` : `@${entry.username}`}</b><small>Уровень {entry.level}{streamerMode ? "" : ` · ${Number(entry.total_cases_opened || 0)} открытий`}</small></div><strong>{Number(entry.xp||0).toLocaleString("ru-RU")} XP</strong></article>)}</div> : <p className="season-empty">Рейтинг появится после накопления игрового опыта.</p>}
+                {hubLoading ? <p>Загружаем рейтинг...</p> : (gameHub.leaderboard || []).length ? <div className="leaderboard-list">{gameHub.leaderboard.map((entry,index)=><article className={`leaderboard-row ${index<3?"top-player":""}`} key={`${entry.game_id||entry.username}-${index}`}><b className="leaderboard-place">{index===0?"👑":`#${index+1}`}</b><div className="leaderboard-avatar">{index<3?"✦":"♙"}</div><div className="leaderboard-user"><b>{streamerMode ? `Игрок #${index + 1}` : `@${entry.username}`}</b><small>Уровень {entry.level}{streamerMode ? "" : ` · ${Number(entry.total_cases_opened || 0)} открытий`}</small></div><strong>{Number(entry.xp||0).toLocaleString("ru-RU")} XP</strong></article>)}</div> : <p className="season-empty">Рейтинг появится после накопления игрового опыта.</p>}
               </section>
             </main>
           )}
@@ -2683,7 +2685,7 @@ export default function App() {
               <header className="season-page-heading"><span className="season-kicker">COMMUNITY FEED</span><h2>🔥 Live Drops</h2><p>Последние подтверждённые выпадения игроков BrainGG.</p></header>
               <section className="season-panel"><div className="season-panel-title"><h3>Лента выпадений</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>{hubLoading ? "..." : "↻ Обновить"}</button></div>
                 {hubLoading ? <p>Загружаем ленту...</p> : liveDrops.length ? <div className="drops-list">{liveDrops.map((drop) => <article className="drops-row" key={drop.id}>
-                  <div className="drops-art">{brainrotImage(drop) ? <img src={brainrotImage(drop)} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} /> : <span>🧠</span>}</div>
+                  <div className="drops-art"><img src={brainrotImage(drop)} alt={drop.item_name || "Brainrot"} loading="lazy" /></div>
                   <div className="drops-info"><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small><time>{drop.created_at ? new Date(drop.created_at).toLocaleString("ru-RU") : ""}</time></div>
                   <strong>{Number(drop.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
                 </article>)}</div> : <div className="season-empty">Пока нет выпадений. Открой кейс и стань первым в ленте!</div>}
@@ -2727,7 +2729,7 @@ export default function App() {
 
           {page === "Задания" && !streamerMode && (
             <main className="content season-page">
-              <header className="season-page-heading"><span className="season-kicker">ARCTIC MISSIONS</span><h2>❄ Задания и достижения</h2><p>Выполняй игровые цели, получай GG и опыт.</p></header>
+              <header className="season-page-heading"><span className="season-kicker">BRAIN GG MISSIONS</span><h2>✦ Задания и достижения</h2><p>Выполняй игровые цели, получай GG и опыт.</p></header>
               {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
               <section className="season-panel"><h3>Текущие задания</h3>{(gameHub.tasks||[]).map((task)=><article className="mission-card" key={task.id}><div className="mission-icon">✦</div><div className="mission-info"><b>{task.title}</b><p>{task.description}</p><div className="mission-progress"><span style={{width:`${Math.min(100,Number(task.progress||0)/task.goal*100)}%`}}/></div><small>{Math.min(Number(task.progress||0),task.goal)} / {task.goal}</small></div><div className="mission-reward"><b>+{task.reward} GG</b><small>+{task.xp} XP</small><button className="case-button" disabled={!task.progress||task.progress<task.goal||task.claimed||taskClaimLoading===task.id} onClick={()=>claimTaskReward(task.id)}>{task.claimed?"Получено":taskClaimLoading===task.id?"...":"Забрать"}</button></div></article>)}</section>
               <section className="season-panel"><h3>Достижения</h3><div className="achievement-grid">{[{name:"Первый шаг",desc:"Открой первый кейс",ok:Number(gameHub.progress?.total_cases_opened||0)>=1},{name:"Коллекционер",desc:"Открой 10 кейсов",ok:Number(gameHub.progress?.total_cases_opened||0)>=10},{name:"Торговец",desc:"Продай первый предмет",ok:Number(gameHub.progress?.total_sales||0)>=1},{name:"Мастер улучшений",desc:"Улучши первый предмет",ok:Number(gameHub.progress?.total_upgrades||0)>=1}].map((a)=><article className={`achievement-card ${a.ok?"unlocked":""}`} key={a.name}><span>{a.ok?"🏆":"🔒"}</span><b>{a.name}</b><small>{a.desc}</small></article>)}</div></section>
@@ -2773,7 +2775,7 @@ export default function App() {
             <main className="content season-page settings-page">
               <header className="season-page-heading"><span className="season-kicker">YOUR EXPERIENCE</span><h2>⚙ Настройки</h2><p>Настрой BrainGG под себя.</p></header>
               <section className="season-panel settings-list">
-                <article className="settings-row"><span className="settings-icon">🎵</span><div><b>Фоновая музыка</b><small>Зимний саундтрек и музыка ивентов</small></div><button className={`settings-switch ${musicEnabled ? "active" : ""}`} type="button" onClick={toggleWinterMusic}>{musicEnabled ? "Вкл." : "Выкл."}</button></article>
+                <article className="settings-row"><span className="settings-icon">🎵</span><div><b>Фоновая музыка</b><small>Музыка BrainGG и активных ивентов</small></div><button className={`settings-switch ${musicEnabled ? "active" : ""}`} type="button" onClick={toggleWinterMusic}>{musicEnabled ? "Вкл." : "Выкл."}</button></article>
                 <article className="settings-row"><span className="settings-icon">🔊</span><div><b>Звуковые эффекты</b><small>Звуки кнопок и игровых действий</small></div><button className={`settings-switch ${soundEnabled ? "active" : ""}`} type="button" onClick={() => setSoundEnabled((value) => !value)}>{soundEnabled ? "Вкл." : "Выкл."}</button></article>
                 <article className="settings-row settings-streamer-row"><span className="settings-icon">📡</span><div><b>Режим стримера</b><small>Скрывает личные данные, баланс и ленты выпадений; отключает кейсы, апгрейды, продажи и платежи в интерфейсе трансляции.</small></div><button className={`settings-switch ${streamerMode ? "active" : ""}`} type="button" aria-pressed={streamerMode} disabled={opening || upgradeLoading || topupBusy || Boolean(sellingId) || sellingAll} onClick={toggleStreamerMode}>{streamerMode ? "Вкл." : "Выкл."}</button></article>
               </section>
@@ -2803,7 +2805,7 @@ export default function App() {
 
           {page === "Викторина" && (
             <main className="content season-page quiz-page">
-              <header className="season-page-heading"><span className="season-kicker">BRAIN GG DAILY QUIZ</span><h2>❄ Викторина BrainGG</h2><p>Отвечай на вопросы, проверяй знания и получай монеты.</p></header>
+              <header className="season-page-heading"><span className="season-kicker">BRAIN GG DAILY QUIZ</span><h2>✦ Викторина BrainGG</h2><p>Отвечай на вопросы, проверяй знания и получай монеты.</p></header>
               <section className="quiz-status-grid">
                 <article><small>Попыток сегодня</small><b>{quizStatus.used || 0} / 3</b></article>
                 <article><small>Осталось попыток</small><b>{quizStatus.remaining ?? 3}</b></article>
@@ -2817,15 +2819,15 @@ export default function App() {
                   <div className="quiz-options">{quizQuestion.options.map((option,index)=><button key={`${quizQuestion.id}-${index}`} className={`quiz-option ${quizSelected===index?"selected":""} ${quizAnswered&&index===quizQuestion.correctIndex?"correct":""} ${quizAnswered&&quizSelected===index&&index!==quizQuestion.correctIndex?"incorrect":""}`} disabled={quizAnswered||quizLoading} onClick={()=>setQuizSelected(index)}><span>{String.fromCharCode(65+index)}</span>{option}</button>)}</div>
                   {quizFeedback && <div className={`quiz-feedback ${quizFeedback.startsWith("Верно")?"success":""}`}>{quizFeedback}{quizQuestion.explanation&&quizAnswered?<small>{quizQuestion.explanation}</small>:null}</div>}
                   {!quizAnswered ? <button className="main-button quiz-action" disabled={quizSelected===null||quizLoading} onClick={submitQuizAnswer}>{quizLoading?"Проверяем...":"Ответить"}</button> : <button className="main-button quiz-action" disabled={quizStatus.remaining<=0||quizLoading} onClick={startQuizQuestion}>{quizStatus.remaining>0?"Следующий вопрос":"Попытки закончились"}</button>}
-                </> : <div className="quiz-empty"><div className="quiz-crystal">❄</div><h3>{quizStatus.remaining<=0?"На сегодня всё!":"Готов проверить свои знания?"}</h3><p>{quizFeedback || "Каждый день доступны 3 попытки. За каждый правильный ответ начисляется 5 GG."}</p><button className="main-button quiz-action" disabled={quizLoading||quizStatus.remaining<=0} onClick={startQuizQuestion}>{quizLoading?"Загружаем...":quizStatus.remaining>0?"Начать викторину":"Возвращайся завтра"}</button></div>}
+                </> : <div className="quiz-empty"><div className="quiz-crystal">✦</div><h3>{quizStatus.remaining<=0?"На сегодня всё!":"Готов проверить свои знания?"}</h3><p>{quizFeedback || "Каждый день доступны 3 попытки. За каждый правильный ответ начисляется 5 GG."}</p><button className="main-button quiz-action" disabled={quizLoading||quizStatus.remaining<=0} onClick={startQuizQuestion}>{quizLoading?"Загружаем...":quizStatus.remaining>0?"Начать викторину":"Возвращайся завтра"}</button></div>}
               </section>
               <p className="quiz-footnote">Попытка расходуется после отправки ответа. Награда начисляется сервером, максимум 15 GG в день.</p>
             </main>
           )}
 
           {page === "Профиль" && (
-            <main className="content season-page"><header className="season-page-heading"><span className="season-kicker">PLAYER IDENTITY</span><h2>❄ Профиль игрока</h2><p>Твой путь в мире BrainGG.</p></header>
-              <section className="season-profile-card"><div className="profile-avatar">❄</div><div className="profile-identity"><h2>{streamerMode ? "Стример BrainGG" : (player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок"))}</h2><p>{streamerMode ? "Личные данные скрыты в режиме трансляции" : `Game ID: ${player?.game_id || "Не задан — добавь username в Telegram"}`}</p><span>Уровень {gameHub.progress?.level||1}</span></div><div className="profile-xp"><b>{Number(gameHub.progress?.xp||0).toLocaleString("ru-RU")} XP</b><div className="mission-progress"><span style={{width:`${Math.min(100,Math.max(0,(Number(gameHub.progress?.xp||0)-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)/Math.max(1,Number(gameHub.progress?.level||1)*Number(gameHub.progress?.level||1)*100-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)*100))}%`}}/></div><small>До следующего уровня: {Math.max(0,Number(gameHub.progress?.next_level_xp||100)-Number(gameHub.progress?.xp||0))} XP</small></div></section>
+            <main className="content season-page"><header className="season-page-heading"><span className="season-kicker">PLAYER IDENTITY</span><h2>✦ Профиль игрока</h2><p>Твой путь в мире BrainGG.</p></header>
+              <section className="season-profile-card"><div className="profile-avatar">🧠</div><div className="profile-identity"><h2>{streamerMode ? "Стример BrainGG" : (player?.username ? `@${player.username}` : (telegramIdentity.first_name || "Игрок"))}</h2><p>{streamerMode ? "Личные данные скрыты в режиме трансляции" : `Game ID: ${player?.game_id || "Не задан — добавь username в Telegram"}`}</p><span>Уровень {gameHub.progress?.level||1}</span></div><div className="profile-xp"><b>{Number(gameHub.progress?.xp||0).toLocaleString("ru-RU")} XP</b><div className="mission-progress"><span style={{width:`${Math.min(100,Math.max(0,(Number(gameHub.progress?.xp||0)-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)/Math.max(1,Number(gameHub.progress?.level||1)*Number(gameHub.progress?.level||1)*100-Math.pow(Math.max(0,Number(gameHub.progress?.level||1)-1),2)*100)*100))}%`}}/></div><small>До следующего уровня: {Math.max(0,Number(gameHub.progress?.next_level_xp||100)-Number(gameHub.progress?.xp||0))} XP</small></div></section>
               <div className="profile-stat-grid">{streamerMode ? <><article><small>УРОВЕНЬ</small><b>{gameHub.progress?.level || 1}</b></article><article><small>ОПЫТ</small><b>{Number(gameHub.progress?.xp || 0).toLocaleString("ru-RU")} XP</b></article><article><small>СЕРИЯ ВХОДОВ</small><b>{gameHub.progress?.daily_streak || 0} дней</b></article><article><small>РЕЖИМ</small><b>Трансляция</b></article></> : <><article><small>ОТКРЫТО КЕЙСОВ</small><b>{gameHub.progress?.total_cases_opened||0}</b></article><article><small>ПРОДАНО ПРЕДМЕТОВ</small><b>{gameHub.progress?.total_sales||0}</b></article><article><small>АПГРЕЙДОВ</small><b>{gameHub.progress?.total_upgrades||0}</b></article><article><small>СЕРИЯ ВХОДОВ</small><b>{gameHub.progress?.daily_streak||0} дней</b></article></>}</div>
             </main>
           )}
@@ -2918,14 +2920,14 @@ export default function App() {
                       <em>Сумма записей coins</em>
                     </article>
                     <article className="admin-metric-card admin-metric-info">
-                      <span className="admin-metric-icon">❄</span>
+                      <span className="admin-metric-icon">✦</span>
                       <small>СОСТОЯНИЕ ДОСТУПА</small>
                       <strong>Активен</strong>
                       <em>Проверка прав на сервере</em>
                     </article>
                   </div>
 
-                  <section className="admin-panel-card"><div className="admin-section-title"><span className="admin-section-icon">❄</span><div><h3>Arctic Season 2</h3><p>Состояние новых игровых модулей.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminGameStats}>↻</button></div><div className="admin-metrics-grid"><article className="admin-metric-card"><small>ВСЕ ИГРОКИ</small><strong>{adminGameStats?.players ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРЕДМЕТОВ В ИНВЕНТАРЯХ</small><strong>{adminGameStats?.inventory_items ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРОФИЛЕЙ С XP</small><strong>{adminGameStats?.active_profiles ?? "—"}</strong></article></div><p className="admin-data-note">Новые показатели доступны после применения миграции migrations_arctic_season2.sql.</p></section>
+                  <section className="admin-panel-card"><div className="admin-section-title"><span className="admin-section-icon">🧠</span><div><h3>BrainGG v16 · Red & White</h3><p>Состояние новых игровых модулей.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminGameStats}>↻</button></div><div className="admin-metrics-grid"><article className="admin-metric-card"><small>ВСЕ ИГРОКИ</small><strong>{adminGameStats?.players ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРЕДМЕТОВ В ИНВЕНТАРЯХ</small><strong>{adminGameStats?.inventory_items ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРОФИЛЕЙ С XP</small><strong>{adminGameStats?.active_profiles ?? "—"}</strong></article></div><p className="admin-data-note">Показатели доступны после применения SQL-миграций из папки supabase/migrations и migrations_arctic_season2.sql.</p></section>
                   <section className="admin-panel-card admin-overview-card">
                     <div className="admin-section-title">
                       <span className="admin-section-icon">⌁</span>
@@ -3010,7 +3012,7 @@ export default function App() {
                       </div>
                       <div>
                         <small>ОПЫТ ПРОФИЛЯ</small>
-                        <b>❄ {adminPlayer.progress?.xp ?? 0} XP</b>
+                        <b>✦ {adminPlayer.progress?.xp ?? 0} XP</b>
                       </div>
                     </div>
                   </section>
@@ -3053,7 +3055,7 @@ export default function App() {
                           <option value="coins">🪙 Монеты GG</option>
                           <option value="cases">🎁 Бесплатные кейсы</option>
                           <option value="brainrot">🧠 Брейнрот</option>
-                          <option value="xp">❄ Опыт профиля (XP)</option>
+                          <option value="xp">✦ Опыт профиля (XP)</option>
                         </select>
                       </label>
 
@@ -3130,7 +3132,7 @@ export default function App() {
                       <div className="admin-inventory-list">
                         {adminInventory.map((item) => (
                           <div className="admin-inventory-row" key={item.id}>
-                            <span>🧠</span>
+                            <img className="admin-inventory-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
                             <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">🍓 ×2.5</span> : null}</b>
                             <small>{item.rarity}</small>
                             <strong>{item.value_gg} GG</strong>
@@ -3164,12 +3166,18 @@ export default function App() {
 
                       <section className="admin-panel-card admin-events-card">
                         <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG. Каждый запуск длится 2 минуты 59 секунд.</p></div></div>
-                        {globalEvent?.event_name && <div className="admin-active-event"><b>Сейчас активен: {globalEvent.event_name === "tacos" ? "🌮 It's Raining Tacos" : globalEvent.event_name === "lucky" ? "🍀 LUCKY DAY!" : "🍓 STRAWBERRY DAY!"}</b><span>Осталось {Math.floor(eventRemainingSeconds / 60)}:{String(eventRemainingSeconds % 60).padStart(2, "0")}</span></div>}
+                        {globalEvent?.event_name && <div className="admin-active-event"><b>Сейчас активен: {eventPresentation[globalEvent.event_name]?.title || globalEvent.event_name}</b><span>Осталось {Math.floor(eventRemainingSeconds / 60)}:{String(eventRemainingSeconds % 60).padStart(2, "0")}</span></div>}
                         <div className="admin-event-grid">
                           {[
-                            ["tacos", "🌮", "It's Raining Tacos", "Тако вместо снега, тёплый фон и музыка события."],
-                            ["lucky", "🍀", "LUCKY DAY!", "Клеверы, золотисто-зелёная тема и x2 удача в кейсах и апгрейдере."],
-                            ["strawberry", "🍓", "STRAWBERRY DAY!", "Клубничная тема, тихая музыка и 5% шанс мутации ×2.5."],
+                            ["tacos", "🌮", "It's Raining Tacos", "Тёплый фон, падающие тако и оригинальная музыка."],
+                            ["lucky", "🍀", "LUCKY DAY!", "Шанс редких дропов и апгрейда ×2."],
+                            ["strawberry", "🍓", "STRAWBERRY DAY!", "5% шанс клубничной мутации ×2.5."],
+                            ["red_fever", "🔥", "RED FEVER", "Вес редких и выше редких наград ×1.5."],
+                            ["gold_rush", "💰", "GOLD RUSH", "Продажа брейнротов приносит в 2 раза больше GG."],
+                            ["case_sale", "🏷️", "CASE SALE", "Скидка 25% на все открытия кейсов."],
+                            ["power_upgrade", "⚡", "POWER UPGRADE", "Шанс апгрейда увеличен в 1.5 раза."],
+                            ["jackpot_hunt", "👑", "JACKPOT HUNT", "Вес легендарных, мифических и OG наград ×3."],
+                            ["night_shift", "🌙", "NIGHT SHIFT", "Ночная тема и отдельный музыкальный луп."],
                           ].map(([key, icon, title, description]) => (
                             <article className={`admin-event-card admin-event-${key} ${globalEvent?.event_name === key ? "is-active" : ""}`} key={key}>
                               <div className="admin-event-icon">{icon}</div><h4>{title}</h4><p>{description}</p>
@@ -3351,13 +3359,13 @@ export default function App() {
       {showRewardModal && lastRewards.length > 0 && (
         <div className="reward-modal-backdrop" role="presentation" onClick={() => setShowRewardModal(false)}>
           <section className="reward-modal" role="dialog" aria-modal="true" aria-labelledby="case-reward-title" onClick={(event) => event.stopPropagation()}>
-            <div className="reward-modal-sparkle" aria-hidden="true">✦ ❄ ✦</div>
-            <span className="reward-modal-kicker">BRAIN GG · DROP CONFIRMED</span>
+            <div className="reward-modal-sparkle" aria-hidden="true">✦ ✧ ✦</div>
+            <span className="reward-modal-kicker">BRAINGG · DROP CONFIRMED</span>
             <h2 id="case-reward-title">Твой выигрыш!</h2>
             <div className={`reward-modal-grid ${lastRewards.length > 1 ? "multi" : ""}`}>
               {lastRewards.map((reward, index) => (
                 <article className="reward-modal-item" key={`${reward.item_name}-${index}`}>
-                  <div className="reward-modal-art">{brainrotImage(reward) ? <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} /> : <span>🧠</span>}</div>
+                  <div className="reward-modal-art"><img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} /></div>
                   <h3>{reward.item_name || reward.name}</h3>
                   <span className={`reward-modal-rarity ${reward.rarity === "OG" ? "rarity-og" : ""}`}>{reward.rarity || "Brainrot"}</span>
                   {reward.mutation === "strawberry" && <span className="strawberry-mutation-pill">🍓 Клубничная мутация · ×2.5</span>}
