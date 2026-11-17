@@ -3,7 +3,39 @@ import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 import redHomeBackground from "./assets/braingg-red-home.svg";
-import partyHomeBackground from "./assets/braingg-party-home.png";
+import partyHomeBackground from "./assets/braingg-party-home.webp";
+import artCappuccinoBallerina from "./assets/brainrots/v17/cappuccino-ballerina.webp";
+import artCrocodileAviator from "./assets/brainrots/v17/crocodile-aviator.webp";
+import artNinjaEspresso from "./assets/brainrots/v17/ninja-espresso.webp";
+import artSlimeSquad from "./assets/brainrots/v17/slime-squad.webp";
+import artPizzaGolem from "./assets/brainrots/v17/pizza-golem.webp";
+import artIceDragon from "./assets/brainrots/v17/ice-dragon.webp";
+import artRollerShrimp from "./assets/brainrots/v17/roller-shrimp.webp";
+import artStrawberryRhino from "./assets/brainrots/v17/strawberry-rhino.webp";
+import artMushroomKnight from "./assets/brainrots/v17/mushroom-knight.webp";
+import artMaskedCoffeeBean from "./assets/brainrots/v17/masked-coffee-bean.webp";
+import artElectricSheep from "./assets/brainrots/v17/electric-sheep.webp";
+import artToastCrab from "./assets/brainrots/v17/toast-crab.webp";
+import artPineappleElephant from "./assets/brainrots/v17/pineapple-elephant.webp";
+import artCactusJellyfish from "./assets/brainrots/v17/cactus-jellyfish.webp";
+import artGeckoPilot from "./assets/brainrots/v17/gecko-pilot.webp";
+import artRaccoonVendor from "./assets/brainrots/v17/raccoon-vendor.webp";
+import caseFallbackArt from "./assets/cases/v17/case-fallback.svg";
+import depCookieBatter from "./assets/brainrots/deposits/cookie-batter.webp";
+import depMonocycleRider from "./assets/brainrots/deposits/monocycle-rider.webp";
+import depBlueLetterSquad from "./assets/brainrots/deposits/blue-letter-squad.webp";
+import depTuffToucan from "./assets/brainrots/deposits/tuff-toucan.webp";
+import depPizzaSauceDuo from "./assets/brainrots/deposits/pizza-sauce-duo.webp";
+import depRoseAndBear from "./assets/brainrots/deposits/rose-and-bear.webp";
+import depHauntedHouse from "./assets/brainrots/deposits/haunted-house.webp";
+import depRicoDinero from "./assets/brainrots/deposits/rico-dinero.webp";
+import depGhostPumpkin from "./assets/brainrots/deposits/ghost-pumpkin.webp";
+import depGoldenDragon from "./assets/brainrots/deposits/golden-dragon.webp";
+import depIceYetiAtm from "./assets/brainrots/deposits/ice-yeti-atm.webp";
+import depBoneCageMonster from "./assets/brainrots/deposits/bone-cage-monster.webp";
+import depArcadeMonster from "./assets/brainrots/deposits/arcade-monster.webp";
+import depFlyingClockCharacter from "./assets/brainrots/deposits/flying-clock-character.webp";
+import depPixelDuo from "./assets/brainrots/deposits/pixel-duo.webp";
 
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
 const SITE_THEME_STORAGE_KEY = "braingg-site-theme-v1";
@@ -59,48 +91,104 @@ function getCaseReelOffset(position) {
   return -(safePosition * itemWidth + itemWidth / 2);
 }
 
-// Original BrainGG character artwork. All game cards use local image files (never emoji placeholders).
+// All brainrot artwork is imported from src/assets. Vite bundles these files,
+// so Vercel cannot silently omit images from a public/ folder during deployment.
 const BRAINROT_ART = [
-  { match: ["ballerina cappuccina", "cappuccina"], image: "/brainrots/v17/cappuccino-ballerina.webp" },
-  { match: ["bombardiro crocodilo", "bombardiro"], image: "/brainrots/v17/crocodile-aviator.webp" },
-  { match: ["cappuccino assassino", "assassino"], image: "/brainrots/v17/ninja-espresso.webp" },
-  { match: ["los tralaleritos", "tralaleritos"], image: "/brainrots/v17/slime-squad.webp" },
-  { match: ["noobini pizzanini", "pizzanini"], image: "/brainrots/v17/pizza-golem.webp" },
-  { match: ["tralalero tralala", "dragon cannelloni", "dragon canneloni"], image: "/brainrots/v17/ice-dragon.webp" },
-  { match: ["trippi troppi"], image: "/brainrots/v17/roller-shrimp.webp" },
-  { match: ["strawberry elephant"], image: "/brainrots/v17/strawberry-rhino.webp" },
-  { match: ["headless horseman"], image: "/brainrots/v17/mushroom-knight.webp" },
-  { match: ["john pork"], image: "/brainrots/v17/masked-coffee-bean.webp" },
-  { match: ["meowl"], image: "/brainrots/v17/electric-sheep.webp" },
-  { match: ["skibidi toilet"], image: "/brainrots/v17/toast-crab.webp" },
-  { match: ["la grande combinasion"], image: "/brainrots/v17/pineapple-elephant.webp" },
-  { match: ["lirili larila", "brr brr patapim"], image: "/brainrots/v17/cactus-jellyfish.webp" },
-  { match: ["arcadragon", "dragon"], image: "/brainrots/v17/gecko-pilot.webp" },
-  { match: ["fishino clownino", "shrimp"], image: "/brainrots/v17/roller-shrimp.webp" },
+  { match: ["ballerina cappuccina", "cappuccina"], image: artCappuccinoBallerina },
+  { match: ["bombardiro crocodilo", "bombardiro"], image: artCrocodileAviator },
+  { match: ["cappuccino assassino", "assassino"], image: artNinjaEspresso },
+  { match: ["los tralaleritos", "tralaleritos"], image: artSlimeSquad },
+  { match: ["noobini pizzanini", "pizzanini"], image: artPizzaGolem },
+  { match: ["tralalero tralala", "dragon cannelloni", "dragon canneloni"], image: artIceDragon },
+  { match: ["trippi troppi"], image: artRollerShrimp },
+  { match: ["strawberry elephant"], image: artStrawberryRhino },
+  { match: ["headless horseman"], image: artMushroomKnight },
+  { match: ["john pork"], image: artMaskedCoffeeBean },
+  { match: ["meowl"], image: artElectricSheep },
+  { match: ["skibidi toilet"], image: artToastCrab },
+  { match: ["la grande combinasion"], image: artPineappleElephant },
+  { match: ["lirili larila", "brr brr patapim"], image: artCactusJellyfish },
+  { match: ["arcadragon", "dragon"], image: artGeckoPilot },
+  { match: ["fishino clownino", "shrimp"], image: artRollerShrimp },
+  { match: ["tuff toucan"], image: depTuffToucan },
+  { match: ["rico dinero"], image: depRicoDinero },
+  { match: ["бисквит с битой", "cookie batter"], image: depCookieBatter },
+  { match: ["наездник на моноцикле", "monocycle rider"], image: depMonocycleRider },
+  { match: ["отряд синих букв", "blue letter squad"], image: depBlueLetterSquad },
+  { match: ["пицца и соус", "pizza and sauce"], image: depPizzaSauceDuo },
+  { match: ["розочка и медвежонок", "rose and bear"], image: depRoseAndBear },
+  { match: ["дом монстр", "haunted house"], image: depHauntedHouse },
+  { match: ["призрак и тыквенный голем", "ghost pumpkin"], image: depGhostPumpkin },
+  { match: ["золотой дракон", "golden dragon"], image: depGoldenDragon },
+  { match: ["ледяной йети банкомат", "ice yeti atm"], image: depIceYetiAtm },
+  { match: ["красный монстр в костяной клетке", "bone cage monster"], image: depBoneCageMonster },
+  { match: ["аркадный монстр", "arcade monster"], image: depArcadeMonster },
+  { match: ["персонаж с летающими часами", "flying clock"], image: depFlyingClockCharacter },
+  { match: ["два пиксельных персонажа", "pixel duo"], image: depPixelDuo },
 ];
 const BRAINROT_FALLBACK_ART = [
-  "cappuccino-ballerina", "crocodile-aviator", "ninja-espresso", "pineapple-elephant",
-  "ice-dragon", "cactus-jellyfish", "pizza-golem", "gecko-pilot",
-  "roller-shrimp", "slime-squad", "masked-coffee-bean", "mushroom-knight",
-  "strawberry-rhino", "toast-crab", "raccoon-vendor", "electric-sheep",
+  artCappuccinoBallerina, artCrocodileAviator, artNinjaEspresso, artPineappleElephant,
+  artIceDragon, artCactusJellyfish, artPizzaGolem, artGeckoPilot,
+  artRollerShrimp, artSlimeSquad, artMaskedCoffeeBean, artMushroomKnight,
+  artStrawberryRhino, artToastCrab, artRaccoonVendor, artElectricSheep,
 ];
+const DEPOSIT_BRAINROT_IMAGES = {
+  "cookie-batter": depCookieBatter,
+  "monocycle-rider": depMonocycleRider,
+  "blue-letter-squad": depBlueLetterSquad,
+  "tuff-toucan": depTuffToucan,
+  "pizza-sauce-duo": depPizzaSauceDuo,
+  "rose-and-bear": depRoseAndBear,
+  "haunted-house": depHauntedHouse,
+  "rico-dinero": depRicoDinero,
+  "ghost-pumpkin": depGhostPumpkin,
+  "golden-dragon": depGoldenDragon,
+  "ice-yeti-atm": depIceYetiAtm,
+  "bone-cage-monster": depBoneCageMonster,
+  "arcade-monster": depArcadeMonster,
+  "flying-clock-character": depFlyingClockCharacter,
+  "pixel-duo": depPixelDuo,
+};
 
 function brainrotImage(item) {
   const name = String(item?.item_name || item?.name || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim();
   const local = BRAINROT_ART.find((entry) => entry.match.some((key) => name.includes(key)))?.image;
-  if (local) return `${import.meta.env.BASE_URL}${local.replace(/^\/+/, "")}`;
-  // Stable fallback keeps every unknown database item associated with a real local illustration.
+  if (local) return local;
   const hash = [...name].reduce((value, char) => ((value * 31) + char.charCodeAt(0)) >>> 0, 7);
-  const fallback = BRAINROT_FALLBACK_ART[hash % BRAINROT_FALLBACK_ART.length] || BRAINROT_FALLBACK_ART[0];
-  return `${import.meta.env.BASE_URL}brainrots/v17/${fallback}.webp`;
+  return BRAINROT_FALLBACK_ART[hash % BRAINROT_FALLBACK_ART.length] || BRAINROT_FALLBACK_ART[0];
+}
+
+function depositBrainrotImage(item) {
+  return DEPOSIT_BRAINROT_IMAGES[String(item?.image_key || item?.item_key || "")] || artCappuccinoBallerina;
 }
 
 function handleBrainrotImageError(event) {
-  const fallback = `${import.meta.env.BASE_URL}brainrots/v17/cappuccino-ballerina.webp`;
-  if (event?.currentTarget && event.currentTarget.src !== fallback) {
+  if (event?.currentTarget && event.currentTarget.src !== artCappuccinoBallerina) {
     event.currentTarget.onerror = null;
-    event.currentTarget.src = fallback;
+    event.currentTarget.src = artCappuccinoBallerina;
   }
+}
+
+function caseImageSrc(item) {
+  return item?.image || caseFallbackArt;
+}
+
+function CaseArtwork({ item, className = "", alt }) {
+  const image = caseImageSrc(item);
+  return (
+    <div className={`${className} case-artwork`}>
+      <img
+        src={image}
+        alt={alt || item?.name || "Изображение кейса"}
+        onError={(event) => {
+          event.currentTarget.onerror = null;
+          event.currentTarget.src = caseFallbackArt;
+        }}
+        loading="eager"
+        decoding="async"
+      />
+    </div>
+  );
 }
 
 function rarityClassName(value) {
@@ -112,20 +200,6 @@ function rarityClassName(value) {
   if (rarity.includes("epic") || rarity.includes("эпич")) return "rarity-epic";
   if (rarity.includes("rare") || rarity.includes("редк")) return "rarity-rare";
   return "rarity-common";
-}
-
-function caseImageSrc(item) {
-  const filename = String(item?.image || "").replace(/^\/+/, "");
-  return filename ? `${import.meta.env.BASE_URL}${filename}` : "";
-}
-
-function CaseArtwork({ item, className = "", alt }) {
-  const image = caseImageSrc(item);
-  return (
-    <div className={`${className} case-artwork`}>
-      {image ? <img src={image} alt={alt || item?.name || "Изображение кейса"} loading="eager" decoding="async" /> : <span className="case-artwork-placeholder">Изображение кейса</span>}
-    </div>
-  );
 }
 
 function calculateUpgradeChance(source, target, luckMultiplier = 1) {
@@ -333,9 +407,30 @@ export default function App() {
   const [quizAnswered, setQuizAnswered] = useState(false);
   const [adminGameStats, setAdminGameStats] = useState(null);
   const [topupOpen, setTopupOpen] = useState(false);
+  const [topupTab, setTopupTab] = useState("stars");
   const [topupStars, setTopupStars] = useState(100);
   const [topupBusy, setTopupBusy] = useState(false);
   const [topupMessage, setTopupMessage] = useState("");
+  const [depositStep, setDepositStep] = useState(1);
+  const [depositCatalog, setDepositCatalog] = useState([]);
+  const [depositMutations, setDepositMutations] = useState([]);
+  const [depositTraits, setDepositTraits] = useState([]);
+  const [depositSelectedItemKey, setDepositSelectedItemKey] = useState("");
+  const [depositMutationKey, setDepositMutationKey] = useState("normal");
+  const [depositRobloxUsername, setDepositRobloxUsername] = useState("");
+  const [depositRequest, setDepositRequest] = useState(null);
+  const [depositRequests, setDepositRequests] = useState([]);
+  const [depositLoading, setDepositLoading] = useState(false);
+  const [depositMessage, setDepositMessage] = useState("");
+  const [depositError, setDepositError] = useState("");
+  const [adminDepositCatalog, setAdminDepositCatalog] = useState([]);
+  const [adminDepositTraits, setAdminDepositTraits] = useState([]);
+  const [adminDepositRequests, setAdminDepositRequests] = useState([]);
+  const [adminDepositTraitDrafts, setAdminDepositTraitDrafts] = useState({});
+  const [adminDepositPriceDrafts, setAdminDepositPriceDrafts] = useState({});
+  const [adminDepositLoading, setAdminDepositLoading] = useState(false);
+  const [adminDepositBusy, setAdminDepositBusy] = useState(false);
+  const [adminDepositFeedback, setAdminDepositFeedback] = useState("");
 
   const initData = () => window.Telegram?.WebApp?.initData;
   const telegramIdentity = window.Telegram?.WebApp?.initDataUnsafe?.user || {};
@@ -361,12 +456,13 @@ export default function App() {
     try {
       tg.ready?.();
       tg.expand?.();
-      tg.setHeaderColor?.("#2a0710");
-      tg.setBackgroundColor?.("#2a0710");
+      const telegramThemeColor = siteTheme === "party" ? "#170d25" : "#2a0710";
+      tg.setHeaderColor?.(telegramThemeColor);
+      tg.setBackgroundColor?.(telegramThemeColor);
     } catch (error) {
       console.warn("Telegram WebApp viewport setup failed:", error);
     }
-  }, []);
+  }, [siteTheme]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -646,6 +742,182 @@ export default function App() {
     finally { setTopupBusy(false); }
   }
 
+  async function callBrainrotDepositApi(action, payload = {}) {
+    const { data, error } = await supabase.functions.invoke("braingg-api", {
+      body: { initData: initData(), action, ...payload },
+    });
+    if (error || !data?.success) {
+      throw new Error(data?.error || error?.message || "Не удалось выполнить операцию с пополнением.");
+    }
+    return data;
+  }
+
+  async function loadDepositCatalog() {
+    setDepositLoading(true);
+    setDepositError("");
+    try {
+      const data = await callBrainrotDepositApi("get_brainrot_deposit_catalog");
+      setDepositCatalog(data.items || []);
+      setDepositMutations(data.mutations || []);
+      setDepositTraits(data.traits || []);
+    } catch (error) {
+      setDepositError(error?.message || "Не удалось загрузить каталог брейнротов.");
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
+  async function loadMyDepositRequests() {
+    setDepositLoading(true);
+    setDepositError("");
+    try {
+      const data = await callBrainrotDepositApi("get_my_brainrot_deposit_requests");
+      const requests = data.requests || [];
+      setDepositRequests(requests);
+      setDepositRequest(requests[0] || null);
+      return requests;
+    } catch (error) {
+      setDepositError(error?.message || "Не удалось загрузить статус пополнения.");
+      return [];
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
+  async function submitBrainrotDeposit() {
+    if (depositLoading) return;
+    const username = String(depositRobloxUsername || "").trim().replace(/^@/, "");
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+      setDepositError("Укажи именно Roblox @username: 3–20 латинских букв, цифр или подчёркиваний.");
+      return;
+    }
+    if (!selectedDepositItem || Number(selectedDepositItem.base_value_gg || 0) <= 0) {
+      setDepositError("Для этого брейнрота ещё не настроена базовая цена. Обратись к администратору.");
+      return;
+    }
+    setDepositLoading(true);
+    setDepositError("");
+    setDepositMessage("");
+    try {
+      const data = await callBrainrotDepositApi("create_brainrot_deposit_request", {
+        robloxUsername: username,
+        brainrotKey: selectedDepositItem.item_key,
+        mutationKey: depositMutationKey,
+        traitKeys: [],
+      });
+      const request = data.request || data;
+      setDepositRequest(request);
+      setDepositRequests((previous) => [request, ...previous.filter((item) => item.id !== request.id)]);
+      setDepositStep(4);
+      setDepositMessage("Заявка создана. Дождись своей очереди — бот сообщит, когда можно отправлять трейд.");
+    } catch (error) {
+      setDepositError(error?.message || "Не удалось создать заявку на пополнение.");
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
+  async function refreshDepositStatus() {
+    const requests = await loadMyDepositRequests();
+    if (requests.length) setDepositRequest(requests[0]);
+  }
+
+  async function loadAdminDepositData() {
+    setAdminDepositLoading(true);
+    setAdminDepositFeedback("");
+    try {
+      const data = await callBrainrotDepositApi("admin_get_brainrot_deposits");
+      setAdminDepositCatalog(data.items || []);
+      setAdminDepositTraits(data.traits || []);
+      setAdminDepositRequests(data.requests || []);
+      setAdminDepositTraitDrafts(Object.fromEntries((data.requests || []).map((request) => [request.id, Array.isArray(request.trait_keys) ? request.trait_keys : []])));
+      setAdminDepositPriceDrafts(Object.fromEntries((data.items || []).map((item) => [item.item_key, String(item.base_value_gg ?? 0)])));
+    } catch (error) {
+      setAdminDepositFeedback(error?.message || "Не удалось загрузить очередь пополнений.");
+    } finally {
+      setAdminDepositLoading(false);
+    }
+  }
+
+  async function saveAdminDepositPrice(itemKey) {
+    const value = Number(adminDepositPriceDrafts[itemKey]);
+    if (!Number.isFinite(value) || value < 0 || value > 100000000) {
+      setAdminDepositFeedback("Цена должна быть числом от 0 до 100 000 000 GG.");
+      return;
+    }
+    setAdminDepositBusy(true);
+    setAdminDepositFeedback("");
+    try {
+      await callBrainrotDepositApi("admin_set_brainrot_deposit_price", { itemKey, baseValueGg: value });
+      setAdminDepositFeedback(`Базовая цена сохранена: ${value.toLocaleString("ru-RU")} GG.`);
+      await loadAdminDepositData();
+    } catch (error) {
+      setAdminDepositFeedback(error?.message || "Не удалось сохранить цену.");
+    } finally {
+      setAdminDepositBusy(false);
+    }
+  }
+
+  async function assignNextBrainrotDeposit() {
+    setAdminDepositBusy(true);
+    setAdminDepositFeedback("");
+    try {
+      const data = await callBrainrotDepositApi("admin_assign_next_brainrot_deposit");
+      setAdminDepositFeedback(data.empty ? "Очередь пока пуста." : `Игрок вызван. Отправка трейда: ${data.request?.assigned_storage_account || "аккаунт назначен"}.`);
+      await loadAdminDepositData();
+    } catch (error) {
+      setAdminDepositFeedback(error?.message || "Не удалось вызвать следующего игрока.");
+    } finally {
+      setAdminDepositBusy(false);
+    }
+  }
+
+  async function markBrainrotDepositReceived(requestId) {
+    setAdminDepositBusy(true);
+    setAdminDepositFeedback("");
+    try {
+      const traitKeys = adminDepositTraitDrafts[requestId] || [];
+      await callBrainrotDepositApi("admin_mark_brainrot_deposit_received", { requestId, traitKeys });
+      setAdminDepositFeedback("Предмет и выбранные traits подтверждены. Сервер пересчитал сумму; игроку отправлена инструкция по Ready и Accept.");
+      await loadAdminDepositData();
+    } catch (error) {
+      setAdminDepositFeedback(error?.message || "Не удалось изменить статус заявки.");
+    } finally {
+      setAdminDepositBusy(false);
+    }
+  }
+
+  async function completeBrainrotDeposit(requestId) {
+    setAdminDepositBusy(true);
+    setAdminDepositFeedback("");
+    try {
+      const data = await callBrainrotDepositApi("admin_complete_brainrot_deposit", { requestId });
+      if (data.balance != null) setPlayer((current) => current ? { ...current, balance: data.balance } : current);
+      setAdminDepositFeedback(`Пополнение подтверждено. Начислено ${Number(data.amount_gg || 0).toLocaleString("ru-RU")} GG.`);
+      await loadAdminDepositData();
+    } catch (error) {
+      setAdminDepositFeedback(error?.message || "Не удалось завершить пополнение.");
+    } finally {
+      setAdminDepositBusy(false);
+    }
+  }
+
+  async function rejectBrainrotDeposit(requestId) {
+    const reason = window.prompt("Причина отказа (необязательно):", "Трейд не завершён или предмет не совпадает");
+    if (reason === null) return;
+    setAdminDepositBusy(true);
+    setAdminDepositFeedback("");
+    try {
+      await callBrainrotDepositApi("admin_reject_brainrot_deposit", { requestId, reason });
+      setAdminDepositFeedback("Заявка отклонена. Игроку отправлено сообщение «Пополнение не удалось :(».");
+      await loadAdminDepositData();
+    } catch (error) {
+      setAdminDepositFeedback(error?.message || "Не удалось отклонить заявку.");
+    } finally {
+      setAdminDepositBusy(false);
+    }
+  }
+
   // Перехватываем стандартные браузерные alert(), чтобы они не показывались
   // поверх приложения в системном стиле WebView.
   useEffect(() => {
@@ -734,7 +1006,14 @@ export default function App() {
     return message || fallback;
   }
 
-  const rarityColors = {
+  const rarityColors = siteTheme === "party" ? {
+    "Обычный": "#c5bbd3",
+    "Редкий": "#76bce8",
+    "Эпический": "#bd91e8",
+    "Легендарный": "#f2c978",
+    "Мифический": "#8bd3c9",
+    "OG": "#ffe1a0",
+  } : {
     "Обычный": "#a5a5b5",
     "Редкий": "#43a5ff",
     "Эпический": "#bd65ff",
@@ -2048,6 +2327,20 @@ export default function App() {
         { page: "Инвентарь", title: "Инвентарь", description: "Смотри лучшие брейнроты в красивых карточках", metric: `${inventory.length} предметов` },
       ];
   const totalCaseMaxReward = cases.reduce((max, item) => Math.max(max, Number(item.maxReward || 0)), 0);
+  const selectedDepositItem = depositCatalog.find((item) => item.item_key === depositSelectedItemKey) || null;
+  const selectedDepositMutation = depositMutations.find((item) => item.mutation_key === depositMutationKey) || depositMutations[0] || null;
+  // Traits are not self-reported by the player. The administrator verifies the actual
+  // traits visible in the Roblox trade; the server then recalculates the final payout.
+  const depositEstimatedAmount = selectedDepositItem && selectedDepositMutation
+    ? Math.round(Number(selectedDepositItem.base_value_gg || 0) * Number(selectedDepositMutation.multiplier || 1) * 100) / 100
+    : 0;
+  const depositStatusLabels = {
+    queued: "В очереди",
+    waiting_trade: "Ожидаем трейд",
+    trade_received: "Предмет и traits проверены · ожидаем Accept",
+    completed: "Пополнение успешно",
+    rejected: "Пополнение не удалось",
+  };
 
   return (
     <div className={`app theme-${siteTheme} ${!streamerMode && globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
@@ -2073,7 +2366,7 @@ export default function App() {
           <button className={`winter-audio-toggle ${soundEnabled ? "is-on" : ""}`} onClick={() => setSoundEnabled((value) => !value)} title="Звуковые эффекты">{soundEnabled ? "🔊 Звуки" : "🔇 Звуки"}</button>
           {!streamerMode && <>
             <div className="balance">🪙 {player ? player.balance : 0} GG</div>
-            <button className="topup-trigger" onClick={() => { setTopupMessage(""); setTopupOpen(true); }}>＋ Пополнить</button>
+            <button className="topup-trigger" onClick={() => { setTopupMessage(""); setDepositMessage(""); setDepositError(""); setTopupTab("stars"); setTopupOpen(true); }}>＋ Пополнить</button>
           </>}
         </div>
       </header>
@@ -2142,19 +2435,82 @@ export default function App() {
 
       {!loading && !authError && (
         <>
-          {topupOpen && !streamerMode && <div className="stars-modal-backdrop" onClick={() => !topupBusy && setTopupOpen(false)}>
-            <section className="stars-modal" role="dialog" aria-modal="true" aria-labelledby="stars-modal-title" onClick={event => event.stopPropagation()}>
+          {topupOpen && !streamerMode && <div className="stars-modal-backdrop" onClick={() => !topupBusy && !depositLoading && setTopupOpen(false)}>
+            <section className="stars-modal deposit-modal" role="dialog" aria-modal="true" aria-labelledby="stars-modal-title" onClick={event => event.stopPropagation()}>
               <button className="stars-modal-close" onClick={() => setTopupOpen(false)} aria-label="Закрыть">×</button>
-              <span className="stars-modal-kicker">BRAIN GG WALLET</span><h2 id="stars-modal-title">Пополнение баланса</h2>
-              <div className="stars-method-card"><span className="stars-symbol">★</span><div><b>Telegram Stars</b><small>Безопасная оплата внутри Telegram</small></div><span className="stars-method-check">✓</span></div>
-              <p className="stars-rate-note">Курс: 1 ⭐ = 1,25 GG. Минимальное пополнение — 25 ⭐.</p>
-              <label className="stars-field-label" htmlFor="stars-amount">Количество Stars</label>
-              <input id="stars-amount" className="stars-amount-input" type="number" min="25" max="10000" step="1" value={topupStars} onChange={event => setTopupStars(event.target.value)} />
-              <div className="stars-presets">{[25,50,100,250,500,1000].map(value => <button key={value} className={Number(topupStars)===value?"selected":""} onClick={() => setTopupStars(value)}>{value} ⭐</button>)}</div>
-              <div className="stars-conversion"><span>Ты получишь</span><b>🪙 {Number.isFinite(Number(topupStars)) ? (Math.round(Number(topupStars)*1.25*100)/100).toLocaleString("ru-RU") : 0} GG</b></div>
-              <p className="stars-wager-note">GG будут зачислены автоматически после подтверждения платежа Telegram.</p>
-              {topupMessage && <div className="stars-status" role="status">{topupMessage}</div>}
-              <button className="stars-pay-button" disabled={topupBusy || Number(topupStars)<25 || Number(topupStars)>10000 || !Number.isSafeInteger(Number(topupStars))} onClick={startStarsTopup}>{topupBusy?"Создаём счёт...":`Оплатить ${topupStars || 0} ⭐`}</button>
+              <span className="stars-modal-kicker">BRAIN GG WALLET</span>
+              <h2 id="stars-modal-title">Пополнение баланса</h2>
+              <div className="deposit-method-tabs" role="tablist" aria-label="Способ пополнения">
+                <button type="button" className={topupTab === "stars" ? "active" : ""} onClick={() => setTopupTab("stars")}>Telegram Stars</button>
+                <button type="button" className={topupTab === "brainrots" ? "active" : ""} onClick={() => { setTopupTab("brainrots"); setDepositError(""); loadDepositCatalog(); loadMyDepositRequests(); }}>Брейнротами</button>
+              </div>
+
+              {topupTab === "stars" ? <>
+                <div className="stars-method-card"><span className="stars-symbol">★</span><div><b>Telegram Stars</b><small>Безопасная оплата внутри Telegram</small></div><span className="stars-method-check">✓</span></div>
+                <p className="stars-rate-note">Курс: 1 ⭐ = 1,25 GG. Минимальное пополнение — 25 ⭐.</p>
+                <label className="stars-field-label" htmlFor="stars-amount">Количество Stars</label>
+                <input id="stars-amount" className="stars-amount-input" type="number" min="25" max="10000" step="1" value={topupStars} onChange={event => setTopupStars(event.target.value)} />
+                <div className="stars-presets">{[25,50,100,250,500,1000].map(value => <button key={value} className={Number(topupStars)===value?"selected":""} onClick={() => setTopupStars(value)}>{value} ⭐</button>)}</div>
+                <div className="stars-conversion"><span>Ты получишь</span><b>🪙 {Number.isFinite(Number(topupStars)) ? (Math.round(Number(topupStars)*1.25*100)/100).toLocaleString("ru-RU") : 0} GG</b></div>
+                <p className="stars-wager-note">GG будут зачислены автоматически после подтверждения платежа Telegram.</p>
+                {topupMessage && <div className="stars-status" role="status">{topupMessage}</div>}
+                <button className="stars-pay-button" disabled={topupBusy || Number(topupStars)<25 || Number(topupStars)>10000 || !Number.isSafeInteger(Number(topupStars))} onClick={startStarsTopup}>{topupBusy?"Создаём счёт...":`Оплатить ${topupStars || 0} ⭐`}</button>
+              </> : <section className="brainrot-deposit-flow">
+                <div className="deposit-stepper" aria-label="Этапы пополнения">
+                  {["Брейнрот", "Мутация и traits", "Roblox username", "Очередь"].map((label, index) => <div key={label} className={depositStep >= index + 1 ? "active" : ""}><i>{index + 1}</i><span>{label}</span></div>)}
+                </div>
+                {depositError && <div className="deposit-feedback error" role="alert">{depositError}</div>}
+                {depositMessage && <div className="deposit-feedback" role="status">{depositMessage}</div>}
+
+                {depositStep === 1 && <>
+                  <div className="deposit-section-heading"><b>1. Выбери брейнрота</b><small>Выбери предмет, который передашь через трейд в Steal a Brainrot.</small></div>
+                  {depositLoading && depositCatalog.length === 0 ? <div className="deposit-loading">Загружаем каталог...</div> : <div className="deposit-brainrot-grid">
+                    {depositCatalog.map((item) => <button type="button" key={item.item_key} className={`deposit-brainrot-card ${depositSelectedItemKey === item.item_key ? "active" : ""}`} disabled={!item.enabled} onClick={() => { setDepositSelectedItemKey(item.item_key); setDepositError(""); }}>
+                      <img src={depositBrainrotImage(item)} onError={handleBrainrotImageError} alt={item.display_name} />
+                      <b>{item.display_name}</b>
+                      <small>{Number(item.base_value_gg || 0) > 0 ? `${Number(item.base_value_gg).toLocaleString("ru-RU")} GG · база` : "Цена ещё не задана"}</small>
+                      {depositSelectedItemKey === item.item_key && <span className="deposit-selected-mark">✓</span>}
+                    </button>)}
+                  </div>}
+                  <button className="main-button deposit-next-button" disabled={!selectedDepositItem || Number(selectedDepositItem.base_value_gg || 0) <= 0 || depositLoading} onClick={() => { setDepositStep(2); setDepositError(""); }}>Далее →</button>
+                  {depositCatalog.length > 0 && depositCatalog.every((item) => Number(item.base_value_gg || 0) <= 0) && <p className="deposit-muted">Администратор ещё не установил базовые цены. Заявки станут доступны после настройки цен в админ-панели.</p>}
+                </>}
+
+                {depositStep === 2 && <>
+                  <div className="deposit-section-heading"><b>2. Выбери мутацию</b><small>Traits не нужно выбирать вручную: администратор сверит их с предметом в Roblox-трейде, а сервер применит множители автоматически.</small></div>
+                  <div className="deposit-choice-block"><b>Мутация</b><div className="deposit-mutation-grid">{depositMutations.map((mutation) => <button type="button" key={mutation.mutation_key} className={depositMutationKey === mutation.mutation_key ? "active" : ""} onClick={() => setDepositMutationKey(mutation.mutation_key)}><span>{mutation.label}</span><small>{mutation.display_value}</small></button>)}</div></div>
+                  <div className="deposit-trait-preview">
+                    <div className="deposit-traits-heading"><b>Traits, которые учитываются при проверке</b><small>Их наличие проверяется администратором в трейде</small></div>
+                    <div className="deposit-traits-grid">{depositTraits.map((trait) => <div key={trait.trait_key} className="deposit-trait-option"><span>{trait.label}</span><b>{trait.display_value}</b></div>)}</div>
+                    <p className="deposit-muted">Tung пока не участвует в расчёте: для него не задан множитель. Taco (−1.25x) и Crab (−1.5x) уменьшают итоговую стоимость делением на 1.25 и 1.5 соответственно.</p>
+                  </div>
+                  <div className="deposit-estimate"><span>Предварительная стоимость без traits</span><b>{depositEstimatedAmount.toLocaleString("ru-RU")} GG</b><small>База {Number(selectedDepositItem?.base_value_gg || 0).toLocaleString("ru-RU")} × мутация {Number(selectedDepositMutation?.multiplier || 1)}. Финальная сумма будет пересчитана после проверки трейда.</small></div>
+                  <div className="deposit-actions-row"><button className="case-button" onClick={() => setDepositStep(1)}>← Назад</button><button className="main-button" onClick={() => setDepositStep(3)}>Далее →</button></div>
+                </>}
+
+                {depositStep === 3 && <>
+                  <div className="deposit-section-heading"><b>3. Укажи Roblox @username</b><small>Нужен именно логин Roblox, не отображаемое имя.</small></div>
+                  <label className="deposit-username-label" htmlFor="deposit-roblox-username">Roblox username</label>
+                  <div className="deposit-username-input-wrap"><span>@</span><input id="deposit-roblox-username" value={depositRobloxUsername} onChange={(event) => setDepositRobloxUsername(event.target.value.replace(/^@/, ""))} placeholder="your_username" maxLength={20} autoComplete="off" /></div>
+                  <div className="deposit-review-card"><img src={depositBrainrotImage(selectedDepositItem)} onError={handleBrainrotImageError} alt={selectedDepositItem?.display_name || "Брейнрот"} /><div><b>{selectedDepositItem?.display_name}</b><small>{selectedDepositMutation?.label} · traits проверит администратор в трейде</small><strong>от {depositEstimatedAmount.toLocaleString("ru-RU")} GG</strong></div></div>
+                  <p className="deposit-muted">После создания заявки ты попадёшь в очередь. Не отправляй трейд, пока бот не сообщит назначенный аккаунт хранения.</p>
+                  <div className="deposit-actions-row"><button className="case-button" onClick={() => setDepositStep(2)}>← Назад</button><button className="main-button" disabled={depositLoading || !/^[A-Za-z0-9_]{3,20}$/.test(depositRobloxUsername.replace(/^@/, "")) || depositEstimatedAmount <= 0} onClick={submitBrainrotDeposit}>{depositLoading ? "Создаём заявку..." : "Создать заявку"}</button></div>
+                </>}
+
+                {depositStep === 4 && <>
+                  <div className="deposit-section-heading"><b>4. Статус пополнения</b><small>Следи за очередью и инструкциями прямо здесь. Бот также отправит уведомление в Telegram.</small></div>
+                  {depositRequest ? <article className={`deposit-request-status status-${depositRequest.status}`}>
+                    <div className="deposit-request-status-top"><span>{depositStatusLabels[depositRequest.status] || depositRequest.status}</span><b>#{depositRequest.queue_number || "—"}</b></div>
+                    <div className="deposit-request-summary"><img src={depositBrainrotImage({ image_key: depositRequest.image_key || depositRequest.brainrot_key })} onError={handleBrainrotImageError} alt={depositRequest.brainrot_name} /><div><b>{depositRequest.brainrot_name}</b><small>@{depositRequest.roblox_username} · {depositRequest.mutation_key}</small><strong>+{Number(depositRequest.amount_gg || 0).toLocaleString("ru-RU")} GG</strong></div></div>
+                    {depositRequest.status === "queued" && <p>Заявка в очереди. Перед отправкой трейда дождись назначения одного из аккаунтов BrainGG_Storage.</p>}
+                    {depositRequest.status === "waiting_trade" && <div className="deposit-trade-instructions"><b>Твоя очередь! Отправь трейд на аккаунт:</b><strong>@{depositRequest.assigned_storage_account}</strong><ol><li>Зайди в Steal a Brainrot.</li><li>Отправь запрос на трейд указанному аккаунту.</li><li>После принятия положи выбранного брейнрота с выбранной мутацией.</li><li>Нажми Ready и дождись проверки предмета и traits администратором.</li><li>Когда администратор тоже нажмёт Ready и сообщит об этом, нажми Accept.</li></ol></div>}
+                    {depositRequest.status === "trade_received" && <div className="deposit-trade-instructions"><b>Предмет и traits проверены!</b><p>Финальная сумма пересчитана: <strong>{Number(depositRequest.amount_gg || 0).toLocaleString("ru-RU")} GG</strong>. Дождись, пока администратор нажмёт Ready, затем нажми Accept. После полного завершения трейда администратор подтвердит начисление.</p>{(depositRequest.trait_labels || []).length > 0 && <small>Учтённые traits: {depositRequest.trait_labels.join(", ")}</small>}</div>}
+                    {depositRequest.status === "completed" && <div className="deposit-success-message">Пополнение удалось :) Начислено {Number(depositRequest.amount_gg || 0).toLocaleString("ru-RU")} GG.</div>}
+                    {depositRequest.status === "rejected" && <div className="deposit-failed-message">Пополнение не удалось :( {depositRequest.admin_note || "Трейд отклонён или не завершён."}</div>}
+                    <button className="case-button deposit-refresh-button" disabled={depositLoading} onClick={refreshDepositStatus}>{depositLoading ? "Обновляем..." : "↻ Обновить статус"}</button>
+                  </article> : <div className="deposit-empty-status"><b>Активной заявки пока нет</b><p>Вернись к первому шагу и выбери брейнрота для пополнения.</p><button className="main-button" onClick={() => setDepositStep(1)}>Выбрать брейнрота</button></div>}
+                </>}
+              </section>}
             </section>
           </div>}
 
@@ -3020,6 +3376,7 @@ export default function App() {
                   ["players", "Игроки", "♙"],
                   ["history", "Журнал", "◷"],
                   ["events", "События", "✦"],
+                  ["deposits", "Пополнения", "🧠"],
                   ...(isOwner ? [["promocodes", "Промокоды", "🎟"]] : []),
                 ].map(([key, label, icon]) => (
                   <button
@@ -3029,6 +3386,7 @@ export default function App() {
                     onClick={() => {
                       setAdminSection(key);
                       if (key === "promocodes") loadAdminPromoCodes();
+                      if (key === "deposits") loadAdminDepositData();
                     }}
                   >
                     <span>{icon}</span>{label}
@@ -3332,6 +3690,49 @@ export default function App() {
                   )}
                   {adminMessage && <div className={`admin-feedback ${adminMessageError ? "error" : "success"}`}>{adminMessage}</div>}
                   {adminEventFeedback && <div className={`admin-feedback ${adminEventFeedbackError ? "error" : "success"}`}>{adminEventFeedback}</div>}
+                </>
+              )}
+
+              {adminSection === "deposits" && (
+                <>
+                  <section className="admin-panel-card deposit-admin-queue-card">
+                    <div className="admin-section-title">
+                      <span className="admin-section-icon">🔁</span>
+                      <div><h3>Очередь пополнений брейнротами</h3><p>Проверяй трейд вручную. GG начисляются только после финального подтверждения.</p></div>
+                      <button className="admin-refresh-button" type="button" onClick={loadAdminDepositData} disabled={adminDepositLoading}>{adminDepositLoading ? "..." : "↻ Обновить"}</button>
+                    </div>
+                    <div className="deposit-admin-actions"><button className="main-button" type="button" disabled={adminDepositBusy || adminDepositLoading} onClick={assignNextBrainrotDeposit}>{adminDepositBusy ? "Обрабатываем..." : "Вызвать следующего из очереди"}</button><span>Аккаунты распределяются по кругу: BrainGG_Storage1–5.</span></div>
+                    {adminDepositFeedback && <div className="admin-feedback success" role="status">{adminDepositFeedback}</div>}
+                    {adminDepositLoading ? <p className="admin-muted">Загружаем очередь...</p> : adminDepositRequests.length === 0 ? <p className="admin-muted">Активных заявок пока нет.</p> : <div className="deposit-admin-request-list">
+                      {adminDepositRequests.map((request) => <article className="deposit-admin-request" key={request.id}>
+                        <div className="deposit-admin-request-head"><b>{request.brainrot_name}</b><span className={`deposit-admin-status status-${request.status}`}>{depositStatusLabels[request.status] || request.status}</span></div>
+                        <div className="deposit-admin-request-meta"><span>Игрок: @{request.roblox_username}</span><span>Telegram ID: {request.telegram_id}</span><span>Заявка #{request.queue_number}</span></div>
+                        <div className="deposit-admin-request-meta"><span>Мутация: {request.mutation_key}</span><span>Traits: {(request.trait_labels || request.trait_keys || []).join(", ") || "нет"}</span><span>База: {Number(request.base_value_gg || 0).toLocaleString("ru-RU")} GG</span></div>
+                        <div className="deposit-admin-request-total">К начислению: <b>{Number(request.amount_gg || 0).toLocaleString("ru-RU")} GG</b>{request.assigned_storage_account && <span> · Аккаунт: @{request.assigned_storage_account}</span>}</div>
+                        {request.status === "waiting_trade" && <div className="deposit-admin-trait-check"><b>Отметь traits, которые реально видны на предмете в Roblox-трейде</b><div className="deposit-traits-grid">{adminDepositTraits.map((trait) => <label key={trait.trait_key} className={`deposit-trait-option ${(adminDepositTraitDrafts[request.id] || []).includes(trait.trait_key) ? "active" : ""} ${!trait.enabled || !trait.multiplier ? "disabled" : ""}`} title={trait.effect_note || trait.label}><input type="checkbox" checked={(adminDepositTraitDrafts[request.id] || []).includes(trait.trait_key)} disabled={!trait.enabled || !trait.multiplier} onChange={(event) => setAdminDepositTraitDrafts((current) => ({ ...current, [request.id]: event.target.checked ? [...new Set([...(current[request.id] || []), trait.trait_key])] : (current[request.id] || []).filter((key) => key !== trait.trait_key) }))} /><span>{trait.label}</span><b>{trait.display_value}</b></label>)}</div><small>Сумма будет пересчитана сервером при подтверждении предмета. Не отмечай traits, которых нет на предмете.</small></div>}
+                        {request.status === "trade_received" && <div className="deposit-admin-verified-traits"><b>Проверенные traits:</b> {(request.trait_labels || []).join(", ") || "нет"}</div>}
+                        <div className="deposit-admin-request-actions">
+                          {request.status === "waiting_trade" && <button type="button" className="case-button" disabled={adminDepositBusy} onClick={() => markBrainrotDepositReceived(request.id)}>Подтвердить предмет и traits</button>}
+                          {request.status === "trade_received" && <button type="button" className="main-button" disabled={adminDepositBusy} onClick={() => completeBrainrotDeposit(request.id)}>Трейд завершён · начислить GG</button>}
+                          {request.status !== "completed" && request.status !== "rejected" && <button type="button" className="deposit-reject-button" disabled={adminDepositBusy} onClick={() => rejectBrainrotDeposit(request.id)}>Отклонить</button>}
+                        </div>
+                      </article>)}
+                    </div>}
+                    <p className="admin-data-note">Важно: Roblox не предоставляет этому боту подтверждение Ready/Accept. Проверь трейд вручную: сначала отметь реальные traits и предмет, затем после полного завершения обмена нажми «Трейд завершён · начислить GG». Повторное нажатие не начислит монеты дважды.</p>
+                  </section>
+
+                  <section className="admin-panel-card deposit-admin-prices-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">🪙</span><div><h3>Базовые цены брейнротов</h3><p>Задай цену каждого предмета в GG. Мутации и выбранные traits будут применяться автоматически.</p></div></div>
+                    <div className="deposit-admin-price-grid">
+                      {adminDepositCatalog.map((item) => <div className="deposit-admin-price-row" key={item.item_key}>
+                        <img src={depositBrainrotImage(item)} onError={handleBrainrotImageError} alt={item.display_name} />
+                        <div><b>{item.display_name}</b><small>{item.item_key}</small></div>
+                        <input className="admin-input" type="number" min="0" step="0.01" value={adminDepositPriceDrafts[item.item_key] ?? item.base_value_gg ?? 0} onChange={(event) => setAdminDepositPriceDrafts((current) => ({ ...current, [item.item_key]: event.target.value }))} aria-label={`Базовая цена ${item.display_name}`} />
+                        <button type="button" className="case-button" disabled={adminDepositBusy} onClick={() => saveAdminDepositPrice(item.item_key)}>Сохранить</button>
+                      </div>)}
+                    </div>
+                    <p className="admin-data-note">Пока цена равна 0 GG, игрок не сможет создать заявку на этот предмет. Установи реальные базовые цены перед открытием пополнений.</p>
+                  </section>
                 </>
               )}
 
