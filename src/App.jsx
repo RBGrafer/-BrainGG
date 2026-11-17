@@ -3,8 +3,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 import redHomeBackground from "./assets/braingg-red-home.svg";
+import partyHomeBackground from "./assets/braingg-party-home.png";
 
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
+const SITE_THEME_STORAGE_KEY = "braingg-site-theme-v1";
 const DISABLED_PAGES = new Set(["Коллекция", "Достижения", "Глобальные события"]);
 const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Live Drops", "Глобальные события", "История", "Промокод", "Задания", "Достижения", "Админка"]);
 
@@ -91,6 +93,14 @@ function brainrotImage(item) {
   const hash = [...name].reduce((value, char) => ((value * 31) + char.charCodeAt(0)) >>> 0, 7);
   const fallback = BRAINROT_FALLBACK_ART[hash % BRAINROT_FALLBACK_ART.length] || BRAINROT_FALLBACK_ART[0];
   return `${import.meta.env.BASE_URL}brainrots/v17/${fallback}.webp`;
+}
+
+function handleBrainrotImageError(event) {
+  const fallback = `${import.meta.env.BASE_URL}brainrots/v17/cappuccino-ballerina.webp`;
+  if (event?.currentTarget && event.currentTarget.src !== fallback) {
+    event.currentTarget.onerror = null;
+    event.currentTarget.src = fallback;
+  }
 }
 
 function rarityClassName(value) {
@@ -184,6 +194,13 @@ export default function App() {
   const eventWasActiveRef = useRef(false);
   const [musicEnabled, setMusicEnabled] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [siteTheme, setSiteTheme] = useState(() => {
+    if (typeof window === "undefined") return "party";
+    try {
+      const saved = window.localStorage.getItem(SITE_THEME_STORAGE_KEY);
+      return saved === "red" || saved === "party" ? saved : "party";
+    } catch { return "party"; }
+  });
   const [musicNotice, setMusicNotice] = useState("");
 
   const [globalEvent, setGlobalEvent] = useState(null);
@@ -329,6 +346,14 @@ export default function App() {
   useEffect(() => {
     try { window.localStorage.setItem(STREAMER_MODE_STORAGE_KEY, streamerMode ? "1" : "0"); } catch (error) { console.warn("Could not persist streamer mode preference:", error); }
   }, [streamerMode]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(SITE_THEME_STORAGE_KEY, siteTheme); } catch (error) { console.warn("Could not persist BrainGG theme preference:", error); }
+    if (typeof document !== "undefined") {
+      document.body.dataset.brainggTheme = siteTheme;
+      document.documentElement.dataset.brainggTheme = siteTheme;
+    }
+  }, [siteTheme]);
 
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
@@ -2025,7 +2050,7 @@ export default function App() {
   const totalCaseMaxReward = cases.reduce((max, item) => Math.max(max, Number(item.maxReward || 0)), 0);
 
   return (
-    <div className={`app ${!streamerMode && globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
+    <div className={`app theme-${siteTheme} ${!streamerMode && globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
       <div className={`winter-snow ${!streamerMode && globalEvent?.event_name ? `event-particles event-particles-${globalEvent.event_name}` : ""}`} aria-hidden="true">
         {!streamerMode && globalEvent?.event_name && activeEventPresentation ? eventParticles.map((particle) => (
           <i className="event-particle" key={particle.id} style={{ left: particle.left, animationDelay: particle.delay, animationDuration: particle.duration, fontSize: particle.size, opacity: particle.opacity, "--particle-drift": particle.drift }}>{activeEventPresentation.particle}</i>
@@ -2138,7 +2163,7 @@ export default function App() {
             <div className="live-drops-track">
               {liveDrops.length ? liveDrops.map((drop) => (
                 <article className={`live-drop-chip ${rarityClassName(drop.rarity)}`} key={drop.id}>
-                  <div className="live-drop-art"><img className={drop.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(drop)} alt={drop.item_name || "Brainrot"} loading="lazy" /></div>
+                  <div className="live-drop-art"><img className={drop.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(drop)} onError={handleBrainrotImageError} alt={drop.item_name || "Brainrot"} loading="lazy" /></div>
                   <div><b>{drop.item_name}{drop.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY</span> : null}</b><small>{drop.username ? `@${drop.username}` : "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small></div>
                   {drop.value_gg > 0 && <strong>{drop.value_gg.toLocaleString("ru-RU")} GG</strong>}
                 </article>
@@ -2151,7 +2176,7 @@ export default function App() {
           {page === "Главная" && (
             <main className="content home-welcome">
               <div className="home-welcome-backdrop" aria-hidden="true">
-                <img src={redHomeBackground} alt="" fetchPriority="high" decoding="async" />
+                <img src={siteTheme === "party" ? partyHomeBackground : redHomeBackground} alt="" fetchPriority="high" decoding="async" />
               </div>
               <div className="home-welcome-inner">
                 <div className="home-welcome-emblem">✦</div>
@@ -2186,7 +2211,7 @@ export default function App() {
                     <div className="home-featured-grid">
                       {featuredInventory.map((item) => (
                         <article key={item.id} className={`home-featured-card ${rarityClassName(item.rarity)}`}>
-                          <img src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
+                          <img src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
                           <div><b>{item.item_name}</b><small>{item.rarity || "Обычный"}</small></div>
                           <strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
                         </article>
@@ -2289,7 +2314,7 @@ export default function App() {
                                 data-drop-name={isWinner ? reward.item_name : undefined}
                                 aria-label={isWinner ? `Фактический дроп: ${reward.item_name}` : undefined}
                               >
-                                <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} loading="lazy" />
+                                <img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} onError={handleBrainrotImageError} alt={reward.item_name} loading="lazy" />
                                 <b>{reward.item_name}{reward.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
                                 {Number(reward.value_gg) > 0 && <small>{Number(reward.value_gg).toLocaleString("ru-RU")} GG</small>}
                               </div>
@@ -2356,7 +2381,7 @@ export default function App() {
                       {caseRewardsLoading && caseRewardsFor === selectedCase.caseName && <p className="case-contents-caption">Загружаем полный список наград...</p>}
                       {caseRewardsFor === selectedCase.caseName && caseRewards.map((item, index) => (
                         <div className={`case-content-item ${rarityClassName(item.rarity)}`} key={`${item.item_name}-${index}`}>
-                          <img className="brainrot-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
+                          <img className="brainrot-thumb" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
                           <div className="case-content-info"><b>{item.item_name}</b><small>{item.rarity || "Награда"} · {Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small><em>{Number(item.drop_chance_percent || 0).toFixed(2)}% шанс</em></div>
                         </div>
                       ))}
@@ -2483,7 +2508,7 @@ export default function App() {
                             disabled={upgradeLoading}
                             onClick={() => chooseSource(item)}
                           >
-                            <img className={`upgrade-item-emoji-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
+                            <img className={`upgrade-item-emoji-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
 
                             <span className="upgrade-item-info">
                               <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY</span> : null}</b>
@@ -2624,7 +2649,7 @@ export default function App() {
                               setActionMessage("");
                             }}
                           >
-                            <img className="upgrade-item-emoji-image" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
+                            <img className="upgrade-item-emoji-image" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
 
                             <span className="upgrade-item-info">
                               <b>{item.item_name}</b>
@@ -2736,7 +2761,7 @@ export default function App() {
 
           {page === "Инвентарь" && (
             <main className="content inventory-page">
-              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Моя коллекция</h2><p>{streamerMode ? "Просматривай свою коллекцию в режиме трансляции" : "Все твои брейнроты — в одном месте"}</p></div><div className="inventory-hero-icon">{featuredInventory[0] ? <img src={brainrotImage(featuredInventory[0])} alt={featuredInventory[0].item_name} loading="lazy" /> : <span>✦</span>}</div></div>
+              <div className="inventory-hero"><div><span className="inventory-kicker">МОЯ КОЛЛЕКЦИЯ</span><h2>Моя коллекция</h2><p>{streamerMode ? "Просматривай свою коллекцию в режиме трансляции" : "Все твои брейнроты — в одном месте"}</p></div><div className="inventory-hero-icon">{featuredInventory[0] ? <img src={brainrotImage(featuredInventory[0])} onError={handleBrainrotImageError} alt={featuredInventory[0].item_name} loading="lazy" /> : <span>✦</span>}</div></div>
               <div className="inventory-stats">{streamerMode ? <><div><small>Предметов в коллекции</small><b>{inventory.length}</b></div><div><small>Видов редкости</small><b>{new Set(inventory.map((item) => item.rarity || "Обычный")).size}</b></div><div><small>Режим</small><b>Просмотр</b></div></> : <><div><small>Предметов</small><b>{inventory.length}</b></div><div><small>Общая стоимость</small><b>{inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0).toLocaleString("ru-RU")} <i>GG</i></b></div><div><small>Средняя стоимость</small><b>{inventory.length?Math.round(inventory.reduce((sum,item)=>sum+(Number(item.value_gg)||0),0)/inventory.length).toLocaleString("ru-RU"):0} <i>GG</i></b></div></>}</div>
               {inventoryLoading && <div className="inventory-state"><div className="inventory-loader">✦</div><b>Собираем коллекцию...</b></div>}
               {inventoryError && <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div>}
@@ -2744,7 +2769,7 @@ export default function App() {
                 <div className="inventory-toolbar"><label className="inventory-search">⌕<input value={inventoryQuery} onChange={e=>setInventoryQuery(e.target.value)} placeholder="Найти предмет..." /></label><select value={inventoryRarity} onChange={e=>setInventoryRarity(e.target.value)}><option>Все</option>{[...new Set(inventory.map(x=>x.rarity).filter(Boolean))].map(x=><option key={x}>{x}</option>)}</select><select value={inventorySort} onChange={e=>setInventorySort(e.target.value)}><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option>{!streamerMode && <><option value="priceHigh">Дорогие сначала</option><option value="priceLow">Дешёвые сначала</option></>}</select>{!streamerMode && <button className="inventory-sell-all" onClick={sellAllItems} disabled={sellingAll || sellingId !== null || upgradeLoading}>{sellingAll ? "Продаём всё..." : "Продать всё"}</button>}</div>
                 <div className="inventory-results-label">КОЛЛЕКЦИЯ · {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length} / {inventory.length}</div>
                 <div className="inventory-grid">{inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).sort((a,b)=>inventorySort==="priceHigh"?Number(b.value_gg)-Number(a.value_gg):inventorySort==="priceLow"?Number(a.value_gg)-Number(b.value_gg):inventorySort==="oldest"?new Date(a.created_at)-new Date(b.created_at):new Date(b.created_at)-new Date(a.created_at)).map((item,index)=>(
-                  <article className={`inventory-card ${rarityClassName(item.rarity)}`} key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} alt={item.item_name} loading="lazy" /><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">{streamerMode ? "STRAWBERRY" : "STRAWBERRY ×2.5"}</span> : null}</h3>{!streamerMode && <div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div>}<p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div>{!streamerMode ? <div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${(Number(item.value_gg||0) * (globalEvent?.event_name === "gold_rush" ? 2 : 1)).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div> : <div className="streamer-readonly-label">Только просмотр во время трансляции</div>}</article>
+                  <article className={`inventory-card ${rarityClassName(item.rarity)}`} key={item.id}><div className="inventory-card-top"><span>#{String(index+1).padStart(2,"0")}</span><span className={`inventory-rarity ${item.rarity === "OG" ? "rarity-og" : ""}`}>{item.rarity||"Обычный"}</span></div><div className="inventory-art"><div className="inventory-art-glow"/><img className={`brainrot-inventory-image ${item.mutation === "strawberry" ? "mutation-strawberry-image" : ""}`} src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" /><i>✦</i></div><div className="inventory-card-info"><h3>{item.item_name} {item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">{streamerMode ? "STRAWBERRY" : "STRAWBERRY ×2.5"}</span> : null}</h3>{!streamerMode && <div className="inventory-value">{Number(item.value_gg||0).toLocaleString("ru-RU")} <small>GG</small></div>}<p>Получен {item.created_at?new Date(item.created_at).toLocaleDateString("ru-RU"):"—"}</p></div>{!streamerMode ? <div className="inventory-card-actions"><button className="main-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>sellItem(item)}>{sellingId===item.id?"Продаём...":`Продать · ${(Number(item.value_gg||0) * (globalEvent?.event_name === "gold_rush" ? 2 : 1)).toLocaleString("ru-RU")} GG`}</button><button className="case-button" disabled={sellingId===item.id||sellingAll||upgradeLoading} onClick={()=>{setSelectedUpgrade(item);setTargetItem("");setUpgradeAnimatedChance(0);setUpgradeSpinWon(null);setUpgradeWheelAnimating(false);setUpgradePointerVisible(true);setUpgradePointerAngle(0);setUpgradeResult(null);setMobileUpgradeList("target");changePage("Апгрейдер");}}>⚡ Улучшить</button></div> : <div className="streamer-readonly-label">Только просмотр во время трансляции</div>}</article>
                 ))}</div>
                 {inventory.filter(item=>(!inventoryQuery||String(item.item_name||"").toLowerCase().includes(inventoryQuery.toLowerCase()))&&(inventoryRarity==="Все"||item.rarity===inventoryRarity)).length===0&&<div className="inventory-state"><span>🔎</span><b>Ничего не найдено</b><p>Измени запрос или фильтр.</p></div>}
               </>)}
@@ -2762,7 +2787,7 @@ export default function App() {
               </div>
               {inventoryLoading ? <div className="inventory-state"><div className="inventory-loader">✦</div><b>Загружаем альбом...</b></div> : inventoryError ? <div className="upgrade-message error">{inventoryError}<button onClick={loadInventory}>Повторить</button></div> : inventory.length ? <div className="collection-grid">
                 {inventory.map((item) => <article className="collection-card" key={`${item.item_name}-${item.mutation || "normal"}`}>
-                  <div className="collection-card-art"><img src={brainrotImage(item)} alt={item.item_name} loading="lazy" /></div>
+                  <div className="collection-card-art"><img src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" /></div>
                   <div className="collection-card-info"><b>{item.item_name}</b><small>{item.rarity || "Обычный"}{item.mutation === "strawberry" ? " · STRAWBERRY" : ""}</small>{!streamerMode && <strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>}</div>
                 </article>)}
               </div> : <div className="inventory-state"><div className="inventory-empty-icon">📚</div><h3>Альбом пока пуст</h3><p>{streamerMode ? "Выполняй задания и участвуй в викторине, чтобы развивать профиль." : "Открой первый кейс, чтобы добавить первого брейнрота."}</p><button className="main-button" onClick={() => changePage(streamerMode ? "Задания" : "Кейсы")}>{streamerMode ? "К заданиям" : "К кейсам"}</button></div>}
@@ -2783,7 +2808,7 @@ export default function App() {
               <header className="season-page-heading"><span className="season-kicker">COMMUNITY FEED</span><h2>🔥 Live Drops</h2><p>Последние подтверждённые выпадения игроков BrainGG.</p></header>
               <section className="season-panel"><div className="season-panel-title"><h3>Лента выпадений</h3><button className="case-button" onClick={loadGameHub} disabled={hubLoading}>{hubLoading ? "..." : "↻ Обновить"}</button></div>
                 {hubLoading ? <p>Загружаем ленту...</p> : liveDrops.length ? <div className="drops-list">{liveDrops.map((drop) => <article className="drops-row" key={drop.id}>
-                  <div className="drops-art"><img src={brainrotImage(drop)} alt={drop.item_name || "Brainrot"} loading="lazy" /></div>
+                  <div className="drops-art"><img src={brainrotImage(drop)} onError={handleBrainrotImageError} alt={drop.item_name || "Brainrot"} loading="lazy" /></div>
                   <div className="drops-info"><b>{drop.item_name}</b><small>@{drop.username || "Игрок"} · {displayCaseName(drop.case_name)} · {drop.rarity || "Награда"}</small><time>{drop.created_at ? new Date(drop.created_at).toLocaleString("ru-RU") : ""}</time></div>
                   <strong>{Number(drop.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
                 </article>)}</div> : <div className="season-empty">Пока нет выпадений. Открой кейс и стань первым в ленте!</div>}
@@ -2872,6 +2897,21 @@ export default function App() {
           {page === "Настройки" && (
             <main className="content season-page settings-page">
               <header className="season-page-heading"><span className="season-kicker">YOUR EXPERIENCE</span><h2>⚙ Настройки</h2><p>Настрой BrainGG под себя.</p></header>
+              <section className="season-panel settings-theme-panel">
+                <div className="settings-theme-heading"><div><b>Дизайн сайта</b><small>Выбери оформление BrainGG. Настройка сохраняется на этом устройстве.</small></div><span className="settings-theme-current">{siteTheme === "party" ? "Вечеринка" : "Red & White"}</span></div>
+                <div className="settings-theme-grid" role="group" aria-label="Выбор дизайна сайта">
+                  <button type="button" className={`settings-theme-option ${siteTheme === "party" ? "active" : ""}`} aria-pressed={siteTheme === "party"} onClick={() => setSiteTheme("party")}>
+                    <span className="settings-theme-preview theme-preview-party" aria-hidden="true"><i className="preview-light"/><i className="preview-logo">BrainGG</i><i className="preview-card-row"><b/><b/><b/></i><i className="preview-action"/></span>
+                    <span className="settings-theme-option-copy"><b>Party Neon</b><small>Фиолетовый, золото и неон — как на первой картинке</small></span>
+                    <span className="settings-theme-check">{siteTheme === "party" ? "✓ Выбрано" : "Выбрать"}</span>
+                  </button>
+                  <button type="button" className={`settings-theme-option ${siteTheme === "red" ? "active" : ""}`} aria-pressed={siteTheme === "red"} onClick={() => setSiteTheme("red")}>
+                    <span className="settings-theme-preview theme-preview-red" aria-hidden="true"><i className="preview-light"/><i className="preview-logo">BrainGG</i><i className="preview-card-row"><b/><b/><b/></i><i className="preview-action"/></span>
+                    <span className="settings-theme-option-copy"><b>Red & White</b><small>Красно-чёрное оформление — как на второй картинке</small></span>
+                    <span className="settings-theme-check">{siteTheme === "red" ? "✓ Выбрано" : "Выбрать"}</span>
+                  </button>
+                </div>
+              </section>
               <section className="season-panel settings-list">
                 <article className="settings-row"><span className="settings-icon">🎵</span><div><b>Фоновая музыка</b><small>Музыка BrainGG и активных ивентов</small></div><button className={`settings-switch ${musicEnabled ? "active" : ""}`} type="button" onClick={toggleWinterMusic}>{musicEnabled ? "Вкл." : "Выкл."}</button></article>
                 <article className="settings-row"><span className="settings-icon">🔊</span><div><b>Звуковые эффекты</b><small>Звуки кнопок и игровых действий</small></div><button className={`settings-switch ${soundEnabled ? "active" : ""}`} type="button" onClick={() => setSoundEnabled((value) => !value)}>{soundEnabled ? "Вкл." : "Выкл."}</button></article>
@@ -3230,7 +3270,7 @@ export default function App() {
                       <div className="admin-inventory-list">
                         {adminInventory.map((item) => (
                           <div className="admin-inventory-row" key={item.id}>
-                            <img className="admin-inventory-thumb" src={brainrotImage(item)} alt={item.item_name} loading="lazy" />
+                            <img className="admin-inventory-thumb" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
                             <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
                             <small>{item.rarity}</small>
                             <strong>{item.value_gg} GG</strong>
@@ -3463,7 +3503,7 @@ export default function App() {
             <div className={`reward-modal-grid ${lastRewards.length > 1 ? "multi" : ""}`}>
               {lastRewards.map((reward, index) => (
                 <article className={`reward-modal-item ${rarityClassName(reward.rarity)}`} key={`${reward.item_name}-${index}`}>
-                  <div className="reward-modal-art"><img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} alt={reward.item_name} /></div>
+                  <div className="reward-modal-art"><img className={reward.mutation === "strawberry" ? "mutation-strawberry-image" : ""} src={brainrotImage(reward)} onError={handleBrainrotImageError} alt={reward.item_name} /></div>
                   <h3>{reward.item_name || reward.name}</h3>
                   <span className={`reward-modal-rarity ${reward.rarity === "OG" ? "rarity-og" : ""}`}>{reward.rarity || "Brainrot"}</span>
                   {reward.mutation === "strawberry" && <span className="strawberry-mutation-pill">STRAWBERRY мутация · ×2.5</span>}
