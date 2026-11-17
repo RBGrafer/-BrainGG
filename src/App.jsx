@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from "react";
-import { cases } from "./data/cases.js";
+import { cases, specialCases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 import redHomeBackground from "./assets/braingg-red-home.svg";
 import partyHomeBackground from "./assets/braingg-party-home.png";
@@ -52,10 +52,16 @@ const CASE_DISPLAY_NAMES = {
   "Elite Case": "White Crown",
   "All In Strawberry Elephant": "All In: Strawberry",
   "All In Headless Horseman": "All In: Headless",
+  "Nick Case": "NICK CASE",
+  "Free Case": "FREE CASE",
 };
 function displayCaseName(value) {
   const key = String(value || "");
   return CASE_DISPLAY_NAMES[key] || key || "Кейс";
+}
+
+function getCaseRewardPoolName(item) {
+  return String(item?.rewardCaseName || item?.caseName || "");
 }
 
 // Keep upgrade-wheel geometry in this module so Vercel cannot fail on a missing
@@ -309,6 +315,11 @@ export default function App() {
   const [caseRewards, setCaseRewards] = useState([]);
   const [caseRewardsFor, setCaseRewardsFor] = useState("");
   const [caseRewardsLoading, setCaseRewardsLoading] = useState(false);
+  const [specialCaseAccess, setSpecialCaseAccess] = useState({
+    loading: false,
+    nick: { allowed: false, reason: "Проверь условие доступа." },
+    free: { allowed: false, reason: "Проверь подписку на канал." },
+  });
   const [mobileUpgradeList, setMobileUpgradeList] = useState("source");
 
   const [inventory, setInventory] = useState([]);
@@ -1066,6 +1077,7 @@ export default function App() {
         }
 
         setPlayer(data.player);
+        loadSpecialCaseAccess();
         // Игровой прогресс загружается отдельно, чтобы не затрагивать старую таблицу players.
         loadGameHub();
 
@@ -1277,8 +1289,9 @@ export default function App() {
   }, [globalEvent?.event_name, streamerMode]);
 
   useEffect(() => {
-    if (!streamerMode && selectedCase?.caseName) loadCaseRewards(selectedCase.caseName);
-  }, [globalEvent?.event_name, selectedCase?.caseName, streamerMode]);
+    const rewardPoolName = getCaseRewardPoolName(selectedCase);
+    if (!streamerMode && rewardPoolName) loadCaseRewards(rewardPoolName);
+  }, [globalEvent?.event_name, selectedCase?.caseName, selectedCase?.rewardCaseName, streamerMode]);
 
   useEffect(() => {
     if (!player?.telegram_id) return undefined;
@@ -1316,6 +1329,33 @@ export default function App() {
       throw error;
     } finally {
       setGlobalActivityLoading(false);
+    }
+  }
+
+  async function loadSpecialCaseAccess() {
+    if (!initData()) return null;
+    setSpecialCaseAccess((current) => ({ ...current, loading: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "get_special_case_access" },
+      });
+      if (error || !data?.success) throw new Error(data?.error || error?.message || "Не удалось проверить специальные кейсы.");
+      const next = {
+        loading: false,
+        nick: data.access?.nick || { allowed: false, reason: "Не удалось проверить имя Telegram." },
+        free: data.access?.free || { allowed: false, reason: "Не удалось проверить подписку." },
+      };
+      setSpecialCaseAccess(next);
+      return next;
+    } catch (error) {
+      console.warn("Special case access check failed:", error);
+      const next = {
+        loading: false,
+        nick: { allowed: false, reason: "Не удалось проверить имя Telegram. Обнови BrainGG и попробуй ещё раз." },
+        free: { allowed: false, reason: "Не удалось проверить подписку. Проверь, что бот BrainGG добавлен администратором канала." },
+      };
+      setSpecialCaseAccess(next);
+      return next;
     }
   }
 
@@ -1899,6 +1939,7 @@ export default function App() {
     if (["Инвентарь", "Коллекция", "Апгрейдер"].includes(nextPage)) {
       await loadInventory();
     }
+    if (nextPage === "Кейсы") await loadSpecialCaseAccess();
 
     if (nextPage === "Апгрейдер" && upgradeTargets.length === 0) {
       await loadUpgradeTargets();
@@ -1928,7 +1969,8 @@ export default function App() {
 
   async function openSelectedCase() {
     if (streamerMode) { setActionMessage("Открытие кейсов отключено в режиме стримера."); return; }
-    if (!selectedCase || !player || opening || caseRewardsLoading || caseRewardsFor !== selectedCase.caseName || caseRewards.length === 0) return;
+    const rewardPoolName = getCaseRewardPoolName(selectedCase);
+    if (!selectedCase || !player || opening || caseRewardsLoading || caseRewardsFor !== rewardPoolName || caseRewards.length === 0) return;
 
     setOpening(true);
     setLastRewards([]);
@@ -1967,11 +2009,13 @@ export default function App() {
     try {
       // Ask the server for every result first. The animation never chooses or changes a reward.
       for (let i = 0; i < openCount; i++) {
-        const { data, error } = await supabase.functions.invoke("braingg-api", {
-          body: { initData: initData(), action: "open_case", caseName: selectedCase.caseName },
-        });
+        const requestBody = selectedCase.specialType
+          ? { initData: initData(), action: "open_special_case", specialCaseType: selectedCase.specialType }
+          : { initData: initData(), action: "open_case", caseName: selectedCase.caseName };
+        const { data, error } = await supabase.functions.invoke("braingg-api", { body: requestBody });
         if (error || !data?.success || !data?.result?.success) {
           const message = await friendlyActionError(error, data, "Не удалось открыть кейс. Попробуй ещё раз.");
+          if (selectedCase.specialType) await loadSpecialCaseAccess();
           throw new Error(message);
         }
 
@@ -2350,6 +2394,8 @@ export default function App() {
         { page: "Инвентарь", title: "Инвентарь", description: "Смотри лучшие брейнроты в красивых карточках", metric: `${inventory.length} предметов` },
       ];
   const totalCaseMaxReward = cases.reduce((max, item) => Math.max(max, Number(item.maxReward || 0)), 0);
+  const selectedCaseRewardPoolName = getCaseRewardPoolName(selectedCase);
+  const selectedSpecialCaseAccess = selectedCase?.specialType ? specialCaseAccess[selectedCase.specialType] : null;
   const selectedDepositItem = depositCatalog.find((item) => item.item_key === depositSelectedItemKey) || null;
   const selectedDepositMutation = depositMutations.find((item) => item.mutation_key === depositMutationKey) || depositMutations[0] || null;
   // Traits are not self-reported by the player. The administrator verifies the actual
@@ -2620,7 +2666,7 @@ export default function App() {
                   </button>
 
                   <div className="case-detail-hero">
-                    <div className={`case-detail-visual case-theme-${selectedCase.color}`}>
+                    <div className={`case-detail-visual case-theme-${selectedCase.color} ${selectedCase.specialType ? `case-detail-special-${selectedCase.specialType}` : ""}`}>
                     <CaseArtwork item={selectedCase} className="case-detail-art-frame" alt={selectedCase.name} />
                       {selectedCase.maxReward && (
                         <span className="case-detail-max">До {selectedCase.maxReward.toLocaleString("ru-RU")} GG</span>
@@ -2629,17 +2675,51 @@ export default function App() {
                     <div className="case-detail-summary">
                       <span className="case-detail-kicker">BrainGG</span>
                       <h2>{selectedCase.name}</h2>
-                      <p>{selectedCase.description}. Обновлённая рулетка работает плавно, быстро и с акцентом на картинках брейнротов.</p>
+                      <p>{selectedCase.description}{selectedCase.specialType ? "" : ". Обновлённая рулетка работает плавно, быстро и с акцентом на картинках брейнротов."}</p>
                       <div className="case-detail-quick-stats">
-                        <div><small>Цена</small><b>{effectiveCasePrice(selectedCase, globalEvent?.event_name).toLocaleString("ru-RU")} GG</b></div>
-                        <div><small>Категория</small><b>{selectedCase.category}</b></div>
-                        <div><small>Макс. награда</small><b>{selectedCase.maxReward ? `${selectedCase.maxReward.toLocaleString("ru-RU")} GG` : "—"}</b></div>
+                        {selectedCase.specialType ? <>
+                          <div><small>Стоимость</small><b>Бесплатно</b></div>
+                          <div><small>Категория</small><b>Специальный</b></div>
+                          <div><small>Доступ</small><b>{specialCaseAccess.loading ? "Проверяем..." : selectedSpecialCaseAccess?.allowed ? "Открыт" : "Закрыт"}</b></div>
+                        </> : <>
+                          <div><small>Цена</small><b>{effectiveCasePrice(selectedCase, globalEvent?.event_name).toLocaleString("ru-RU")} GG</b></div>
+                          <div><small>Категория</small><b>{selectedCase.category}</b></div>
+                          <div><small>Макс. награда</small><b>{selectedCase.maxReward ? `${selectedCase.maxReward.toLocaleString("ru-RU")} GG` : "—"}</b></div>
+                        </>}
                       </div>
                     </div>
                   </div>
 
+                  {selectedCase.specialType && (
+                    <section className={`special-case-access-panel special-case-access-${selectedCase.specialType}`}>
+                      <div className="special-case-access-heading">
+                        <div><span>УСЛОВИЕ ОТКРЫТИЯ</span><b>{selectedCase.name}</b></div>
+                        <strong className={selectedSpecialCaseAccess?.allowed ? "is-available" : "is-locked"}>
+                          {specialCaseAccess.loading ? "ПРОВЕРЯЕМ" : selectedSpecialCaseAccess?.allowed ? "ДОСТУП ОТКРЫТ" : "ДОСТУП ЗАКРЫТ"}
+                        </strong>
+                      </div>
+                      {selectedCase.specialType === "nick" ? (
+                        <>
+                          <p>Добавь <b>@Brain_GG_Bot</b> в имя или фамилию своего Telegram-профиля. После изменения закрой и заново открой BrainGG, чтобы Telegram передал обновлённое имя. Пока отметка есть в имени или фамилии, кейс доступен для открытия.</p>
+                          <a className="special-case-link" href="https://t.me/Brain_GG_Bot" target="_blank" rel="noreferrer">Открыть @Brain_GG_Bot ↗</a>
+                        </>
+                      ) : (
+                        <>
+                          <p>Подпишись на Telegram-канал <b>@Brainrot_GG</b>. Кейс доступен, пока ты остаёшься подписанным на канал.</p>
+                          <a className="special-case-link" href="https://t.me/Brainrot_GG" target="_blank" rel="noreferrer">Открыть Telegram-канал ↗</a>
+                        </>
+                      )}
+                      <div className="special-case-access-footer">
+                        <span role="status">{specialCaseAccess.loading ? "Проверяем условие на сервере..." : selectedSpecialCaseAccess?.reason || "Нажми «Проверить доступ», чтобы обновить статус."}</span>
+                        <button type="button" className="case-button" onClick={loadSpecialCaseAccess} disabled={specialCaseAccess.loading}>
+                          {specialCaseAccess.loading ? "Проверяем..." : "Проверить доступ"}
+                        </button>
+                      </div>
+                    </section>
+                  )}
+
                   <div className="case-detail-controls">
-                    <div className="opening-options">
+                    {!selectedCase.specialType && <div className="opening-options">
                       {[1, 2, 3].map((count) => (
                         <button
                           key={count}
@@ -2650,7 +2730,7 @@ export default function App() {
                           {count} {count === 1 ? "кейс" : "кейса"}
                         </button>
                       ))}
-                    </div>
+                    </div>}
                     <label className="case-fast-toggle">
                       <input
                         type="checkbox"
@@ -2710,7 +2790,7 @@ export default function App() {
                   </div>
                   {opening && skipAvailable && <button className="case-skip-button" onClick={() => { skipRequestedRef.current = true; setSkipAvailable(false); }}>Пропустить анимацию</button>}
 
-                  {(() => {
+                  {!selectedCase.specialType && (() => {
                     const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
                     const freeToUse = Math.min(freeCount, openCount);
                     const paidCount = Math.max(0, openCount - freeToUse);
@@ -2724,15 +2804,17 @@ export default function App() {
                   })()}
 
                   <button
-                    className="main-button case-open-main"
-                    disabled={!player || opening || caseRewardsLoading || caseRewardsFor !== selectedCase.caseName || caseRewards.length === 0}
+                    className={`main-button case-open-main ${selectedCase.specialType ? `special-case-open-${selectedCase.specialType}` : ""}`}
+                    disabled={!player || opening || caseRewardsLoading || caseRewardsFor !== selectedCaseRewardPoolName || caseRewards.length === 0 || (Boolean(selectedCase.specialType) && (specialCaseAccess.loading || !selectedSpecialCaseAccess?.allowed))}
                     onClick={openSelectedCase}
                   >
-                    {opening ? "Открываем..." : caseRewardsLoading || caseRewardsFor !== selectedCase.caseName ? "Загружаем дроп..." : (() => {
-                      const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
-                      const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
-                      return `ОТКРЫТЬ КЕЙС · ${(effectiveCasePrice(selectedCase, globalEvent?.event_name) * paidCount).toLocaleString("ru-RU")} GG`;
-                    })()}
+                    {opening ? "Открываем..." : caseRewardsLoading || caseRewardsFor !== selectedCaseRewardPoolName ? "Загружаем дроп..." : selectedCase.specialType
+                      ? (specialCaseAccess.loading ? "ПРОВЕРЯЕМ ДОСТУП..." : selectedSpecialCaseAccess?.allowed ? `ОТКРЫТЬ ${selectedCase.name} · БЕСПЛАТНО` : "ВЫПОЛНИ УСЛОВИЕ ДЛЯ ОТКРЫТИЯ")
+                      : (() => {
+                        const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
+                        const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
+                        return `ОТКРЫТЬ КЕЙС · ${(effectiveCasePrice(selectedCase, globalEvent?.event_name) * paidCount).toLocaleString("ru-RU")} GG`;
+                      })()}
                   </button>
 
                   {actionMessage && <div className="upgrade-message" role="status">{actionMessage}</div>}
@@ -2757,14 +2839,14 @@ export default function App() {
                     {globalEvent?.event_name === "jackpot_hunt" && <p className="case-contents-event-note">👑 JACKPOT HUNT: вес легендарных, мифических и OG наград увеличен в 3 раза.</p>}
                     {globalEvent?.event_name === "case_sale" && <p className="case-contents-event-note">🏷️ CASE SALE: цена каждого открытия снижена на 25%.</p>}
                     <div className="case-contents-grid">
-                      {caseRewardsLoading && caseRewardsFor === selectedCase.caseName && <p className="case-contents-caption">Загружаем полный список наград...</p>}
-                      {caseRewardsFor === selectedCase.caseName && caseRewards.map((item, index) => (
+                      {caseRewardsLoading && caseRewardsFor === selectedCaseRewardPoolName && <p className="case-contents-caption">Загружаем полный список наград...</p>}
+                      {caseRewardsFor === selectedCaseRewardPoolName && caseRewards.map((item, index) => (
                         <div className={`case-content-item ${rarityClassName(item.rarity)}`} key={`${item.item_name}-${index}`}>
                           <img className="brainrot-thumb" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
                           <div className="case-content-info"><b>{item.item_name}</b><small>{item.rarity || "Награда"} · {Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</small><em>{Number(item.drop_chance_percent || 0).toFixed(2)}% шанс</em></div>
                         </div>
                       ))}
-                      {!caseRewardsLoading && caseRewardsFor === selectedCase.caseName && caseRewards.length === 0 && <p className="case-contents-caption">Для этого кейса пока не настроен пул наград.</p>}
+                      {!caseRewardsLoading && caseRewardsFor === selectedCaseRewardPoolName && caseRewards.length === 0 && <p className="case-contents-caption">Для этого кейса пока не настроен пул наград.</p>}
                     </div>
                   </section>
                 </section>
@@ -2779,49 +2861,65 @@ export default function App() {
                     <div className="cases-balance-chip">Баланс · {Number(player?.balance || 0).toLocaleString("ru-RU")} GG</div>
                   </div>
                   <section className="cases-overview-grid">
-                    <article><small>Всего кейсов</small><b>{cases.length}</b><p>Все открываются в новом стиле.</p></article>
+                    <article><small>Всего кейсов</small><b>{cases.length + specialCases.length}</b><p>Обычные и специальные кейсы BrainGG.</p></article>
                     <article><small>Макс. награда</small><b>{totalCaseMaxReward.toLocaleString("ru-RU")} GG</b><p>Топовый потенциальный дроп сезона.</p></article>
                     <article><small>Открытие</small><b>Плавная рулетка</b><p>С фокусом на карточках, дропах и честном финале.</p></article>
                   </section>
 
-                  {["Обычные кейсы", "Премиум", "All In"].map((category) => (
-                    <section className="case-category-section" key={category}>
-                      <h3>{category}</h3>
-                      <div className="case-grid case-grid-reference">
-                        {cases.filter((item) => item.category === category).map((item) => (
-                          <article className={`case-card case-card-reference case-theme-${item.color}`} key={item.id}>
-                            {item.maxReward && <span className="case-max-badge">до {item.maxReward.toLocaleString("ru-RU")} GG</span>}
-                            <button
-                              type="button"
-                              className="case-card-reference-button"
-                              onClick={() => {
-                                setSelectedCase(item);
-                                setCaseRewards([]);
-                                setCaseRewardsFor(item.caseName);
-                                setLastRewards([]);
-                                setOpenCount(1);
-                                setActionMessage("");
-                                if (upgradeTargets.length === 0) loadUpgradeTargets();
-                              }}
-                            >
-                              <CaseArtwork item={item} className="case-card-art" alt={item.name} />
-                              <div className="case-card-details">
-                                <h4>{item.name}</h4>
-                                <p>{item.description}</p>
-                                <div className="case-price-row">
-                                  <span>Цена:</span>
-                                  {item.oldPrice && <del>{item.oldPrice.toLocaleString("ru-RU")}</del>}
-                                  <b>{effectiveCasePrice(item, globalEvent?.event_name).toLocaleString("ru-RU")} GG</b>{globalEvent?.event_name === "case_sale" && <em className="event-sale-pill">ИВЕНТ −25%</em>}
-                                  {item.discount && <em>-{item.discount}%</em>}
-                                </div>
-                                <span className="case-card-open-label">Открыть ›</span>
-                              </div>
-                            </button>
-                          </article>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
+                  {["Специальные кейсы", "Обычные кейсы", "Премиум", "All In"].map((category) => {
+                    const categoryItems = category === "Специальные кейсы"
+                      ? specialCases
+                      : cases.filter((item) => item.category === category);
+                    if (!categoryItems.length) return null;
+                    return (
+                      <section className="case-category-section" key={category}>
+                        <h3>{category}</h3>
+                        <div className="case-grid case-grid-reference">
+                          {categoryItems.map((item) => {
+                            const isSpecial = Boolean(item.specialType);
+                            const access = isSpecial ? specialCaseAccess[item.specialType] : null;
+                            return (
+                              <article className={`case-card case-card-reference case-theme-${item.color} ${isSpecial ? `case-card-special case-card-special-${item.specialType}` : ""}`} key={item.id}>
+                                {item.maxReward && <span className="case-max-badge">до {item.maxReward.toLocaleString("ru-RU")} GG</span>}
+                                {isSpecial && <span className={`special-case-status ${access?.allowed ? "is-available" : ""}`}>{specialCaseAccess.loading ? "ПРОВЕРКА" : access?.allowed ? "ДОСТУП ОТКРЫТ" : "УСЛОВИЕ"}</span>}
+                                <button
+                                  type="button"
+                                  className="case-card-reference-button"
+                                  onClick={() => {
+                                    setSelectedCase(item);
+                                    setCaseRewards([]);
+                                    setCaseRewardsFor(getCaseRewardPoolName(item));
+                                    setLastRewards([]);
+                                    setOpenCount(1);
+                                    setActionMessage("");
+                                    if (isSpecial) loadSpecialCaseAccess();
+                                    if (upgradeTargets.length === 0) loadUpgradeTargets();
+                                  }}
+                                >
+                                  <CaseArtwork item={item} className="case-card-art" alt={item.name} />
+                                  <div className="case-card-details">
+                                    <h4>{item.name}</h4>
+                                    <p>{item.description}</p>
+                                    {isSpecial ? (
+                                      <div className="special-case-requirement">{item.requirementShort}</div>
+                                    ) : (
+                                      <div className="case-price-row">
+                                        <span>Цена:</span>
+                                        {item.oldPrice && <del>{item.oldPrice.toLocaleString("ru-RU")}</del>}
+                                        <b>{effectiveCasePrice(item, globalEvent?.event_name).toLocaleString("ru-RU")} GG</b>{globalEvent?.event_name === "case_sale" && <em className="event-sale-pill">ИВЕНТ −25%</em>}
+                                        {item.discount && <em>-{item.discount}%</em>}
+                                      </div>
+                                    )}
+                                    <span className="case-card-open-label">{isSpecial ? (access?.allowed ? "Открыть бесплатно ›" : "Проверить условие ›") : "Открыть ›"}</span>
+                                  </div>
+                                </button>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </>
               )}
             </main>
