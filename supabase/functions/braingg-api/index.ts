@@ -349,7 +349,7 @@ Deno.serve(async (req) => {
       const requestedEvent = body.eventName == null || body.eventName === ""
         ? null
         : String(body.eventName).trim();
-      const allowedEvents = ["tacos", "lucky", "strawberry"];
+      const allowedEvents = ["tacos", "lucky", "strawberry", "red_fever", "gold_rush", "case_sale", "power_upgrade", "jackpot_hunt", "night_shift"];
       if (requestedEvent && !allowedEvents.includes(requestedEvent)) {
         return respond({ error: "Неизвестный ивент." }, 400);
       }
@@ -1035,7 +1035,7 @@ Deno.serve(async (req) => {
         .select("item_name, rarity, value_gg, mutation")
         .eq("id", inventoryId).eq("telegram_id", telegramUser.id).maybeSingle();
       const { data, error } = await supabase.rpc(
-        "sell_inventory_item",
+        "sell_inventory_item_with_event",
         {
           p_telegram_id: telegramUser.id,
           p_inventory_id: inventoryId,
@@ -1048,8 +1048,10 @@ Deno.serve(async (req) => {
       }
 
       await recordProgress("sell_item", 1);
-      if (soldItem) await recordGlobalActivity({ eventType: "item_sold", title: "Продал брейнрота", description: `${soldItem.item_name} · ${Number(soldItem.value_gg || 0)} GG`, itemName: soldItem.item_name, rarity: soldItem.rarity, valueGg: Number(soldItem.value_gg || 0), success: true });
-      return respond({ success: true, result: data });
+      const saleResult = typeof data === "string" ? JSON.parse(data) : data;
+      const soldPrice = Number(saleResult?.sold_price ?? soldItem?.value_gg ?? 0);
+      if (soldItem) await recordGlobalActivity({ eventType: "item_sold", title: "Продал брейнрота", description: `${soldItem.item_name} · ${soldPrice} GG${Number(saleResult?.event_multiplier || 1) > 1 ? " · GOLD RUSH ×2" : ""}`, itemName: soldItem.item_name, rarity: soldItem.rarity, valueGg: soldPrice, success: true });
+      return respond({ success: true, result: saleResult });
     }
 
     // ЦЕЛИ АПГРЕЙДА
@@ -1100,15 +1102,19 @@ Deno.serve(async (req) => {
       }
       const weighted = (rewards || []).map((item: any) => {
         const rarity = String(item.rarity || "").toLowerCase();
-        const boosted = event?.event_name === "lucky" && !["обычный", "common"].includes(rarity);
-        return { ...item, effective_weight: Number(item.chance || 0) * (boosted ? 2 : 1) };
+        const nonCommon = !["обычный", "common"].includes(rarity);
+        const jackpot = ["легендарный", "мифический", "ог", "legendary", "mythic", "og"].includes(rarity);
+        const multiplier = event?.event_name === "lucky" && nonCommon ? 2
+          : event?.event_name === "red_fever" && nonCommon ? 1.5
+          : event?.event_name === "jackpot_hunt" && jackpot ? 3 : 1;
+        return { ...item, effective_weight: Number(item.chance || 0) * multiplier, event_weight_multiplier: multiplier };
       });
       const totalWeight = weighted.reduce((sum: number, item: any) => sum + Number(item.effective_weight || 0), 0);
       const result = weighted.map((item: any) => ({
         ...item,
         drop_chance_percent: totalWeight > 0 ? Number(item.effective_weight) / totalWeight * 100 : 0,
       }));
-      return respond({ success: true, caseName, items: result, luckyBoost: event?.event_name === "lucky" });
+      return respond({ success: true, caseName, items: result, eventName: event?.event_name || null, luckyBoost: event?.event_name === "lucky" });
     }
 
     // АПГРЕЙД
@@ -1134,7 +1140,7 @@ Deno.serve(async (req) => {
         .select("item_name, rarity, value_gg")
         .eq("id", inventoryId).eq("telegram_id", telegramUser.id).maybeSingle();
       const { data, error } = await supabase.rpc(
-        "upgrade_inventory_item_with_luck",
+        "upgrade_inventory_item_fair_v2",
         {
           p_telegram_id: telegramUser.id,
           p_inventory_id: inventoryId,
