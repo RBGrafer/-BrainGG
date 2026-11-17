@@ -4153,3 +4153,185 @@ body[data-braingg-theme="party"][data-braingg-event] {
 .app.theme-red .case-open-main.special-case-open-nick { background:linear-gradient(110deg,#167bd4,#1053a0) !important; box-shadow:0 8px 24px rgba(27,120,210,.3) !important; }
 .app.theme-party .case-open-main.special-case-open-free,
 .app.theme-red .case-open-main.special-case-open-free { background:linear-gradient(110deg,#1b9c55,#0e6b3a) !important; box-shadow:0 8px 24px rgba(25,157,82,.28) !important; }
+
+/* Brainrot artwork containment: keep every character inside its UI frame. */
+.reward-modal-item,
+.reward-modal-art,
+.collection-card-art,
+.inventory-art,
+.inventory-hero-icon,
+.deposit-brainrot-card,
+.live-drop-art,
+.drops-art {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.reward-modal-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 132px !important;
+  min-height: 132px;
+  max-height: 132px;
+  padding: 5px;
+  box-sizing: border-box;
+  isolation: isolate;
+}
+
+.reward-modal-art img {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: min(100%, 126px) !important;
+  max-height: 122px !important;
+  object-fit: contain !important;
+  object-position: center;
+  margin: auto;
+  transform: none !important;
+}
+
+.reward-modal-grid.multi .reward-modal-art img {
+  max-width: 94px !important;
+  max-height: 94px !important;
+}
+
+.brainrot-thumb {
+  width: 56px !important;
+  height: 56px !important;
+  max-width: 56px;
+  max-height: 56px;
+  flex: 0 0 56px !important;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.upgrade-item-emoji-image,
+.upgrade-content .upgrade-item-emoji-image {
+  width: 56px !important;
+  height: 56px !important;
+  max-width: 56px;
+  max-height: 56px;
+  flex: 0 0 56px !important;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.case-roulette-stack .case-roulette-item > img,
+.case-roulette-item > img {
+  width: 58px !important;
+  height: 58px !important;
+  max-width: 100%;
+  max-height: 58px;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.inventory-art .brainrot-inventory-image {
+  width: 124px !important;
+  height: 124px !important;
+  max-width: 88% !important;
+  max-height: 124px !important;
+  padding: 4px !important;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.inventory-hero-icon img {
+  width: 70px !important;
+  height: 70px !important;
+  max-width: 82%;
+  max-height: 82%;
+  object-fit: contain !important;
+}
+
+.collection-card-art img {
+  width: 100%;
+  height: 100%;
+  max-width: 108px;
+  max-height: 108px;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.home-featured-card img {
+  width: 60px;
+  height: 60px;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain !important;
+}
+
+.live-drop-art img,
+.drops-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.deposit-brainrot-card img {
+  display: block;
+  width: min(100%, 84px) !important;
+  height: 84px !important;
+  max-width: 84px;
+  max-height: 84px;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.deposit-review-card img,
+.deposit-request-summary img {
+  width: 64px !important;
+  height: 64px !important;
+  max-width: 64px;
+  max-height: 64px;
+  flex: 0 0 64px !important;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+.deposit-admin-price-row img,
+.admin-inventory-thumb {
+  width: 40px !important;
+  height: 40px !important;
+  max-width: 40px;
+  max-height: 40px;
+  object-fit: contain !important;
+  object-position: center;
+}
+
+@media (max-width: 600px) {
+  .reward-modal-art {
+    height: 100px !important;
+    min-height: 100px;
+    max-height: 100px;
+  }
+
+  .reward-modal-art img {
+    max-width: 92px !important;
+    max-height: 92px !important;
+  }
+
+  .reward-modal-grid.multi .reward-modal-art img {
+    max-width: 76px !important;
+    max-height: 76px !important;
+  }
+
+  .case-roulette-stack .case-roulette-item > img,
+  .case-roulette-item > img {
+    width: 50px !important;
+    height: 50px !important;
+    max-height: 50px;
+  }
+
+  .deposit-brainrot-card img {
+    width: min(100%, 76px) !important;
+    height: 76px !important;
+    max-width: 76px;
+    max-height: 76px;
+  }
+}
