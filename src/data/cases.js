@@ -6,6 +6,8 @@ import royalRedArt from "../assets/cases/v17/royal-red.webp";
 import whiteCrownArt from "../assets/cases/v17/white-crown.webp";
 import strawberryAllInArt from "../assets/cases/v17/strawberry-all-in.webp";
 import headlessAllInArt from "../assets/cases/v17/headless-all-in.webp";
+import nickCaseArt from "../assets/cases/v17/nick-case.webp";
+import freeCaseArt from "../assets/cases/v17/free-case.webp";
 
 // BrainGG v17 case art. Backend caseName values stay stable for existing rewards.
 export const cases = [
@@ -56,5 +58,37 @@ export const cases = [
     description: "Один бросок — шанс забрать легендарную награду", price: 59,
     oldPrice: 89, discount: 33, color: "headless",
     image: headlessAllInArt, category: "All In", maxReward: 14830,
+  },
+];
+
+
+// Special cases are displayed separately from the paid case catalogue.
+// Their reward pools reuse existing database case names so no new reward rows are required.
+export const specialCases = [
+  {
+    id: "nick-case",
+    name: "NICK CASE",
+    caseName: "Nick Case",
+    rewardCaseName: "Truckini Case",
+    specialType: "nick",
+    description: "Синий специальный кейс. Доступен, пока @Brain_GG_Bot указан в имени или фамилии Telegram.",
+    requirementShort: "Добавь @Brain_GG_Bot в имя или фамилию Telegram",
+    price: 0,
+    color: "special-blue",
+    image: nickCaseArt,
+    category: "Специальные кейсы",
+  },
+  {
+    id: "free-case",
+    name: "FREE CASE",
+    caseName: "Free Case",
+    rewardCaseName: "Summer Case",
+    specialType: "free",
+    description: "Зелёный специальный кейс. Доступен, пока ты подписан на Telegram-канал Brainrot_GG.",
+    requirementShort: "Подпишись на Telegram-канал @Brainrot_GG",
+    price: 0,
+    color: "special-green",
+    image: freeCaseArt,
+    category: "Специальные кейсы",
   },
 ];
