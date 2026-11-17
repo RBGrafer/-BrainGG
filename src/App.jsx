@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { cases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 import redHomeBackground from "./assets/braingg-red-home.svg";
-import partyHomeBackground from "./assets/braingg-party-home.webp";
+import partyHomeBackground from "./assets/braingg-party-home.png";
 import artCappuccinoBallerina from "./assets/brainrots/v17/cappuccino-ballerina.webp";
 import artCrocodileAviator from "./assets/brainrots/v17/crocodile-aviator.webp";
 import artNinjaEspresso from "./assets/brainrots/v17/ninja-espresso.webp";
