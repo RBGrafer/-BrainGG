@@ -2539,7 +2539,7 @@ export default function App() {
                 <p className="home-greeting">Привет, <b>{greetingLabel}!</b></p>
                 <h2>Добро пожаловать в BrainGG!</h2>
                 <p>{streamerMode ? "Собирай коллекцию, проходи викторины и выполняй задания сообщества." : "Открывай кейсы, собирай персонажей и улучшай свою коллекцию."}</p>
-                <p className="home-luck">{streamerMode ? "Трансляция в безопасном режиме просмотра" : "Обновлённый Red & White сезон уже активен"}</p>
+                <p className="home-luck">{streamerMode ? "Трансляция в безопасном режиме просмотра" : siteTheme === "party" ? "Party Neon — праздничный сезон BrainGG уже активен" : "Обновлённый Red & White сезон уже активен"}</p>
                 <div className="home-cta-row">
                   <button className="main-button" onClick={() => changePage(streamerMode ? "Инвентарь" : "Кейсы")}>{streamerMode ? "Открыть коллекцию" : "Смотреть кейсы"}</button>
                   {!streamerMode && <button className="case-button" onClick={() => changePage("Апгрейдер")}>Перейти в апгрейдер</button>}
@@ -2604,7 +2604,7 @@ export default function App() {
                       )}
                     </div>
                     <div className="case-detail-summary">
-                      <span className="case-detail-kicker">BRAINROT CASER</span>
+                      <span className="case-detail-kicker">BrainGG</span>
                       <h2>{selectedCase.name}</h2>
                       <p>{selectedCase.description}. Обновлённая рулетка работает плавно, быстро и с акцентом на картинках брейнротов.</p>
                       <div className="case-detail-quick-stats">
