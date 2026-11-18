@@ -82,6 +82,21 @@ function formatUpgradeChance(value) {
   return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
 }
 
+function getSpecialCaseRemainingSeconds(access, now = Date.now()) {
+  const cooldownUntil = Date.parse(String(access?.cooldownUntil || ""));
+  return Number.isFinite(cooldownUntil)
+    ? Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
+    : Math.max(0, Number(access?.remainingSeconds || 0));
+}
+
+function formatCooldownCountdown(seconds) {
+  const total = Math.max(0, Math.ceil(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainingSeconds = total % 60;
+  return [hours, minutes, remainingSeconds].map((value) => String(value).padStart(2, "0")).join(":");
+}
+
 // Keep the case reel's winning card centered under the fixed pointer.
 // The item widths intentionally match the responsive CSS breakpoints below.
 function getCaseReelItemWidth() {
@@ -312,13 +327,14 @@ export default function App() {
   const [globalActivityLoading, setGlobalActivityLoading] = useState(false);
   const [globalActivityError, setGlobalActivityError] = useState("");
   const [eventClock, setEventClock] = useState(Date.now());
+  const [specialCaseClock, setSpecialCaseClock] = useState(Date.now());
   const [caseRewards, setCaseRewards] = useState([]);
   const [caseRewardsFor, setCaseRewardsFor] = useState("");
   const [caseRewardsLoading, setCaseRewardsLoading] = useState(false);
   const [specialCaseAccess, setSpecialCaseAccess] = useState({
     loading: false,
-    nick: { allowed: false, reason: "Проверь условие доступа." },
-    free: { allowed: false, reason: "Проверь подписку на канал." },
+    nick: { allowed: false, reason: "Проверь условие доступа.", cooldownUntil: null, remainingSeconds: 0 },
+    free: { allowed: false, reason: "Проверь подписку на канал.", cooldownUntil: null, remainingSeconds: 0 },
   });
   const [mobileUpgradeList, setMobileUpgradeList] = useState("source");
 
@@ -1253,6 +1269,12 @@ export default function App() {
   }, [globalEvent?.event_name]);
 
   useEffect(() => {
+    if (page !== "Кейсы") return undefined;
+    const timer = window.setInterval(() => setSpecialCaseClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [page]);
+
+  useEffect(() => {
     if (!globalMessage?.id) return undefined;
     const timer = window.setTimeout(() => setGlobalMessage(null), 12000);
     return () => window.clearTimeout(timer);
@@ -1342,8 +1364,8 @@ export default function App() {
       if (error || !data?.success) throw new Error(data?.error || error?.message || "Не удалось проверить специальные кейсы.");
       const next = {
         loading: false,
-        nick: data.access?.nick || { allowed: false, reason: "Не удалось проверить имя Telegram." },
-        free: data.access?.free || { allowed: false, reason: "Не удалось проверить подписку." },
+        nick: data.access?.nick || { allowed: false, reason: "Не удалось проверить имя Telegram.", cooldownUntil: null, remainingSeconds: 0 },
+        free: data.access?.free || { allowed: false, reason: "Не удалось проверить подписку.", cooldownUntil: null, remainingSeconds: 0 },
       };
       setSpecialCaseAccess(next);
       return next;
@@ -1351,8 +1373,8 @@ export default function App() {
       console.warn("Special case access check failed:", error);
       const next = {
         loading: false,
-        nick: { allowed: false, reason: "Не удалось проверить имя Telegram. Обнови BrainGG и попробуй ещё раз." },
-        free: { allowed: false, reason: "Не удалось проверить подписку. Проверь, что бот BrainGG добавлен администратором канала." },
+        nick: { allowed: false, reason: "Не удалось проверить имя Telegram. Обнови BrainGG и попробуй ещё раз.", cooldownUntil: null, remainingSeconds: 0 },
+        free: { allowed: false, reason: "Не удалось проверить подписку. Проверь, что бот BrainGG добавлен администратором канала.", cooldownUntil: null, remainingSeconds: 0 },
       };
       setSpecialCaseAccess(next);
       return next;
@@ -1982,6 +2004,9 @@ export default function App() {
     setSkipAvailable(false);
     skipRequestedRef.current = false;
     const rewards = [];
+    // Special cases are strictly single-open actions even if the regular case
+    // quantity state was changed before this case was selected.
+    const casesToOpen = selectedCase.specialType ? 1 : openCount;
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
@@ -2008,7 +2033,7 @@ export default function App() {
 
     try {
       // Ask the server for every result first. The animation never chooses or changes a reward.
-      for (let i = 0; i < openCount; i++) {
+      for (let i = 0; i < casesToOpen; i++) {
         const requestBody = selectedCase.specialType
           ? { initData: initData(), action: "open_special_case", specialCaseType: selectedCase.specialType }
           : { initData: initData(), action: "open_case", caseName: selectedCase.caseName };
@@ -2039,6 +2064,7 @@ export default function App() {
         } : previous);
       }
 
+      if (selectedCase.specialType) await loadSpecialCaseAccess();
       playUiSound("spin");
       const rows = fastOpen
         ? rewards.map((reward, index) => ({ id: `reel-${index}`, cards: [reward], winnerIndex: 0, position: 0, revealed: true }))
@@ -2396,6 +2422,8 @@ export default function App() {
   const totalCaseMaxReward = cases.reduce((max, item) => Math.max(max, Number(item.maxReward || 0)), 0);
   const selectedCaseRewardPoolName = getCaseRewardPoolName(selectedCase);
   const selectedSpecialCaseAccess = selectedCase?.specialType ? specialCaseAccess[selectedCase.specialType] : null;
+  const selectedSpecialCaseRemainingSeconds = getSpecialCaseRemainingSeconds(selectedSpecialCaseAccess, specialCaseClock);
+  const selectedSpecialCaseCoolingDown = selectedSpecialCaseRemainingSeconds > 0;
   const selectedDepositItem = depositCatalog.find((item) => item.item_key === depositSelectedItemKey) || null;
   const selectedDepositMutation = depositMutations.find((item) => item.mutation_key === depositMutationKey) || depositMutations[0] || null;
   // Traits are not self-reported by the player. The administrator verifies the actual
@@ -2680,7 +2708,7 @@ export default function App() {
                         {selectedCase.specialType ? <>
                           <div><small>Стоимость</small><b>Бесплатно</b></div>
                           <div><small>Категория</small><b>Специальный</b></div>
-                          <div><small>Доступ</small><b>{specialCaseAccess.loading ? "Проверяем..." : selectedSpecialCaseAccess?.allowed ? "Открыт" : "Закрыт"}</b></div>
+                          <div><small>Доступ</small><b>{specialCaseAccess.loading ? "Проверяем..." : !selectedSpecialCaseAccess?.allowed ? "Закрыт" : selectedSpecialCaseCoolingDown ? `Через ${formatCooldownCountdown(selectedSpecialCaseRemainingSeconds)}` : "Открыт"}</b></div>
                         </> : <>
                           <div><small>Цена</small><b>{effectiveCasePrice(selectedCase, globalEvent?.event_name).toLocaleString("ru-RU")} GG</b></div>
                           <div><small>Категория</small><b>{selectedCase.category}</b></div>
@@ -2694,20 +2722,26 @@ export default function App() {
                     <section className={`special-case-access-panel special-case-access-${selectedCase.specialType}`}>
                       <div className="special-case-access-heading">
                         <div><span>УСЛОВИЕ ОТКРЫТИЯ</span><b>{selectedCase.name}</b></div>
-                        <strong className={selectedSpecialCaseAccess?.allowed ? "is-available" : "is-locked"}>
-                          {specialCaseAccess.loading ? "ПРОВЕРЯЕМ" : selectedSpecialCaseAccess?.allowed ? "ДОСТУП ОТКРЫТ" : "ДОСТУП ЗАКРЫТ"}
+                        <strong className={selectedSpecialCaseAccess?.allowed ? (selectedSpecialCaseCoolingDown ? "is-cooldown" : "is-available") : "is-locked"}>
+                          {specialCaseAccess.loading ? "ПРОВЕРЯЕМ" : !selectedSpecialCaseAccess?.allowed ? "ДОСТУП ЗАКРЫТ" : selectedSpecialCaseCoolingDown ? "ПЕРЕЗАРЯДКА" : "ДОСТУП ОТКРЫТ"}
                         </strong>
                       </div>
                       {selectedCase.specialType === "nick" ? (
                         <>
-                          <p>Добавь <b>@Brain_GG_Bot</b> в имя или фамилию своего Telegram-профиля. После изменения закрой и заново открой BrainGG, чтобы Telegram передал обновлённое имя. Пока отметка есть в имени или фамилии, кейс доступен для открытия.</p>
+                          <p>Добавь <b>@Brain_GG_Bot</b> в имя или фамилию своего Telegram-профиля. После изменения закрой и заново открой BrainGG, чтобы Telegram передал обновлённое имя. Пока отметка есть в имени или фамилии, кейс доступен для открытия — одно бесплатное открытие раз в 12 часов.</p>
                           <a className="special-case-link" href="https://t.me/Brain_GG_Bot" target="_blank" rel="noreferrer">Открыть @Brain_GG_Bot ↗</a>
                         </>
                       ) : (
                         <>
-                          <p>Подпишись на Telegram-канал <b>@Brainrot_GG</b>. Кейс доступен, пока ты остаёшься подписанным на канал.</p>
+                          <p>Подпишись на Telegram-канал <b>@Brainrot_GG</b>. Кейс доступен, пока ты остаёшься подписанным на канал — одно бесплатное открытие раз в 12 часов.</p>
                           <a className="special-case-link" href="https://t.me/Brainrot_GG" target="_blank" rel="noreferrer">Открыть Telegram-канал ↗</a>
                         </>
+                      )}
+                      {selectedSpecialCaseAccess?.allowed && selectedSpecialCaseCoolingDown && (
+                        <div className="special-case-cooldown" role="status">
+                          <span>Следующее бесплатное открытие через</span>
+                          <b>{formatCooldownCountdown(selectedSpecialCaseRemainingSeconds)}</b>
+                        </div>
                       )}
                       <div className="special-case-access-footer">
                         <span role="status">{specialCaseAccess.loading ? "Проверяем условие на сервере..." : selectedSpecialCaseAccess?.reason || "Нажми «Проверить доступ», чтобы обновить статус."}</span>
@@ -2805,11 +2839,11 @@ export default function App() {
 
                   <button
                     className={`main-button case-open-main ${selectedCase.specialType ? `special-case-open-${selectedCase.specialType}` : ""}`}
-                    disabled={!player || opening || caseRewardsLoading || caseRewardsFor !== selectedCaseRewardPoolName || caseRewards.length === 0 || (Boolean(selectedCase.specialType) && (specialCaseAccess.loading || !selectedSpecialCaseAccess?.allowed))}
+                    disabled={!player || opening || caseRewardsLoading || caseRewardsFor !== selectedCaseRewardPoolName || caseRewards.length === 0 || (Boolean(selectedCase.specialType) && (specialCaseAccess.loading || !selectedSpecialCaseAccess?.allowed || selectedSpecialCaseCoolingDown))}
                     onClick={openSelectedCase}
                   >
                     {opening ? "Открываем..." : caseRewardsLoading || caseRewardsFor !== selectedCaseRewardPoolName ? "Загружаем дроп..." : selectedCase.specialType
-                      ? (specialCaseAccess.loading ? "ПРОВЕРЯЕМ ДОСТУП..." : selectedSpecialCaseAccess?.allowed ? `ОТКРЫТЬ ${selectedCase.name} · БЕСПЛАТНО` : "ВЫПОЛНИ УСЛОВИЕ ДЛЯ ОТКРЫТИЯ")
+                      ? (specialCaseAccess.loading ? "ПРОВЕРЯЕМ ДОСТУП..." : !selectedSpecialCaseAccess?.allowed ? "ВЫПОЛНИ УСЛОВИЕ ДЛЯ ОТКРЫТИЯ" : selectedSpecialCaseCoolingDown ? `СЛЕДУЮЩЕЕ ОТКРЫТИЕ ЧЕРЕЗ ${formatCooldownCountdown(selectedSpecialCaseRemainingSeconds)}` : `ОТКРЫТЬ ${selectedCase.name} · БЕСПЛАТНО`)
                       : (() => {
                         const freeCount = Number(player?.free_case_credits?.find((credit) => credit.case_name === selectedCase.caseName)?.amount || 0);
                         const paidCount = Math.max(0, openCount - Math.min(freeCount, openCount));
@@ -2881,7 +2915,12 @@ export default function App() {
                             return (
                               <article className={`case-card case-card-reference case-theme-${item.color} ${isSpecial ? `case-card-special case-card-special-${item.specialType}` : ""}`} key={item.id}>
                                 {item.maxReward && <span className="case-max-badge">до {item.maxReward.toLocaleString("ru-RU")} GG</span>}
-                                {isSpecial && <span className={`special-case-status ${access?.allowed ? "is-available" : ""}`}>{specialCaseAccess.loading ? "ПРОВЕРКА" : access?.allowed ? "ДОСТУП ОТКРЫТ" : "УСЛОВИЕ"}</span>}
+                                {isSpecial && (() => {
+                                  const remaining = getSpecialCaseRemainingSeconds(access, specialCaseClock);
+                                  return <span className={`special-case-status ${access?.allowed && remaining === 0 ? "is-available" : ""} ${access?.allowed && remaining > 0 ? "is-cooldown" : ""}`}>
+                                    {specialCaseAccess.loading ? "ПРОВЕРКА" : !access?.allowed ? "УСЛОВИЕ" : remaining > 0 ? `ЧЕРЕЗ ${formatCooldownCountdown(remaining)}` : "ДОСТУП ОТКРЫТ"}
+                                  </span>;
+                                })()}
                                 <button
                                   type="button"
                                   className="case-card-reference-button"
