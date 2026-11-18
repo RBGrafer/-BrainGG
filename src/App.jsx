@@ -40,7 +40,7 @@ import depPixelDuo from "./assets/brainrots/deposits/pixel-duo.webp";
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
 const SITE_THEME_STORAGE_KEY = "braingg-site-theme-v1";
 const DISABLED_PAGES = new Set(["Коллекция", "Достижения", "Глобальные события"]);
-const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Live Drops", "Глобальные события", "История", "Промокод", "Задания", "Достижения", "Админка"]);
+const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Мины", "Live Drops", "Глобальные события", "История", "Промокод", "Задания", "Достижения", "Админка"]);
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
@@ -282,6 +282,12 @@ function effectiveCasePrice(item, eventName) {
 
 export default function App() {
   const [page, setPage] = useState("Главная");
+  const [minesBet, setMinesBet] = useState("10");
+  const [minesCount, setMinesCount] = useState(3);
+  const [minesGame, setMinesGame] = useState(null);
+  const [minesBusy, setMinesBusy] = useState(false);
+  const [minesMessage, setMinesMessage] = useState("");
+  const [minesMessageError, setMinesMessageError] = useState(false);
   const [streamerMode, setStreamerMode] = useState(() => {
     if (typeof window === "undefined") return false;
     try { return window.localStorage.getItem(STREAMER_MODE_STORAGE_KEY) === "1"; } catch { return false; }
@@ -373,6 +379,7 @@ export default function App() {
   const menuGroups = [
     { title: "ИГРАТЬ", items: [
       { label: "Кейсы", page: "Кейсы", icon: "🎁", description: "Открывай кейсы и лови редкие дропы" },
+      { label: "Мины", page: "Мины", icon: "💣", description: "Ищи безопасные клетки и забирай выигрыш" },
       { label: "Апгрейдер", page: "Апгрейдер", icon: "⚡", description: "Улучшай предметы из инвентаря" },
       { label: "Викторина", page: "Викторина", icon: "🧠", description: "Отвечай и зарабатывай GG" },
       { label: "Коллекция", page: "Коллекция", icon: "📚", description: "Все твои брейнроты в одном альбоме" },
@@ -1995,6 +2002,87 @@ export default function App() {
     setTargetItem(closest?.item_name || "");
   }
 
+  async function callMinesApi(action, payload = {}) {
+    const { data, error } = await supabase.functions.invoke("braingg-api", {
+      body: { initData: initData(), action, ...payload },
+    });
+    if (error || !data?.success) throw new Error(data?.error || error?.message || "Режим «Мины» временно недоступен.");
+    return data;
+  }
+
+  async function loadMinesGame() {
+    try {
+      const data = await callMinesApi("mines_get_active_game");
+      setMinesGame(data.game || null);
+      setMinesMessage(data.game ? "Продолжай текущую игру — ставка уже зарезервирована." : "Выбери ставку и количество мин, чтобы начать.");
+      setMinesMessageError(false);
+    } catch (error) {
+      setMinesMessage(error.message || "Не удалось загрузить игру.");
+      setMinesMessageError(true);
+    }
+  }
+
+  async function startMinesGame() {
+    const bet = Math.round(Number(minesBet) * 100) / 100;
+    if (!Number.isFinite(bet) || bet < 1 || bet > 100000) {
+      setMinesMessage("Ставка должна быть от 1 до 100 000 GG.");
+      setMinesMessageError(true);
+      return;
+    }
+    if (bet > Number(player?.balance || 0)) {
+      setMinesMessage("Недостаточно GG для этой ставки.");
+      setMinesMessageError(true);
+      return;
+    }
+    setMinesBusy(true);
+    setMinesMessage("");
+    try {
+      const data = await callMinesApi("mines_start_game", { bet, mineCount: minesCount });
+      setMinesGame(data.game);
+      setPlayer((current) => current ? { ...current, balance: data.game.balance } : current);
+      setMinesMessage("Игра началась! Открывай клетки и забирай выигрыш до попадания на мину.");
+      setMinesMessageError(false);
+      playUiSound("success");
+    } catch (error) {
+      setMinesMessage(error.message || "Не удалось начать игру.");
+      setMinesMessageError(true);
+    } finally { setMinesBusy(false); }
+  }
+
+  async function revealMinesCell(cell) {
+    if (!minesGame || minesGame.status !== "active" || minesBusy || minesGame.revealedCells?.includes(cell)) return;
+    setMinesBusy(true);
+    try {
+      const data = await callMinesApi("mines_reveal_cell", { gameId: minesGame.id, cell });
+      setMinesGame((current) => ({ ...current, ...data.game }));
+      if (data.game?.balance != null) setPlayer((current) => current ? { ...current, balance: data.game.balance } : current);
+      setMinesMessage(data.game?.status === "lost"
+        ? `Бум! Ты нашёл мину. Ставка ${Number(minesGame.bet).toLocaleString("ru-RU")} GG потеряна. Попробуй ещё раз!`
+        : `Чисто! Текущий коэффициент ×${Number(data.game?.multiplier || 1).toFixed(2)}. Можешь продолжить или забрать выигрыш.`);
+      setMinesMessageError(data.game?.status === "lost");
+      playUiSound(data.game?.status === "lost" ? "error" : "success");
+    } catch (error) {
+      setMinesMessage(error.message || "Не удалось открыть клетку.");
+      setMinesMessageError(true);
+    } finally { setMinesBusy(false); }
+  }
+
+  async function cashoutMinesGame() {
+    if (!minesGame || minesGame.status !== "active" || !(minesGame.revealedCells?.length > 0) || minesBusy) return;
+    setMinesBusy(true);
+    try {
+      const data = await callMinesApi("mines_cashout", { gameId: minesGame.id });
+      setMinesGame((current) => ({ ...current, ...data.game }));
+      setPlayer((current) => current ? { ...current, balance: data.game.balance } : current);
+      setMinesMessage(`Забрал ${Number(data.game.payout || 0).toLocaleString("ru-RU")} GG! Отличная игра.`);
+      setMinesMessageError(false);
+      playUiSound("success");
+    } catch (error) {
+      setMinesMessage(error.message || "Не удалось забрать выигрыш.");
+      setMinesMessageError(true);
+    } finally { setMinesBusy(false); }
+  }
+
   async function changePage(nextPage) {
     if (streamerMode && STREAMER_RESTRICTED_PAGES.has(nextPage)) {
       setMenuOpen(false);
@@ -2010,6 +2098,7 @@ export default function App() {
       await loadInventory();
     }
     if (nextPage === "Кейсы") await loadSpecialCaseAccess();
+    if (nextPage === "Мины") await loadMinesGame();
 
     if (nextPage === "Апгрейдер" && upgradeTargets.length === 0) {
       await loadUpgradeTargets();
@@ -2465,6 +2554,7 @@ export default function App() {
     : [
         { page: "Кейсы", title: "Кейсы", description: "Открывай обновлённые кейсы с плавной рулеткой", metric: `${cases.length} кейсов` },
         { page: "Апгрейдер", title: "Апгрейдер", description: "Честный 10-секундный апгрейдер без подкрутов", metric: selectedUpgrade ? "Выбран предмет" : "Готов к запуску" },
+        { page: "Мины", title: "Мины", description: "Открывай клетки, повышай множитель и забирай выигрыш", metric: "25 клеток · риск" },
         { page: "Инвентарь", title: "Инвентарь", description: "Смотри лучшие брейнроты в красивых карточках", metric: `${inventory.length} предметов` },
       ];
   const totalCaseMaxReward = cases.reduce((max, item) => Math.max(max, Number(item.maxReward || 0)), 0);
@@ -2727,6 +2817,44 @@ export default function App() {
                 </section>
                 {hubMessage && <p className="hub-feedback">{hubMessage}</p>}
               </div>
+            </main>
+          )}
+
+          {page === "Мины" && !streamerMode && (
+            <main className="content mines-page">
+              <section className="mines-hero">
+                <div className="mines-hero-copy"><span className="season-kicker">BRAINGG ARCADE · HIGH RISK</span><h2>Мины</h2><p>Открывай безопасные клетки, повышай множитель и забирай выигрыш в любой момент. Одна мина — и раунд окончен.</p></div>
+                <div className="mines-hero-icon" aria-hidden="true">💣</div>
+              </section>
+              <section className="mines-stats">
+                <article><small>Твой баланс</small><b>{Number(player?.balance || 0).toLocaleString("ru-RU")} GG</b></article>
+                <article><small>Ставка раунда</small><b>{minesGame ? `${Number(minesGame.bet).toLocaleString("ru-RU")} GG` : `${Number(minesBet || 0).toLocaleString("ru-RU")} GG`}</b></article>
+                <article><small>Текущий множитель</small><b>×{Number(minesGame?.multiplier || 1).toFixed(2)}</b></article>
+                <article><small>Можно забрать</small><b>{minesGame?.status === "active" ? `${Number(minesGame.payout || 0).toLocaleString("ru-RU")} GG` : "—"}</b></article>
+              </section>
+              <section className="mines-game-panel">
+                <div className="mines-controls">
+                  <label className="mines-field"><span>Ставка, GG</span><input type="number" min="1" max="100000" step="0.01" value={minesBet} onChange={(event) => setMinesBet(event.target.value)} disabled={minesBusy || minesGame?.status === "active"}/></label>
+                  <div className="mines-field"><span>Количество мин</span><div className="mines-count-options">{[1, 3, 5, 8, 10, 15, 20, 24].map((count) => <button type="button" key={count} className={minesCount === count ? "active" : ""} onClick={() => setMinesCount(count)} disabled={minesBusy || minesGame?.status === "active"}>{count}</button>)}</div></div>
+                </div>
+                <div className="mines-board-head"><div><b>Игровое поле</b><small>{minesGame?.status === "active" ? `Безопасных клеток: ${minesGame.revealedCells?.length || 0}` : "Поле 5 × 5 · 25 клеток"}</small></div><span className="mines-risk-pill">💣 {minesGame?.mineCount || minesCount} мин</span></div>
+                <div className={`mines-board ${minesGame?.status === "lost" ? "is-lost" : ""}`}>
+                  {Array.from({ length: 25 }, (_, cell) => {
+                    const revealed = minesGame?.revealedCells?.includes(cell);
+                    const isMine = minesGame?.minePositions?.includes(cell);
+                    const showMine = minesGame?.status === "lost" && isMine;
+                    const showSafe = revealed && !isMine;
+                    return <button type="button" key={cell} className={`mines-cell ${showMine ? "mine" : ""} ${showSafe ? "safe" : ""} ${revealed && isMine ? "hit" : ""}`} onClick={() => revealMinesCell(cell)} disabled={!minesGame || minesGame.status !== "active" || minesBusy || revealed} aria-label={`Клетка ${cell + 1}${showMine ? ", мина" : showSafe ? ", безопасно" : ""}`}>
+                      {showMine ? "💣" : showSafe ? "💎" : minesGame?.status === "cashed_out" && isMine ? "💣" : minesGame?.status === "cashed_out" && revealed ? "💎" : "✦"}
+                    </button>;
+                  })}
+                </div>
+                <div className="mines-actions">
+                  {!minesGame || minesGame.status !== "active" ? <button type="button" className="main-button" onClick={startMinesGame} disabled={minesBusy || loading}>{minesBusy ? "Подожди..." : minesGame ? "Начать новый раунд" : "Начать игру"}</button> : <button type="button" className="mines-cashout-button" onClick={cashoutMinesGame} disabled={minesBusy || !(minesGame.revealedCells?.length > 0)}>{minesBusy ? "Обрабатываем..." : `Забрать ${Number(minesGame.payout || 0).toLocaleString("ru-RU")} GG`}</button>}
+                </div>
+                {minesMessage && <p className={`mines-feedback ${minesMessageError ? "error" : ""}`} role="status">{minesMessage}</p>}
+                <p className="mines-footnote">Ставка списывается при старте. Выигрыш рассчитывается и начисляется сервером. Игра использует внутренние GG.</p>
+              </section>
             </main>
           )}
 
