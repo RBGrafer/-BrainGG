@@ -92,10 +92,13 @@ function getSpecialCaseRemainingSeconds(access, now = Date.now()) {
 
 function formatCooldownCountdown(seconds) {
   const total = Math.max(0, Math.ceil(Number(seconds) || 0));
-  const hours = Math.floor(total / 3600);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const remainingSeconds = total % 60;
-  return [hours, minutes, remainingSeconds].map((value) => String(value).padStart(2, "0")).join(":");
+  const pad = (value) => String(value).padStart(2, "0");
+  if (days > 0) return `${days}д ${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
+  return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
 }
 
 // Keep the case reel's winning card centered under the fixed pointer.
@@ -525,6 +528,40 @@ export default function App() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [menuOpen]);
 
+  // Keep Telegram's native Back button in sync with the in-app navigation.
+  // This avoids trapping mobile users inside nested pages or the drawer.
+  useEffect(() => {
+    const backButton = window.Telegram?.WebApp?.BackButton;
+    if (!backButton) return;
+    const shouldShow = menuOpen || page !== "Главная";
+    const handleBack = () => {
+      if (menuOpen) {
+        setMenuOpen(false);
+        return;
+      }
+      if (page !== "Главная") {
+        setPage("Главная");
+        setSelectedCase(null);
+        setActionMessage("");
+      }
+    };
+    try {
+      if (shouldShow) backButton.show?.();
+      else backButton.hide?.();
+      backButton.onClick?.(handleBack);
+    } catch (error) {
+      console.warn("Telegram BackButton setup failed:", error);
+    }
+    return () => {
+      try {
+        backButton.offClick?.(handleBack);
+        if (!shouldShow) backButton.hide?.();
+      } catch (error) {
+        console.warn("Telegram BackButton cleanup failed:", error);
+      }
+    };
+  }, [menuOpen, page]);
+
   function getAudioContext() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return null;
@@ -755,6 +792,13 @@ export default function App() {
   useEffect(() => () => {
     stopWinterMusic();
     stopEventMusic();
+    const audioContext = audioContextRef.current;
+    audioContextRef.current = null;
+    if (audioContext && audioContext.state !== "closed") {
+      audioContext.close().catch((error) => console.warn("Audio context cleanup failed:", error));
+    }
+    const backButton = window.Telegram?.WebApp?.BackButton;
+    try { backButton?.hide?.(); } catch (error) { console.warn("Telegram BackButton cleanup failed:", error); }
   }, []);
 
 
