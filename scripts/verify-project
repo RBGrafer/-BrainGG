@@ -52,3 +52,15 @@ if (assetCheck.status !== 0) {
 }
 process.stdout.write(assetCheck.stdout);
 console.log('BrainGG: OK — API auth boundaries, payment webhook configuration, special-case cooldown contract, SQL permissions, and project assets checked.');
+
+const minesSql = read('supabase/manual-sql/mines-mode.sql');
+assert.match(appSource, /page === "Мины"/, 'Mines mode UI must be registered as a page');
+assert.match(appSource, /mines_start_game/, 'Mines UI must start games through the trusted backend');
+assert.match(appSource, /mines_reveal_cell/, 'Mines UI must reveal cells through the trusted backend');
+assert.match(backend, /crypto\.getRandomValues\(new Uint32Array\(25\)\)/, 'Mine positions must be generated with cryptographically secure randomness');
+assert.match(backend, /cashout_mines_game/, 'Mines cashout must be processed by the database');
+assert.match(minesSql, /enable row level security/i, 'Mines game storage must have RLS enabled');
+assert.match(minesSql, /mines_one_active_game_per_player/, 'A player may have only one active Mines round');
+assert.match(minesSql, /for update/i, 'Mines balance and game updates must be transactionally locked');
+assert.match(minesSql, /grant execute on function public\.cashout_mines_game\(bigint,uuid\) to service_role/i, 'Only service role may pay out Mines winnings');
+console.log('BrainGG Mines: OK — server-side RNG, locked balance transactions, RLS, one active game, and trusted cashout checked.');
