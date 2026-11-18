@@ -54,6 +54,7 @@ const CASE_DISPLAY_NAMES = {
   "All In Headless Horseman": "All In: Headless",
   "Nick Case": "NICK CASE",
   "Free Case": "FREE CASE",
+  "BrainGG Case": "BrainGG CASE",
 };
 function displayCaseName(value) {
   const key = String(value || "");
@@ -335,6 +336,7 @@ export default function App() {
     loading: false,
     nick: { allowed: false, reason: "Проверь условие доступа.", cooldownUntil: null, remainingSeconds: 0 },
     free: { allowed: false, reason: "Проверь подписку на канал.", cooldownUntil: null, remainingSeconds: 0 },
+    deposit: { allowed: false, reason: "Проверь пополнения за последние 7 дней.", cooldownUntil: null, remainingSeconds: 0 },
   });
   const [mobileUpgradeList, setMobileUpgradeList] = useState("source");
 
@@ -1366,6 +1368,7 @@ export default function App() {
         loading: false,
         nick: data.access?.nick || { allowed: false, reason: "Не удалось проверить имя Telegram.", cooldownUntil: null, remainingSeconds: 0 },
         free: data.access?.free || { allowed: false, reason: "Не удалось проверить подписку.", cooldownUntil: null, remainingSeconds: 0 },
+        deposit: data.access?.deposit || { allowed: false, reason: "Не удалось проверить пополнения за последние 7 дней.", cooldownUntil: null, remainingSeconds: 0 },
       };
       setSpecialCaseAccess(next);
       return next;
@@ -1375,6 +1378,7 @@ export default function App() {
         loading: false,
         nick: { allowed: false, reason: "Не удалось проверить имя Telegram. Обнови BrainGG и попробуй ещё раз.", cooldownUntil: null, remainingSeconds: 0 },
         free: { allowed: false, reason: "Не удалось проверить подписку. Проверь, что бот BrainGG добавлен администратором канала.", cooldownUntil: null, remainingSeconds: 0 },
+        deposit: { allowed: false, reason: "Не удалось проверить историю пополнений. Попробуй ещё раз позже.", cooldownUntil: null, remainingSeconds: 0 },
       };
       setSpecialCaseAccess(next);
       return next;
@@ -2731,11 +2735,13 @@ export default function App() {
                           <p>Добавь <b>@Brain_GG_Bot</b> в имя или фамилию своего Telegram-профиля. После изменения закрой и заново открой BrainGG, чтобы Telegram передал обновлённое имя. Пока отметка есть в имени или фамилии, кейс доступен для открытия — одно бесплатное открытие раз в 12 часов.</p>
                           <a className="special-case-link" href="https://t.me/Brain_GG_Bot" target="_blank" rel="noreferrer">Открыть @Brain_GG_Bot ↗</a>
                         </>
-                      ) : (
+                      ) : selectedCase.specialType === "free" ? (
                         <>
                           <p>Подпишись на Telegram-канал <b>@Brainrot_GG</b>. Кейс доступен, пока ты остаёшься подписанным на канал — одно бесплатное открытие раз в 12 часов.</p>
                           <a className="special-case-link" href="https://t.me/Brainrot_GG" target="_blank" rel="noreferrer">Открыть Telegram-канал ↗</a>
                         </>
+                      ) : (
+                        <p>Пополнения суммируются за последние <b>7 дней</b>. Когда сумма достигнет <b>60 GG</b>, кейс станет доступен. После открытия повторное получение будет доступно через 7 дней. <b>Учитываются успешные пополнения Telegram Stars и завершённые пополнения брейнротами.</b></p>
                       )}
                       {selectedSpecialCaseAccess?.allowed && selectedSpecialCaseCoolingDown && (
                         <div className="special-case-cooldown" role="status">
