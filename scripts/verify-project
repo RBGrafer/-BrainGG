@@ -1,1 +1,54 @@
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const read = (relative) => readFileSync(path.join(root, relative), 'utf8');
+const backend = read('supabase/functions/braingg-api/index.ts');
+const cases = read('src/data/cases.js');
+const sql = read('supabase/manual-sql/special-case-credits.sql');
+const config = read('supabase/config.toml');
+const packageJson = JSON.parse(read('package.json'));
+
+assert.match(config, /\[functions\.braingg-api\][\s\S]*?verify_jwt\s*=\s*false/,
+  'braingg-api must disable gateway JWT verification because Telegram webhook uses its own secret');
+assert.match(backend, /async function verifyTelegram\(/,
+  'Telegram Mini App initData must be verified by the backend');
+assert.match(backend, /TELEGRAM_WEBHOOK_SECRET/,
+  'Telegram payment webhook must validate its dedicated secret');
+assert.match(backend, /suppliedWebhookSecret && !webhookSecret[\s\S]*?return respond\(\{ error: "Webhook authentication is not configured" \}, 503\)/,
+  'Telegram webhook must fail closed when its secret is missing');
+assert.match(cases, /specialType:\s*"deposit"[\s\S]*?60 GG[\s\S]*?7 дней/,
+  'BrainGG CASE must retain the 60 GG / rolling 7-day requirement');
+assert.match(backend, /deposit:\s*7 \* 24 \* 60 \* 60 \* 1000/,
+  'BrainGG CASE API cooldown must be seven days');
+assert.match(backend, /cooldownOpenedAt \+ SPECIAL_CASE_COOLDOWN_MS\[specialCaseType\]/,
+  'Successful special-case response must use the selected case cooldown');
+assert.match(sql, /interval '7 days'/,
+  'Database atomic claim must enforce the seven-day BrainGG CASE cooldown');
+assert.match(sql, /enable row level security/i,
+  'Special-case cooldown storage must have RLS enabled');
+assert.match(sql, /grant execute on function public\.claim_special_case_cooldown\(bigint, text\) to service_role/i,
+  'Only the service role should be able to claim special-case cooldowns');
+assert.ok(existsSync(path.join(root, '.env.example')), 'Frontend environment example must exist');
+assert.ok(packageJson.scripts?.build, 'Production build script must exist');
+const appSource = read('src/App.jsx');
+const entrySource = read('src/main.jsx');
+assert.match(appSource, /Telegram's native Back button|Telegram\u2019s native Back button/,
+  'Telegram native Back button integration must remain documented in source');
+assert.match(entrySource, /class AppErrorBoundary extends React\.Component/,
+  'The app must show a recovery screen instead of a blank page after a render crash');
+
+const assetCheck = spawnSync(process.execPath, [path.join(root, 'scripts/verify-assets')], {
+  cwd: root,
+  encoding: 'utf8',
+});
+if (assetCheck.status !== 0) {
+  process.stderr.write(assetCheck.stdout || '');
+  process.stderr.write(assetCheck.stderr || '');
+  process.exit(assetCheck.status ?? 1);
+}
+process.stdout.write(assetCheck.stdout);
+console.log('BrainGG: OK — API auth boundaries, payment webhook configuration, special-case cooldown contract, SQL permissions, and project assets checked.');
