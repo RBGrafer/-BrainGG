@@ -8,6 +8,7 @@ import strawberryAllInArt from "../assets/cases/v17/strawberry-all-in.webp";
 import headlessAllInArt from "../assets/cases/v17/headless-all-in.webp";
 import nickCaseArt from "../assets/cases/v17/nick-case.webp";
 import freeCaseArt from "../assets/cases/v17/free-case.webp";
+import brainGGDepositArt from "../assets/cases/v17/braingg-deposit.png";
 
 // BrainGG v17 case art. Backend caseName values stay stable for existing rewards.
 export const cases = [
@@ -89,6 +90,19 @@ export const specialCases = [
     price: 0,
     color: "special-green",
     image: freeCaseArt,
+    category: "Специальные кейсы",
+  },
+  {
+    id: "braingg-deposit-case",
+    name: "BrainGG CASE",
+    caseName: "BrainGG Case",
+    rewardCaseName: "Summer Case",
+    specialType: "deposit",
+    description: "Неоновый кейс с пиксельным котиком. Пополни баланс минимум на 60 GG за последние 7 дней — и открывай кейс раз в неделю.",
+    requirementShort: "Пополнение 60 GG за 7 дней · 1 открытие / 7 дней",
+    price: 0,
+    color: "special-deposit",
+    image: brainGGDepositArt,
     category: "Специальные кейсы",
   },
 ];
