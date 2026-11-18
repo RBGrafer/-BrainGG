@@ -398,7 +398,35 @@ Deno.serve(async (req) => {
           checkAvailable: false,
         };
       }
-      return { nick, free };
+      // Cooldowns live in their own server-only table. They are deliberately
+      // independent from `players`, so profile updates and case-opening RPCs
+      // cannot accidentally clear or overwrite the 12-hour lock.
+      const { data: cooldownRows, error: cooldownError } = await supabase
+        .from("special_case_cooldowns")
+        .select("case_type, opened_at")
+        .eq("telegram_id", telegramUser.id);
+      if (cooldownError) throw cooldownError;
+
+      const nickOpenedAt = cooldownRows?.find((row: any) => row.case_type === "nick")?.opened_at;
+      const freeOpenedAt = cooldownRows?.find((row: any) => row.case_type === "free")?.opened_at;
+
+      const getCooldown = (openedAt: unknown) => {
+        const openedAtMs = Date.parse(String(openedAt || ""));
+        if (!Number.isFinite(openedAtMs)) {
+          return { cooldownUntil: null, remainingSeconds: 0 };
+        }
+        const untilMs = openedAtMs + 12 * 60 * 60 * 1000;
+        const remainingSeconds = Math.max(0, Math.ceil((untilMs - Date.now()) / 1000));
+        return {
+          cooldownUntil: remainingSeconds > 0 ? new Date(untilMs).toISOString() : null,
+          remainingSeconds,
+        };
+      };
+
+      return {
+        nick: { ...nick, ...getCooldown(nickOpenedAt) },
+        free: { ...free, ...getCooldown(freeOpenedAt) },
+      };
     };
 
     if (body.action === "get_global_state") {
@@ -1421,7 +1449,8 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       return respond({ success: true, result: upgradeResult });
     }
 
-    // SPECIAL CASES: server-side eligibility + a temporary free-case credit.
+    // SPECIAL CASES: server-side Telegram eligibility + an atomic, independent
+    // 12-hour cooldown stored outside the players table.
     if (body.action === "open_special_case") {
       const specialCaseType = String(body.specialCaseType || "").trim() as keyof typeof SPECIAL_CASES;
       if (!Object.prototype.hasOwnProperty.call(SPECIAL_CASES, specialCaseType)) {
@@ -1432,12 +1461,51 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       const access = await getSpecialCaseAccess();
       const requirement = access[specialCaseType];
       if (!requirement.allowed) return respond({ error: requirement.reason }, 403);
+      if (Number(requirement.remainingSeconds || 0) > 0) {
+        return respond({
+          error: `Этот кейс уже открыт. Следующее бесплатное открытие будет доступно через ${Math.ceil(Number(requirement.remainingSeconds) / 60)} мин.`,
+          cooldownUntil: requirement.cooldownUntil,
+          remainingSeconds: requirement.remainingSeconds,
+        }, 429);
+      }
+
+      // The UPDATE in this RPC is atomic. Two simultaneous requests for the same
+      // player/case cannot both claim the opening; the other special case is independent.
+      const { data: cooldownClaimData, error: cooldownClaimError } = await supabase.rpc(
+        "claim_special_case_cooldown",
+        { p_telegram_id: telegramUser.id, p_case_type: specialCaseType },
+      );
+      if (cooldownClaimError) {
+        console.error("Special case cooldown claim failed:", cooldownClaimError.message);
+        return respond({ error: "Таблица таймеров специальных кейсов не настроена. Выполни SQL из supabase/manual-sql/special-case-credits.sql и повтори попытку." }, 503);
+      }
+      const cooldownClaim = Array.isArray(cooldownClaimData) ? cooldownClaimData[0] : cooldownClaimData;
+      const claimToken = cooldownClaim?.claim_token;
+      if (!claimToken) {
+        const latestAccess = await getSpecialCaseAccess();
+        const latestRequirement = latestAccess[specialCaseType];
+        return respond({
+          error: "Кейс уже открыт или его открытие обрабатывается. Попробуй позже.",
+          cooldownUntil: latestRequirement.cooldownUntil || null,
+          remainingSeconds: Number(latestRequirement.remainingSeconds || 0),
+        }, 429);
+      }
+
+      const releaseCooldownClaim = async () => {
+        const { error: releaseError } = await supabase.rpc("release_special_case_cooldown", {
+          p_telegram_id: telegramUser.id,
+          p_case_type: specialCaseType,
+          p_claim_token: claimToken,
+        });
+        if (releaseError) console.error("Special case cooldown release failed:", releaseError.message);
+      };
 
       const { error: grantError } = await supabase.rpc("grant_special_case_credit", {
         p_telegram_id: telegramUser.id,
         p_case_name: specialCase.rewardCaseName,
       });
       if (grantError) {
+        await releaseCooldownClaim();
         console.error("Special case credit grant failed:", grantError.message);
         return respond({ error: "Специальные кейсы ещё не подключены к базе. Примени SQL-файл special-case-credits.sql из архива и повтори попытку." }, 503);
       }
@@ -1452,6 +1520,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
           p_case_name: specialCase.rewardCaseName,
         });
         if (rollbackError) console.error("Special case credit rollback failed:", rollbackError.message);
+        await releaseCooldownClaim();
         console.error("Special case opening failed:", error.message);
         return respond({ error: "Не удалось открыть специальный кейс. Попробуй ещё раз." }, 400);
       }
@@ -1466,7 +1535,39 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
           p_case_name: specialCase.rewardCaseName,
         });
         if (rollbackError) console.error("Special case credit rollback failed:", rollbackError.message);
+        await releaseCooldownClaim();
         return respond({ error: String(openedReward?.error || "Не удалось открыть специальный кейс.") }, 400);
+      }
+
+      let completedCooldownAt: string | null = null;
+      const { data: completedAt, error: completeCooldownError } = await supabase.rpc(
+        "complete_special_case_cooldown",
+        {
+          p_telegram_id: telegramUser.id,
+          p_case_type: specialCaseType,
+          p_claim_token: claimToken,
+        },
+      );
+      if (completeCooldownError) {
+        console.error("Special case cooldown finalization failed:", completeCooldownError.message);
+        // The atomic claim already wrote opened_at, so the player is still
+        // protected. Try to finalize it directly as a recovery path so the
+        // full 12-hour period starts after the successful opening.
+        const fallbackOpenedAt = new Date().toISOString();
+        const { data: fallbackRows, error: fallbackError } = await supabase
+          .from("special_case_cooldowns")
+          .update({ opened_at: fallbackOpenedAt, claim_token: null })
+          .eq("telegram_id", telegramUser.id)
+          .eq("case_type", specialCaseType)
+          .eq("claim_token", claimToken)
+          .select("opened_at");
+        if (fallbackError) {
+          console.error("Special case cooldown fallback failed:", fallbackError.message);
+        } else {
+          completedCooldownAt = fallbackRows?.[0]?.opened_at || null;
+        }
+      } else {
+        completedCooldownAt = typeof completedAt === "string" ? completedAt : null;
       }
 
       await recordProgress("open_case", 1);
@@ -1500,9 +1601,16 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
         credits = { free_case_credits: [], free_cases_total: 0 };
       }
 
+      const cooldownOpenedAt = Date.parse(String(completedCooldownAt || cooldownClaim?.opened_at || ""));
       return respond({
         success: true,
         result: { ...openedReward, case_name: specialCase.displayName },
+        special_case_cooldown: {
+          case_type: specialCaseType,
+          cooldown_until: Number.isFinite(cooldownOpenedAt)
+            ? new Date(cooldownOpenedAt + 12 * 60 * 60 * 1000).toISOString()
+            : null,
+        },
         ...credits,
       });
     }
