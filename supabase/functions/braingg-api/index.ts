@@ -47,6 +47,24 @@ const SPECIAL_CASES = {
   deposit: { displayName: "BrainGG CASE", rewardCaseName: "Summer Case" },
 } as const;
 
+// Keep the API response and the database claim policy aligned. NICK/FREE are
+// independent 12-hour cases; BrainGG CASE is a separate rolling 7-day reward.
+const SPECIAL_CASE_COOLDOWN_MS = {
+  nick: 12 * 60 * 60 * 1000,
+  free: 12 * 60 * 60 * 1000,
+  deposit: 7 * 24 * 60 * 60 * 1000,
+} as const;
+
+function formatSpecialCooldown(seconds: number) {
+  const safeSeconds = Math.max(0, Math.ceil(Number.isFinite(seconds) ? seconds : 0));
+  const days = Math.floor(safeSeconds / 86400);
+  const hours = Math.floor((safeSeconds % 86400) / 3600);
+  const minutes = Math.ceil((safeSeconds % 3600) / 60);
+  if (days > 0) return `${days} дн. ${hours} ч.`;
+  if (hours > 0) return `${hours} ч. ${minutes} мин.`;
+  return `${Math.max(1, minutes)} мин.`;
+}
+
 function toHex(buffer: ArrayBuffer) {
   return Array.from(new Uint8Array(buffer))
     .map((byte) => byte.toString(16).padStart(2, "0"))
@@ -182,9 +200,15 @@ Deno.serve(async (req) => {
   }
 
   // Telegram webhook: pre-checkout and successful Stars payment.
+  // Fail closed if Telegram sends the webhook header but the secret is not configured.
+  const suppliedWebhookSecret = req.headers.get("x-telegram-bot-api-secret-token");
   const webhookSecret = Deno.env.get("TELEGRAM_WEBHOOK_SECRET");
-  if (req.headers.get("x-telegram-bot-api-secret-token") && webhookSecret) {
-    if (req.headers.get("x-telegram-bot-api-secret-token") !== webhookSecret) {
+  if (suppliedWebhookSecret && !webhookSecret) {
+    console.error("Telegram webhook rejected: TELEGRAM_WEBHOOK_SECRET is not configured");
+    return respond({ error: "Webhook authentication is not configured" }, 503);
+  }
+  if (suppliedWebhookSecret && webhookSecret) {
+    if (suppliedWebhookSecret !== webhookSecret) {
       return respond({ error: "Webhook unauthorized" }, 401);
     }
     try {
@@ -456,9 +480,9 @@ Deno.serve(async (req) => {
       };
 
       return {
-        nick: { ...nick, ...getCooldown(nickOpenedAt) },
-        free: { ...free, ...getCooldown(freeOpenedAt) },
-        deposit: { ...deposit, ...getCooldown(depositOpenedAt, 7 * 24 * 60 * 60 * 1000) },
+        nick: { ...nick, ...getCooldown(nickOpenedAt, SPECIAL_CASE_COOLDOWN_MS.nick) },
+        free: { ...free, ...getCooldown(freeOpenedAt, SPECIAL_CASE_COOLDOWN_MS.free) },
+        deposit: { ...deposit, ...getCooldown(depositOpenedAt, SPECIAL_CASE_COOLDOWN_MS.deposit) },
       };
     };
 
@@ -1483,7 +1507,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
     }
 
     // SPECIAL CASES: server-side Telegram eligibility + an atomic, independent
-    // 12-hour cooldown stored outside the players table.
+    // case-specific cooldown stored outside the players table.
     if (body.action === "open_special_case") {
       const specialCaseType = String(body.specialCaseType || "").trim() as keyof typeof SPECIAL_CASES;
       if (!Object.prototype.hasOwnProperty.call(SPECIAL_CASES, specialCaseType)) {
@@ -1496,7 +1520,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       if (!requirement.allowed) return respond({ error: requirement.reason }, 403);
       if (Number(requirement.remainingSeconds || 0) > 0) {
         return respond({
-          error: `Этот кейс уже открыт. Следующее бесплатное открытие будет доступно через ${Math.ceil(Number(requirement.remainingSeconds) / 60)} мин.`,
+          error: `Этот кейс уже открыт. Следующее бесплатное открытие будет доступно через ${formatSpecialCooldown(Number(requirement.remainingSeconds))}.`,
           cooldownUntil: requirement.cooldownUntil,
           remainingSeconds: requirement.remainingSeconds,
         }, 429);
@@ -1641,7 +1665,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
         special_case_cooldown: {
           case_type: specialCaseType,
           cooldown_until: Number.isFinite(cooldownOpenedAt)
-            ? new Date(cooldownOpenedAt + 12 * 60 * 60 * 1000).toISOString()
+            ? new Date(cooldownOpenedAt + SPECIAL_CASE_COOLDOWN_MS[specialCaseType]).toISOString()
             : null,
         },
         ...credits,
