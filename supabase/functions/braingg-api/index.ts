@@ -44,6 +44,7 @@ const ALLOWED_CASES = [
 const SPECIAL_CASES = {
   nick: { displayName: "NICK CASE", rewardCaseName: "Truckini Case" },
   free: { displayName: "FREE CASE", rewardCaseName: "Summer Case" },
+  deposit: { displayName: "BrainGG CASE", rewardCaseName: "Summer Case" },
 } as const;
 
 function toHex(buffer: ArrayBuffer) {
@@ -398,9 +399,39 @@ Deno.serve(async (req) => {
           checkAvailable: false,
         };
       }
+      // The BrainGG CASE uses verified successful top-ups during a rolling 7-day window.
+      // Telegram Stars orders are credited by the payment webhook; brainrot deposits
+      // count only after the admin completes the trade and the balance is credited.
+      const depositSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const [starsOrdersResult, brainrotDepositsResult] = await Promise.all([
+        supabase.from("telegram_star_orders").select("gg_amount, created_at, status")
+          .eq("telegram_id", telegramUser.id).in("status", ["paid", "completed", "succeeded"])
+          .gte("created_at", depositSince),
+        supabase.from("brainrot_deposit_requests").select("amount_gg, created_at, status")
+          .eq("telegram_id", telegramUser.id).eq("status", "completed")
+          .gte("created_at", depositSince),
+      ]);
+      if (starsOrdersResult.error || brainrotDepositsResult.error) {
+        console.error("BrainGG CASE deposit history lookup failed:", starsOrdersResult.error?.message || brainrotDepositsResult.error?.message);
+        throw new Error("Не удалось проверить историю пополнений для BrainGG CASE.");
+      }
+      const depositedGg = [
+        ...(starsOrdersResult.data || []).map((row: any) => Number(row.gg_amount || 0)),
+        ...(brainrotDepositsResult.data || []).map((row: any) => Number(row.amount_gg || 0)),
+      ].reduce((sum: number, amount: number) => sum + (Number.isFinite(amount) && amount > 0 ? amount : 0), 0);
+      const deposit = {
+        allowed: depositedGg >= 60,
+        depositedGg: Math.round(depositedGg * 100) / 100,
+        requiredGg: 60,
+        windowDays: 7,
+        reason: depositedGg >= 60
+          ? `За последние 7 дней пополнено ${depositedGg.toLocaleString("ru-RU")} GG — условие выполнено.`
+          : `За последние 7 дней пополнено ${depositedGg.toLocaleString("ru-RU")} из 60 GG. Пополни ещё ${(60 - depositedGg).toLocaleString("ru-RU")} GG.`,
+      };
+
       // Cooldowns live in their own server-only table. They are deliberately
       // independent from `players`, so profile updates and case-opening RPCs
-      // cannot accidentally clear or overwrite the 12-hour lock.
+      // cannot accidentally clear or overwrite the lock.
       const { data: cooldownRows, error: cooldownError } = await supabase
         .from("special_case_cooldowns")
         .select("case_type, opened_at")
@@ -409,13 +440,14 @@ Deno.serve(async (req) => {
 
       const nickOpenedAt = cooldownRows?.find((row: any) => row.case_type === "nick")?.opened_at;
       const freeOpenedAt = cooldownRows?.find((row: any) => row.case_type === "free")?.opened_at;
+      const depositOpenedAt = cooldownRows?.find((row: any) => row.case_type === "deposit")?.opened_at;
 
-      const getCooldown = (openedAt: unknown) => {
+      const getCooldown = (openedAt: unknown, durationMs = 12 * 60 * 60 * 1000) => {
         const openedAtMs = Date.parse(String(openedAt || ""));
         if (!Number.isFinite(openedAtMs)) {
           return { cooldownUntil: null, remainingSeconds: 0 };
         }
-        const untilMs = openedAtMs + 12 * 60 * 60 * 1000;
+        const untilMs = openedAtMs + durationMs;
         const remainingSeconds = Math.max(0, Math.ceil((untilMs - Date.now()) / 1000));
         return {
           cooldownUntil: remainingSeconds > 0 ? new Date(untilMs).toISOString() : null,
@@ -426,6 +458,7 @@ Deno.serve(async (req) => {
       return {
         nick: { ...nick, ...getCooldown(nickOpenedAt) },
         free: { ...free, ...getCooldown(freeOpenedAt) },
+        deposit: { ...deposit, ...getCooldown(depositOpenedAt, 7 * 24 * 60 * 60 * 1000) },
       };
     };
 
