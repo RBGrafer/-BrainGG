@@ -486,6 +486,75 @@ Deno.serve(async (req) => {
       };
     };
 
+    // MINES: every outcome and balance change is server-side and atomic in SQL.
+    if (body.action === "mines_get_active_game") {
+      const { data, error } = await supabase.rpc("get_active_mines_game", { p_telegram_id: telegramUser.id });
+      if (error) {
+        console.error("Mines active game lookup failed:", error.message);
+        return respond({ error: "Не удалось загрузить текущую игру. Проверь SQL-миграцию режима «Мины»." }, 500);
+      }
+      return respond({ success: true, game: data || null });
+    }
+
+    if (body.action === "mines_start_game") {
+      const bet = Math.round(Number(body.bet) * 100) / 100;
+      const mineCount = Number(body.mineCount);
+      if (!Number.isFinite(bet) || bet < 1 || bet > 100000) return respond({ error: "Ставка должна быть от 1 до 100 000 GG." }, 400);
+      if (!Number.isInteger(mineCount) || mineCount < 1 || mineCount > 24) return respond({ error: "Выбери от 1 до 24 мин." }, 400);
+      // Cryptographically secure Fisher-Yates shuffle; mine locations never come from the client.
+      const random = crypto.getRandomValues(new Uint32Array(25));
+      const cells = Array.from({ length: 25 }, (_, index) => index);
+      for (let index = cells.length - 1; index > 0; index--) {
+        const swapIndex = Math.floor((random[index] / 0x100000000) * (index + 1));
+        [cells[index], cells[swapIndex]] = [cells[swapIndex], cells[index]];
+      }
+      const minePositions = cells.slice(0, mineCount).sort((a, b) => a - b);
+      const { data, error } = await supabase.rpc("start_mines_game", {
+        p_telegram_id: telegramUser.id, p_bet: bet, p_mine_count: mineCount, p_mine_positions: minePositions,
+      });
+      if (error) {
+        console.warn("Mines start rejected:", error.message);
+        if (String(error.message).includes("MINES_INSUFFICIENT_BALANCE")) return respond({ error: "Недостаточно GG для этой ставки." }, 400);
+        if (String(error.message).includes("MINES_ACTIVE_GAME")) return respond({ error: "У тебя уже есть незавершённый раунд. Продолжи его на поле." }, 409);
+        return respond({ error: "Не удалось начать раунд. Попробуй ещё раз." }, 400);
+      }
+      await recordGlobalActivity({ eventType: "mines_start", title: "Начал раунд в Минах", description: `Ставка ${bet} GG · ${mineCount} мин`, valueGg: bet, success: true });
+      return respond({ success: true, game: data });
+    }
+
+    if (body.action === "mines_reveal_cell") {
+      const gameId = String(body.gameId || "");
+      const cell = Number(body.cell);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(gameId) || !Number.isInteger(cell) || cell < 0 || cell > 24) return respond({ error: "Некорректная клетка или игровой раунд." }, 400);
+      const { data, error } = await supabase.rpc("reveal_mines_cell", { p_telegram_id: telegramUser.id, p_game_id: gameId, p_cell: cell });
+      if (error) {
+        console.warn("Mines reveal rejected:", error.message);
+        const message = String(error.message || "");
+        if (message.includes("MINES_CELL_ALREADY_REVEALED")) return respond({ error: "Эта клетка уже открыта." }, 409);
+        if (message.includes("MINES_GAME_NOT_ACTIVE")) return respond({ error: "Этот раунд уже завершён." }, 409);
+        if (message.includes("MINES_GAME_NOT_FOUND")) return respond({ error: "Раунд не найден." }, 404);
+        return respond({ error: "Не удалось открыть клетку." }, 400);
+      }
+      if (data?.status === "lost") await recordGlobalActivity({ eventType: "mines_loss", title: "Попал на мину", description: `Раунд завершён · ставка ${data.bet} GG`, valueGg: data.bet, success: false });
+      return respond({ success: true, game: data });
+    }
+
+    if (body.action === "mines_cashout") {
+      const gameId = String(body.gameId || "");
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(gameId)) return respond({ error: "Некорректный игровой раунд." }, 400);
+      const { data, error } = await supabase.rpc("cashout_mines_game", { p_telegram_id: telegramUser.id, p_game_id: gameId });
+      if (error) {
+        console.warn("Mines cashout rejected:", error.message);
+        const message = String(error.message || "");
+        if (message.includes("MINES_NO_SAFE_CELLS")) return respond({ error: "Открой хотя бы одну безопасную клетку, чтобы забрать выигрыш." }, 400);
+        if (message.includes("MINES_GAME_NOT_ACTIVE")) return respond({ error: "Этот раунд уже завершён." }, 409);
+        if (message.includes("MINES_GAME_NOT_FOUND")) return respond({ error: "Раунд не найден." }, 404);
+        return respond({ error: "Не удалось забрать выигрыш." }, 400);
+      }
+      await recordGlobalActivity({ eventType: "mines_cashout", title: "Забрал выигрыш в Минах", description: `Выигрыш ${data.payout} GG · ${data.safeCount} безопасных клеток`, valueGg: Number(data.payout || 0), success: true });
+      return respond({ success: true, game: data });
+    }
+
     if (body.action === "get_global_state") {
       try {
         const event = await getActiveEvent();
