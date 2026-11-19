@@ -101,6 +101,33 @@ function formatCooldownCountdown(seconds) {
   return `${pad(hours)}:${pad(minutes)}:${pad(remainingSeconds)}`;
 }
 
+function csvField(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadCsvFile(filename, headers, rows) {
+  if (typeof document === "undefined" || typeof URL === "undefined" || typeof Blob === "undefined" || typeof URL.createObjectURL !== "function") return false;
+  let url = "";
+  try {
+    const content = "\uFEFF" + [headers, ...rows].map((row) => row.map(csvField).join(";")).join("\r\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+    return true;
+  } catch (error) {
+    if (url) URL.revokeObjectURL(url);
+    console.warn("BrainGG CSV export failed:", error);
+    return false;
+  }
+}
+
 // Keep the case reel's winning card centered under the fixed pointer.
 // The item widths intentionally match the responsive CSS breakpoints below.
 function getCaseReelItemWidth() {
@@ -453,6 +480,15 @@ export default function App() {
   const [adminSection, setAdminSection] = useState("overview");
   const [adminLogQuery, setAdminLogQuery] = useState("");
   const [adminLogAction, setAdminLogAction] = useState("all");
+  const [adminInventoryQuery, setAdminInventoryQuery] = useState("");
+  const [adminInventoryRarity, setAdminInventoryRarity] = useState("all");
+  const [adminInventorySort, setAdminInventorySort] = useState("value_desc");
+  const [adminDepositQuery, setAdminDepositQuery] = useState("");
+  const [adminDepositStatus, setAdminDepositStatus] = useState("all");
+  const [adminPromoQuery, setAdminPromoQuery] = useState("");
+  const [adminPromoStatus, setAdminPromoStatus] = useState("all");
+  const [adminToolFeedback, setAdminToolFeedback] = useState("");
+  const [adminToolsRefreshing, setAdminToolsRefreshing] = useState(false);
   const [gameHub, setGameHub] = useState({ progress: null, tasks: [], leaderboard: [], liveDrops: [], dailyClaimed: false });
   const [hubLoading, setHubLoading] = useState(false);
   const [dailyClaimLoading, setDailyClaimLoading] = useState(false);
@@ -493,6 +529,20 @@ export default function App() {
   const [adminDepositLoading, setAdminDepositLoading] = useState(false);
   const [adminDepositBusy, setAdminDepositBusy] = useState(false);
   const [adminDepositFeedback, setAdminDepositFeedback] = useState("");
+
+  useEffect(() => {
+    const restoreDesktopAdminDefaults = () => {
+      if (window.innerWidth <= 600) return;
+      setAdminSection((current) => current === "tools" ? "overview" : current);
+      setAdminDepositQuery("");
+      setAdminDepositStatus("all");
+      setAdminPromoQuery("");
+      setAdminPromoStatus("all");
+    };
+    restoreDesktopAdminDefaults();
+    window.addEventListener("resize", restoreDesktopAdminDefaults);
+    return () => window.removeEventListener("resize", restoreDesktopAdminDefaults);
+  }, []);
 
   const initData = () => window.Telegram?.WebApp?.initData;
   const telegramIdentity = window.Telegram?.WebApp?.initDataUnsafe?.user || {};
@@ -1780,6 +1830,111 @@ export default function App() {
     }
   }
 
+  async function copyAdminText(value, label = "Текст") {
+    const text = String(value ?? "").trim();
+    if (!text) {
+      setAdminToolFeedback("Нет данных для копирования.");
+      return;
+    }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(text);
+      setAdminToolFeedback(`${label}: скопировано в буфер обмена.`);
+    } catch {
+      setAdminToolFeedback(`${label}: открой поле ниже и скопируй текст вручную.`);
+      try { window.prompt(`Скопируй: ${label}`, text); } catch { /* Clipboard fallback is optional in embedded WebViews. */ }
+    }
+  }
+
+  function copyAdminPlayerSummary() {
+    if (!adminPlayer) return;
+    const summary = [
+      `Игрок: ${adminPlayer.username ? `@${adminPlayer.username}` : "BrainGG"}`,
+      `Game ID: ${adminPlayer.game_id || "—"}`,
+      `Баланс: ${Number(adminPlayer.balance || 0).toLocaleString("ru-RU")} GG`,
+      `Бесплатные кейсы: ${Number(adminPlayer.free_cases_total ?? adminPlayer.free_cases ?? 0).toLocaleString("ru-RU")}`,
+      `Брейнроты: ${adminInventory.length}`,
+      `XP: ${Number(adminPlayer.progress?.xp || 0).toLocaleString("ru-RU")}`,
+      `Открыто кейсов: ${Number(adminPlayer.progress?.total_cases_opened || 0).toLocaleString("ru-RU")}`,
+      `Продано предметов: ${Number(adminPlayer.progress?.total_sales || 0).toLocaleString("ru-RU")}`,
+      `Апгрейдов: ${Number(adminPlayer.progress?.total_upgrades || 0).toLocaleString("ru-RU")}`,
+      `Серия входов: ${Number(adminPlayer.progress?.daily_streak || 0)} дней`,
+    ].join("\n");
+    copyAdminText(summary, "Профиль игрока");
+  }
+
+  function copyAdminInventoryText() {
+    const rows = filteredAdminInventory.map((item) => `${item.item_name} · ${item.rarity || "без редкости"} · ${Number(item.value_gg || 0).toLocaleString("ru-RU")} GG${item.mutation ? ` · ${item.mutation}` : ""}`);
+    copyAdminText(rows.join("\n"), "Инвентарь игрока");
+  }
+
+  function exportAdminInventoryCsv() {
+    if (!adminPlayer || !filteredAdminInventory.length) return;
+    const rows = filteredAdminInventory.map((item) => [item.item_name, item.rarity, item.value_gg, item.mutation, item.created_at]);
+    const ok = downloadCsvFile(`braingg-inventory-${String(adminPlayer.username || "player").replace(/[^a-z0-9_-]/gi, "_")}.csv`, ["Предмет", "Редкость", "Стоимость GG", "Мутация", "Дата получения"], rows);
+    setAdminToolFeedback(ok ? `Экспортировано предметов: ${rows.length}.` : "Не удалось создать CSV-файл в этом WebView.");
+  }
+
+  function exportAdminLogsCsv() {
+    if (!filteredAdminLogs.length) return;
+    const rows = filteredAdminLogs.map((log) => [log.created_at ? new Date(log.created_at).toLocaleString("ru-RU") : "", log.game_id, log.action, log.amount, log.item_name || log.case_name || ""]);
+    const ok = downloadCsvFile("braingg-admin-history.csv", ["Дата", "Игрок", "Операция", "Количество", "Предмет или кейс"], rows);
+    setAdminToolFeedback(ok ? `Экспортировано операций: ${rows.length}.` : "Не удалось создать CSV-файл в этом WebView.");
+  }
+
+  function exportAdminDepositsCsv() {
+    if (!filteredAdminDepositRequests.length) return;
+    const rows = filteredAdminDepositRequests.map((request) => [request.queue_number, request.roblox_username, depositBrainrotName(request, request.brainrot_name), request.status, request.mutation_key, (request.trait_labels || request.trait_keys || []).join(", "), request.amount_gg, request.assigned_storage_account || ""]);
+    const ok = downloadCsvFile("braingg-deposit-queue.csv", ["Номер очереди", "Roblox username", "Предмет", "Статус", "Мутация", "Traits", "К начислению GG", "Аккаунт хранения"], rows);
+    setAdminToolFeedback(ok ? `Экспортировано заявок: ${rows.length}.` : "Не удалось создать CSV-файл в этом WebView.");
+  }
+
+  function exportAdminPromosCsv() {
+    if (!isOwner || !filteredAdminPromoCodes.length) return;
+    const rows = filteredAdminPromoCodes.map((promo) => {
+      const expired = promo.expires_at && Date.parse(promo.expires_at) <= Date.now();
+      const exhausted = promo.max_uses != null && Number(promo.uses_count) >= Number(promo.max_uses);
+      const active = Boolean(promo.active && !expired && !exhausted);
+      return [promo.code, promo.reward_type, promo.reward_amount, promo.case_name || promo.item_name || "", promo.uses_count, promo.max_uses ?? "∞", promo.expires_at || "", active ? "Да" : "Нет"];
+    });
+    const ok = downloadCsvFile("braingg-promo-codes.csv", ["Код", "Тип награды", "Количество", "Награда", "Использовано", "Лимит", "Истекает", "Активен"], rows);
+    setAdminToolFeedback(ok ? `Экспортировано промокодов: ${rows.length}.` : "Не удалось создать CSV-файл в этом WebView.");
+  }
+
+  function copyAdminLatestLog() {
+    const log = filteredAdminLogs[0];
+    if (!log) return;
+    const actionLabel = log.action === "coins" ? "Монеты GG" : log.action === "cases" ? "Бесплатные кейсы" : "Брейнрот";
+    copyAdminText([`Операция: ${actionLabel}`, `Игрок: ${log.game_id || "—"}`, `Количество: ${log.amount ?? "—"}`, `Предмет/кейс: ${log.item_name || log.case_name || "—"}`, `Дата: ${log.created_at ? new Date(log.created_at).toLocaleString("ru-RU") : "—"}`].join("\n"), "Последняя операция");
+  }
+
+  function copyAdminDiagnostics() {
+    const telegram = window.Telegram?.WebApp;
+    const diagnostics = [
+      "BrainGG mobile diagnostics",
+      `Telegram WebApp: ${telegram ? "available" : "not detected"}`,
+      `Signed initData: ${initData() ? "present" : "missing"}`,
+      `Network: ${navigator.onLine ? "online" : "offline"}`,
+      `Supabase URL configured: ${Boolean(import.meta.env.VITE_SUPABASE_URL) ? "yes" : "no"}`,
+      `Supabase public key configured: ${Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY) ? "yes" : "no"}`,
+      `Screen: ${window.screen?.width || "?"}x${window.screen?.height || "?"}`,
+      `Viewport: ${window.innerWidth || "?"}x${window.innerHeight || "?"}`,
+      `User agent: ${navigator.userAgent}`,
+    ].join("\n");
+    copyAdminText(diagnostics, "Диагностика");
+  }
+
+  async function refreshAdminTools() {
+    if (adminToolsRefreshing) return;
+    setAdminToolsRefreshing(true);
+    setAdminToolFeedback("");
+    const tasks = [loadAdminGameStats(), loadAdminLogs(), loadAdminDepositData()];
+    if (isOwner) tasks.push(loadAdminPromoCodes());
+    await Promise.allSettled(tasks);
+    setAdminToolFeedback("Запросы обновления отправлены. Если источник недоступен, ошибка появится в его разделе.");
+    setAdminToolsRefreshing(false);
+  }
+
   async function searchAdminPlayer(event) {
     event?.preventDefault();
     const gameId = adminGameId.trim();
@@ -2508,6 +2663,46 @@ export default function App() {
       .some((value) => String(value || "").toLowerCase().includes(query));
     const matchesAction = adminLogAction === "all" || log.action === adminLogAction;
     return matchesQuery && matchesAction;
+  });
+
+  const adminInventoryRarities = [...new Set(adminInventory.map((item) => String(item.rarity || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
+  const filteredAdminInventory = adminInventory
+    .filter((item) => {
+      const query = adminInventoryQuery.trim().toLowerCase();
+      const matchesQuery = !query || [item.item_name, item.rarity, item.mutation].some((value) => String(value || "").toLowerCase().includes(query));
+      const matchesRarity = adminInventoryRarity === "all" || String(item.rarity || "") === adminInventoryRarity;
+      return matchesQuery && matchesRarity;
+    })
+    .sort((a, b) => {
+      if (adminInventorySort === "value_asc") return Number(a.value_gg || 0) - Number(b.value_gg || 0);
+      if (adminInventorySort === "newest") return Date.parse(b.created_at || "") - Date.parse(a.created_at || "");
+      if (adminInventorySort === "name") return String(a.item_name || "").localeCompare(String(b.item_name || ""), "ru");
+      return Number(b.value_gg || 0) - Number(a.value_gg || 0);
+    });
+  const adminInventoryFilteredValue = filteredAdminInventory.reduce((sum, item) => sum + Number(item.value_gg || 0), 0);
+
+  const filteredAdminDepositRequests = adminDepositRequests.filter((request) => {
+    const query = adminDepositQuery.trim().toLowerCase();
+    const matchesQuery = !query || [request.roblox_username, request.brainrot_name, request.brainrot_key, request.queue_number, request.assigned_storage_account]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+    const matchesStatus = adminDepositStatus === "all" || request.status === adminDepositStatus;
+    return matchesQuery && matchesStatus;
+  });
+  const adminDepositQueueCounts = {
+    all: adminDepositRequests.length,
+    queued: adminDepositRequests.filter((request) => request.status === "queued").length,
+    waiting_trade: adminDepositRequests.filter((request) => request.status === "waiting_trade").length,
+    trade_received: adminDepositRequests.filter((request) => request.status === "trade_received").length,
+  };
+
+  const filteredAdminPromoCodes = adminPromoCodes.filter((promo) => {
+    const query = adminPromoQuery.trim().toLowerCase();
+    const matchesQuery = !query || [promo.code, promo.reward_type, promo.case_name, promo.item_name].some((value) => String(value || "").toLowerCase().includes(query));
+    const expired = promo.expires_at && Date.parse(promo.expires_at) <= Date.now();
+    const exhausted = promo.max_uses != null && Number(promo.uses_count) >= Number(promo.max_uses);
+    const active = Boolean(promo.active && !expired && !exhausted);
+    const matchesStatus = adminPromoStatus === "all" || (adminPromoStatus === "active" ? active : !active);
+    return matchesQuery && matchesStatus;
   });
 
   const eventRemainingSeconds = globalEvent?.event_ends_at
@@ -3716,11 +3911,12 @@ export default function App() {
                   ["events", "События", "✦"],
                   ["deposits", "Пополнения", "🧠"],
                   ...(isOwner ? [["promocodes", "Промокоды", "🎟"]] : []),
+                  ["tools", "Инструменты", "⌘"],
                 ].map(([key, label, icon]) => (
                   <button
                     key={key}
                     type="button"
-                    className={adminSection === key ? "active" : ""}
+                    className={`${adminSection === key ? "active" : ""} ${key === "tools" ? "admin-mobile-only-tab" : ""}`}
                     onClick={() => {
                       setAdminSection(key);
                       if (key === "promocodes") loadAdminPromoCodes();
@@ -3731,6 +3927,8 @@ export default function App() {
                   </button>
                 ))}
               </nav>
+
+              {adminToolFeedback && <div className="admin-mobile-global-feedback" role="status">{adminToolFeedback}</div>}
 
               {adminSection === "overview" && (
                 <>
@@ -3760,6 +3958,30 @@ export default function App() {
                       <em>Проверка прав на сервере</em>
                     </article>
                   </div>
+
+                  <section className="admin-mobile-quick-panel">
+                    <div className="admin-mobile-quick-heading">
+                      <div><span>БЫСТРЫЙ ДОСТУП</span><h3>Командная панель</h3><p>Частые действия — одним касанием.</p></div>
+                      <span className={`admin-mobile-live-dot ${navigator.onLine ? "" : "is-offline"}`}>{navigator.onLine ? "● ONLINE" : "● OFFLINE"}</span>
+                    </div>
+                    <div className="admin-mobile-quick-grid">
+                      <button type="button" onClick={() => setAdminSection("players")}><b>⌕</b><span><strong>Найти игрока</strong><small>Профиль и баланс</small></span></button>
+                      <button type="button" onClick={() => { setAdminGrantType("coins"); setAdminSection("players"); }}><b>🪙</b><span><strong>Выдать GG</strong><small>Пополнить баланс</small></span></button>
+                      <button type="button" onClick={() => { setAdminGrantType("cases"); setAdminSection("players"); }}><b>🎁</b><span><strong>Выдать кейсы</strong><small>Бесплатные открытия</small></span></button>
+                      <button type="button" onClick={() => { setAdminGrantType("brainrot"); setAdminSection("players"); }}><b>🧠</b><span><strong>Выдать брейнрот</strong><small>Предмет в инвентарь</small></span></button>
+                      <button type="button" onClick={() => { setAdminGrantType("xp"); setAdminSection("players"); }}><b>✦</b><span><strong>Начислить XP</strong><small>Опыт профиля</small></span></button>
+                      <button type="button" onClick={() => setAdminSection("tools")}><b>🎒</b><span><strong>Инвентарь</strong><small>Поиск и экспорт</small></span></button>
+                      <button type="button" onClick={() => { setAdminSection("history"); loadAdminLogs(); }}><b>◷</b><span><strong>Журнал</strong><small>История операций</small></span></button>
+                      <button type="button" onClick={() => { setAdminSection("deposits"); loadAdminDepositData(); }}><b>🔁</b><span><strong>Очередь</strong><small>Заявки пополнений</small></span></button>
+                      <button type="button" onClick={() => { setAdminSection("deposits"); loadAdminDepositData(); }}><b>💎</b><span><strong>Цены предметов</strong><small>Каталог и стоимость</small></span></button>
+                      <button type="button" onClick={() => { setAdminSection("events"); }}><b>🌍</b><span><strong>Глобальные ивенты</strong><small>Запуск и остановка</small></span></button>
+                      {isOwner && <button type="button" onClick={() => { setAdminSection("events"); }}><b>📣</b><span><strong>Сообщение всем</strong><small>Объявление игрокам</small></span></button>}
+                      {isOwner && <button type="button" onClick={() => { setAdminSection("promocodes"); loadAdminPromoCodes(); }}><b>🎟️</b><span><strong>Промокоды</strong><small>Создать и отключить</small></span></button>}
+                      <button type="button" onClick={() => { setAdminSection("tools"); }}><b>⌘</b><span><strong>Мобильные инструменты</strong><small>Копирование и CSV</small></span></button>
+                      <button type="button" onClick={exportAdminLogsCsv} disabled={!filteredAdminLogs.length}><b>⇩</b><span><strong>Экспорт журнала</strong><small>Скачать CSV</small></span></button>
+                      <button type="button" onClick={refreshAdminTools} disabled={adminToolsRefreshing}><b>↻</b><span><strong>Обновить данные</strong><small>{adminToolsRefreshing ? "Обновляем..." : "Статистика и очереди"}</small></span></button>
+                    </div>
+                  </section>
 
                   <section className="admin-panel-card"><div className="admin-section-title"><span className="admin-section-icon">🧠</span><div><h3>BrainGG v16 · Red & White</h3><p>Состояние новых игровых модулей.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminGameStats}>↻</button></div><div className="admin-metrics-grid"><article className="admin-metric-card"><small>ВСЕ ИГРОКИ</small><strong>{adminGameStats?.players ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРЕДМЕТОВ В ИНВЕНТАРЯХ</small><strong>{adminGameStats?.inventory_items ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРОФИЛЕЙ С XP</small><strong>{adminGameStats?.active_profiles ?? "—"}</strong></article></div><p className="admin-data-note">Показатели доступны после применения SQL-миграций из папки supabase/migrations и migrations_arctic_season2.sql.</p></section>
                   <section className="admin-panel-card admin-overview-card">
@@ -3848,6 +4070,11 @@ export default function App() {
                         <small>ОПЫТ ПРОФИЛЯ</small>
                         <b>✦ {adminPlayer.progress?.xp ?? 0} XP</b>
                       </div>
+                    </div>
+                    <div className="admin-mobile-player-actions">
+                      <button type="button" onClick={() => copyAdminText(adminPlayer.game_id, "Game ID")}>⧉ Скопировать ID</button>
+                      <button type="button" onClick={copyAdminPlayerSummary}>▤ Профиль</button>
+                      <button type="button" onClick={() => searchAdminPlayer()} disabled={adminSearchLoading}>↻ Обновить</button>
                     </div>
                   </section>
 
@@ -3963,16 +4190,42 @@ export default function App() {
                     {adminInventory.length === 0 ? (
                       <p className="admin-muted">У игрока пока нет брейнротов.</p>
                     ) : (
-                      <div className="admin-inventory-list">
-                        {adminInventory.map((item) => (
-                          <div className="admin-inventory-row" key={item.id}>
-                            <img className="admin-inventory-thumb" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
-                            <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
-                            <small>{item.rarity}</small>
-                            <strong>{item.value_gg} GG</strong>
+                      <>
+                        <div className="admin-mobile-inventory-manager">
+                          <div className="admin-tools-filters">
+                            <input className="admin-input" value={adminInventoryQuery} onChange={(event) => setAdminInventoryQuery(event.target.value)} placeholder="Найти предмет или мутацию" aria-label="Поиск в инвентаре игрока" />
+                            <select className="admin-input" value={adminInventoryRarity} onChange={(event) => setAdminInventoryRarity(event.target.value)} aria-label="Фильтр редкости">
+                              <option value="all">Все редкости</option>
+                              {adminInventoryRarities.map((rarity) => <option key={rarity} value={rarity}>{rarity}</option>)}
+                            </select>
+                            <select className="admin-input" value={adminInventorySort} onChange={(event) => setAdminInventorySort(event.target.value)} aria-label="Сортировка инвентаря">
+                              <option value="value_desc">Сначала дорогие</option><option value="value_asc">Сначала дешёвые</option><option value="newest">Сначала новые</option><option value="name">По названию</option>
+                            </select>
                           </div>
-                        ))}
-                      </div>
+                          <div className="admin-tools-summary-row"><span>{filteredAdminInventory.length} из {adminInventory.length} предметов</span><strong>{adminInventoryFilteredValue.toLocaleString("ru-RU")} GG</strong></div>
+                          {filteredAdminInventory.length ? <div className="admin-inventory-list admin-tools-inventory-list">
+                            {filteredAdminInventory.map((item) => <div className="admin-inventory-row" key={item.id}>
+                              <img className="admin-inventory-thumb" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
+                              <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
+                              <small>{item.rarity || "—"}</small><strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
+                            </div>)}
+                          </div> : <p className="admin-muted">По этим фильтрам предметов не найдено.</p>}
+                          <div className="admin-tool-actions-grid admin-tool-actions-compact">
+                            <button type="button" onClick={exportAdminInventoryCsv} disabled={!filteredAdminInventory.length}>⇩ Скачать CSV</button>
+                            <button type="button" onClick={copyAdminInventoryText} disabled={!filteredAdminInventory.length}>⧉ Скопировать</button>
+                          </div>
+                        </div>
+                        <div className="admin-inventory-list admin-desktop-inventory-list">
+                          {adminInventory.map((item) => (
+                            <div className="admin-inventory-row" key={item.id}>
+                              <img className="admin-inventory-thumb" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
+                              <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
+                              <small>{item.rarity}</small>
+                              <strong>{item.value_gg} GG</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </section>
                 </>
@@ -4040,9 +4293,16 @@ export default function App() {
                       <button className="admin-refresh-button" type="button" onClick={loadAdminDepositData} disabled={adminDepositLoading}>{adminDepositLoading ? "..." : "↻ Обновить"}</button>
                     </div>
                     <div className="deposit-admin-actions"><button className="main-button" type="button" disabled={adminDepositBusy || adminDepositLoading} onClick={assignNextBrainrotDeposit}>{adminDepositBusy ? "Обрабатываем..." : "Вызвать следующего из очереди"}</button><span>Аккаунты распределяются по кругу: BrainGG_Storage1–5.</span></div>
+                    <div className="admin-mobile-deposit-filters">
+                      <input className="admin-input" value={adminDepositQuery} onChange={(event) => setAdminDepositQuery(event.target.value)} placeholder="Поиск по игроку, предмету, номеру" aria-label="Поиск в очереди пополнений" />
+                      <select className="admin-input" value={adminDepositStatus} onChange={(event) => setAdminDepositStatus(event.target.value)} aria-label="Фильтр статуса пополнения">
+                        <option value="all">Все этапы · {adminDepositQueueCounts.all}</option><option value="queued">В очереди · {adminDepositQueueCounts.queued}</option><option value="waiting_trade">Ожидает трейд · {adminDepositQueueCounts.waiting_trade}</option><option value="trade_received">Трейд получен · {adminDepositQueueCounts.trade_received}</option>
+                      </select>
+                      <button type="button" className="admin-mobile-export-button" onClick={exportAdminDepositsCsv} disabled={!filteredAdminDepositRequests.length}>⇩ Скачать CSV</button>
+                    </div>
                     {adminDepositFeedback && <div className="admin-feedback success" role="status">{adminDepositFeedback}</div>}
-                    {adminDepositLoading ? <p className="admin-muted">Загружаем очередь...</p> : adminDepositRequests.length === 0 ? <p className="admin-muted">Активных заявок пока нет.</p> : <div className="deposit-admin-request-list">
-                      {adminDepositRequests.map((request) => <article className="deposit-admin-request" key={request.id}>
+                    {adminDepositLoading ? <p className="admin-muted">Загружаем очередь...</p> : adminDepositRequests.length === 0 ? <p className="admin-muted">Активных заявок пока нет.</p> : filteredAdminDepositRequests.length === 0 ? <p className="admin-muted">По выбранным фильтрам заявок нет.</p> : <div className="deposit-admin-request-list">
+                      {filteredAdminDepositRequests.map((request) => <article className="deposit-admin-request" key={request.id}>
                         <div className="deposit-admin-request-head"><b>{depositBrainrotName(request, request.brainrot_name)}</b><span className={`deposit-admin-status status-${request.status}`}>{depositStatusLabels[request.status] || request.status}</span></div>
                         <div className="deposit-admin-request-meta"><span>Игрок: @{request.roblox_username}</span><span>Telegram ID: {request.telegram_id}</span><span>Заявка #{request.queue_number}</span></div>
                         <div className="deposit-admin-request-meta"><span>Мутация: {request.mutation_key}</span><span>Traits: {(request.trait_labels || request.trait_keys || []).join(", ") || "нет"}</span><span>База: {Number(request.base_value_gg || 0).toLocaleString("ru-RU")} GG</span></div>
@@ -4053,6 +4313,7 @@ export default function App() {
                           {request.status === "waiting_trade" && <button type="button" className="case-button" disabled={adminDepositBusy} onClick={() => markBrainrotDepositReceived(request.id)}>Подтвердить предмет и traits</button>}
                           {request.status === "trade_received" && <button type="button" className="main-button" disabled={adminDepositBusy} onClick={() => completeBrainrotDeposit(request.id)}>Трейд завершён · начислить GG</button>}
                           {request.status !== "completed" && request.status !== "rejected" && <button type="button" className="deposit-reject-button" disabled={adminDepositBusy} onClick={() => rejectBrainrotDeposit(request.id)}>Отклонить</button>}
+                          <button type="button" className="admin-mobile-copy-action" onClick={() => copyAdminText([`Заявка #${request.queue_number}`, `Игрок: @${request.roblox_username}`, `Предмет: ${depositBrainrotName(request, request.brainrot_name)}`, `Статус: ${request.status}`, `К начислению: ${request.amount_gg} GG`, `Аккаунт: ${request.assigned_storage_account || "не назначен"}`].join("\n"), "Заявка пополнения")}>⧉ Копировать</button>
                         </div>
                       </article>)}
                     </div>}
@@ -4143,9 +4404,14 @@ export default function App() {
                       <div><h3>Созданные промокоды</h3><p>Лимиты, количество активаций и статус каждого кода.</p></div>
                       <button className="admin-refresh-button" type="button" onClick={loadAdminPromoCodes} disabled={adminPromoLoading}>{adminPromoLoading ? "..." : "↻ Обновить"}</button>
                     </div>
-                    {adminPromoLoading ? <p className="admin-muted">Загружаем промокоды...</p> : adminPromoCodes.length === 0 ? <p className="admin-muted">Пока нет созданных промокодов.</p> : (
+                    <div className="admin-mobile-promo-filters">
+                      <input className="admin-input" value={adminPromoQuery} onChange={(event) => setAdminPromoQuery(event.target.value)} placeholder="Поиск кода или награды" aria-label="Поиск промокодов" />
+                      <select className="admin-input" value={adminPromoStatus} onChange={(event) => setAdminPromoStatus(event.target.value)} aria-label="Фильтр статуса промокодов"><option value="all">Все статусы</option><option value="active">Активные</option><option value="inactive">Неактивные / истёкшие</option></select>
+                      <button type="button" className="admin-mobile-export-button" onClick={exportAdminPromosCsv} disabled={!filteredAdminPromoCodes.length}>⇩ Скачать CSV</button>
+                    </div>
+                    {adminPromoLoading ? <p className="admin-muted">Загружаем промокоды...</p> : adminPromoCodes.length === 0 ? <p className="admin-muted">Пока нет созданных промокодов.</p> : filteredAdminPromoCodes.length === 0 ? <p className="admin-muted">По выбранным фильтрам промокодов нет.</p> : (
                       <div className="promo-admin-list">
-                        {adminPromoCodes.map((promo) => {
+                        {filteredAdminPromoCodes.map((promo) => {
                           const rewardLabel = promo.reward_type === "coins"
                             ? `${Number(promo.reward_amount).toLocaleString("ru-RU")} GG`
                             : promo.reward_type === "cases"
@@ -4162,6 +4428,7 @@ export default function App() {
                                 <small>Использовано: {promo.uses_count} / {promo.max_uses == null ? "∞" : promo.max_uses}{promo.expires_at ? ` · до ${new Date(promo.expires_at).toLocaleString("ru-RU")}` : " · без срока"}</small>
                               </div>
                               <div className={`promo-admin-status ${active ? "active" : "inactive"}`}>{active ? "Активен" : expired ? "Истёк" : exhausted ? "Лимит исчерпан" : "Отключён"}</div>
+                              <button type="button" className="admin-mobile-copy-action" onClick={() => copyAdminText(promo.code, "Промокод")}>⧉ Копировать</button>
                               {promo.active && <button type="button" className="promo-admin-disable" disabled={adminPromoBusy} onClick={() => deactivateAdminPromoCode(promo.id)}>Отключить</button>}
                             </article>
                           );
@@ -4188,6 +4455,7 @@ export default function App() {
                   >
                     {adminLogsLoading ? "..." : "↻ Обновить"}
                   </button>
+                  <button type="button" className="admin-mobile-export-button" onClick={exportAdminLogsCsv} disabled={!filteredAdminLogs.length}>⇩ CSV</button>
                 </div>
 
                 <div className="admin-log-filters">
@@ -4227,6 +4495,137 @@ export default function App() {
                   </div>
                 )}
               </section>
+              )}
+
+              {adminSection === "tools" && (
+                <div className="admin-tools-view">
+                  <section className="admin-tools-hero">
+                    <div className="admin-tools-hero-icon">⌘</div>
+                    <div className="admin-tools-hero-copy">
+                      <span>POCKET CONTROL · MOBILE</span>
+                      <h3>Мобильная консоль</h3>
+                      <p>Быстрые действия, фильтры, копирование данных и CSV-экспорт. Никаких фиктивных показателей.</p>
+                    </div>
+                    <button type="button" onClick={refreshAdminTools} disabled={adminToolsRefreshing} aria-label="Обновить все данные">{adminToolsRefreshing ? "…" : "↻"}</button>
+                  </section>
+
+                  <section className="admin-panel-card admin-tools-card">
+                    <div className="admin-section-title">
+                      <span className="admin-section-icon">👤</span>
+                      <div><h3>Карточка игрока</h3><p>{adminPlayer ? "Действия с найденным профилем." : "Сначала найди игрока, чтобы открыть инструменты профиля."}</p></div>
+                    </div>
+                    {adminPlayer ? (
+                      <div className="admin-tools-player-card">
+                        <div className="admin-tools-player-heading"><b>{adminPlayer.username ? `@${adminPlayer.username}` : "Игрок BrainGG"}</b><span>{Number(adminPlayer.balance || 0).toLocaleString("ru-RU")} GG</span></div>
+                        <small>Game ID: {adminPlayer.game_id || "—"} · {adminInventory.length} предметов · {Number(adminPlayer.progress?.xp || 0).toLocaleString("ru-RU")} XP</small>
+                        <div className="admin-tool-actions-grid">
+                          <button type="button" onClick={() => copyAdminText(adminPlayer.game_id, "Game ID")}>⧉ Скопировать ID</button>
+                          <button type="button" onClick={copyAdminPlayerSummary}>▤ Скопировать профиль</button>
+                          <button type="button" onClick={() => searchAdminPlayer()} disabled={adminSearchLoading}>↻ Обновить профиль</button>
+                          <button type="button" onClick={() => setAdminSection("players")}>✎ К выдаче наград</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" className="admin-tools-empty-action" onClick={() => setAdminSection("players")}>⌕ Открыть поиск игрока</button>
+                    )}
+                  </section>
+
+                  <section className="admin-panel-card admin-tools-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">⚡</span><div><h3>Экспресс-действия</h3><p>Экспортируй нужные данные или скопируй сводку.</p></div></div>
+                    <div className="admin-tool-actions-grid">
+                      <button type="button" onClick={copyAdminInventoryText} disabled={!filteredAdminInventory.length}>⧉ Скопировать инвентарь</button>
+                      <button type="button" onClick={exportAdminInventoryCsv} disabled={!filteredAdminInventory.length}>⇩ Инвентарь CSV</button>
+                      <button type="button" onClick={exportAdminLogsCsv} disabled={!filteredAdminLogs.length}>⇩ Журнал CSV</button>
+                      <button type="button" onClick={copyAdminLatestLog} disabled={!filteredAdminLogs.length}>⧉ Последняя операция</button>
+                      <button type="button" onClick={exportAdminDepositsCsv} disabled={!filteredAdminDepositRequests.length}>⇩ Очередь CSV</button>
+                      {isOwner && <button type="button" onClick={exportAdminPromosCsv} disabled={!filteredAdminPromoCodes.length}>⇩ Промокоды CSV</button>}
+                      <button type="button" onClick={copyAdminDiagnostics}>⌘ Диагностика WebView</button>
+                      <button type="button" onClick={refreshAdminTools} disabled={adminToolsRefreshing}>↻ Обновить всё</button>
+                    </div>
+                  </section>
+
+                  <section className="admin-panel-card admin-tools-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">🎒</span><div><h3>Умный просмотр инвентаря</h3><p>Поиск, фильтр редкости, сортировка и экспорт выбранного списка.</p></div></div>
+                    {adminPlayer ? (
+                      <>
+                        <div className="admin-tools-filters">
+                          <input className="admin-input" value={adminInventoryQuery} onChange={(event) => setAdminInventoryQuery(event.target.value)} placeholder="Поиск по предмету или мутации" aria-label="Поиск в инвентаре" />
+                          <select className="admin-input" value={adminInventoryRarity} onChange={(event) => setAdminInventoryRarity(event.target.value)} aria-label="Фильтр редкости">
+                            <option value="all">Все редкости</option>
+                            {adminInventoryRarities.map((rarity) => <option key={rarity} value={rarity}>{rarity}</option>)}
+                          </select>
+                          <select className="admin-input" value={adminInventorySort} onChange={(event) => setAdminInventorySort(event.target.value)} aria-label="Сортировка инвентаря">
+                            <option value="value_desc">Сначала дорогие</option><option value="value_asc">Сначала дешёвые</option><option value="newest">Сначала новые</option><option value="name">По названию</option>
+                          </select>
+                        </div>
+                        <div className="admin-tools-summary-row"><span>Показано: <b>{filteredAdminInventory.length}</b> из {adminInventory.length}</span><strong>{adminInventoryFilteredValue.toLocaleString("ru-RU")} GG</strong></div>
+                        {filteredAdminInventory.length ? (
+                          <div className="admin-inventory-list admin-tools-inventory-list">
+                            {filteredAdminInventory.map((item) => <div className="admin-inventory-row" key={item.id}>
+                              <img className="admin-inventory-thumb" src={brainrotImage(item)} onError={handleBrainrotImageError} alt={item.item_name} loading="lazy" />
+                              <b>{item.item_name}{item.mutation === "strawberry" ? <span className="strawberry-mutation-pill">STRAWBERRY ×2.5</span> : null}</b>
+                              <small>{item.rarity || "—"}</small><strong>{Number(item.value_gg || 0).toLocaleString("ru-RU")} GG</strong>
+                            </div>)}
+                          </div>
+                        ) : <p className="admin-muted">По этим фильтрам предметов не найдено.</p>}
+                        <div className="admin-tool-actions-grid admin-tool-actions-compact">
+                          <button type="button" onClick={exportAdminInventoryCsv} disabled={!filteredAdminInventory.length}>⇩ Скачать этот список</button>
+                          <button type="button" onClick={copyAdminInventoryText} disabled={!filteredAdminInventory.length}>⧉ Скопировать список</button>
+                        </div>
+                      </>
+                    ) : <p className="admin-muted">Найди игрока в разделе «Игроки», чтобы просматривать его инвентарь.</p>}
+                  </section>
+
+                  <section className="admin-panel-card admin-tools-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">◷</span><div><h3>Контроль журнала</h3><p>Те же серверные записи, но с быстрым экспортом и копированием.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminLogs} disabled={adminLogsLoading}>{adminLogsLoading ? "…" : "↻"}</button></div>
+                    <div className="admin-tools-summary-row"><span>Найдено записей</span><strong>{filteredAdminLogs.length} / {adminLogs.length}</strong></div>
+                    <div className="admin-tool-actions-grid">
+                      <button type="button" onClick={exportAdminLogsCsv} disabled={!filteredAdminLogs.length}>⇩ Экспортировать фильтр</button>
+                      <button type="button" onClick={copyAdminLatestLog} disabled={!filteredAdminLogs.length}>⧉ Скопировать последнюю</button>
+                      <button type="button" onClick={() => { setAdminSection("history"); loadAdminLogs(); }}>☷ Открыть полный журнал</button>
+                    </div>
+                  </section>
+
+                  <section className="admin-panel-card admin-tools-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">🔁</span><div><h3>Монитор очереди пополнений</h3><p>Фильтруй заявки по игроку, предмету и этапу трейда.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminDepositData} disabled={adminDepositLoading}>{adminDepositLoading ? "…" : "↻"}</button></div>
+                    <div className="admin-tools-filters">
+                      <input className="admin-input" value={adminDepositQuery} onChange={(event) => setAdminDepositQuery(event.target.value)} placeholder="Игрок, предмет или номер заявки" aria-label="Поиск заявок" />
+                      <select className="admin-input" value={adminDepositStatus} onChange={(event) => setAdminDepositStatus(event.target.value)} aria-label="Статус заявки">
+                        <option value="all">Все этапы · {adminDepositQueueCounts.all}</option>
+                        <option value="queued">В очереди · {adminDepositQueueCounts.queued}</option>
+                        <option value="waiting_trade">Ожидает трейд · {adminDepositQueueCounts.waiting_trade}</option>
+                        <option value="trade_received">Трейд получен · {adminDepositQueueCounts.trade_received}</option>
+                      </select>
+                    </div>
+                    <div className="admin-tools-summary-row"><span>Совпадений</span><strong>{filteredAdminDepositRequests.length} / {adminDepositRequests.length}</strong></div>
+                    <div className="admin-tool-actions-grid">
+                      <button type="button" onClick={exportAdminDepositsCsv} disabled={!filteredAdminDepositRequests.length}>⇩ Экспортировать очередь</button>
+                      <button type="button" onClick={() => { setAdminSection("deposits"); loadAdminDepositData(); }}>☷ Управлять заявками</button>
+                      <button type="button" onClick={() => filteredAdminDepositRequests[0] && copyAdminText([`Заявка #${filteredAdminDepositRequests[0].queue_number}`, `Игрок: @${filteredAdminDepositRequests[0].roblox_username}`, `Предмет: ${depositBrainrotName(filteredAdminDepositRequests[0], filteredAdminDepositRequests[0].brainrot_name)}`, `Статус: ${filteredAdminDepositRequests[0].status}`, `К начислению: ${filteredAdminDepositRequests[0].amount_gg} GG`].join("\n"), "Заявка пополнения")} disabled={!filteredAdminDepositRequests.length}>⧉ Скопировать первую заявку</button>
+                    </div>
+                  </section>
+
+                  {isOwner && <section className="admin-panel-card admin-tools-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">🎟️</span><div><h3>Контроль промокодов</h3><p>Найди код, проверь статус или выгрузи список.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminPromoCodes} disabled={adminPromoLoading}>{adminPromoLoading ? "…" : "↻"}</button></div>
+                    <div className="admin-tools-filters">
+                      <input className="admin-input" value={adminPromoQuery} onChange={(event) => setAdminPromoQuery(event.target.value)} placeholder="Поиск промокода или награды" aria-label="Поиск промокодов" />
+                      <select className="admin-input" value={adminPromoStatus} onChange={(event) => setAdminPromoStatus(event.target.value)} aria-label="Статус промокода"><option value="all">Все статусы</option><option value="active">Активные</option><option value="inactive">Неактивные / истёкшие</option></select>
+                    </div>
+                    <div className="admin-tools-summary-row"><span>Совпадений</span><strong>{filteredAdminPromoCodes.length} / {adminPromoCodes.length}</strong></div>
+                    <div className="admin-tool-actions-grid"><button type="button" onClick={exportAdminPromosCsv} disabled={!filteredAdminPromoCodes.length}>⇩ Экспортировать промокоды</button><button type="button" onClick={() => { setAdminSection("promocodes"); loadAdminPromoCodes(); }}>✎ Управлять промокодами</button><button type="button" onClick={() => filteredAdminPromoCodes[0] && copyAdminText(filteredAdminPromoCodes[0].code, "Промокод")} disabled={!filteredAdminPromoCodes.length}>⧉ Скопировать первый код</button></div>
+                  </section>}
+
+                  <section className="admin-panel-card admin-tools-card admin-tools-diagnostics">
+                    <div className="admin-section-title"><span className="admin-section-icon">📡</span><div><h3>Состояние приложения</h3><p>Локальная проверка окружения телефона и Telegram WebView.</p></div></div>
+                    <div className="admin-diagnostic-list">
+                      <div><span>Telegram WebApp</span><b>{window.Telegram?.WebApp ? "Обнаружен" : "Не обнаружен"}</b></div>
+                      <div><span>Подписанные данные</span><b>{initData() ? "Получены" : "Не получены"}</b></div>
+                      <div><span>Интернет</span><b>{navigator.onLine ? "Подключён" : "Нет соединения"}</b></div>
+                      <div><span>Supabase config</span><b>{import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? "Настроен" : "Не настроен"}</b></div>
+                    </div>
+                    <button type="button" className="admin-tools-empty-action" onClick={copyAdminDiagnostics}>⧉ Скопировать диагностику для поддержки</button>
+                  </section>
+                </div>
               )}
             </main>
           )}
