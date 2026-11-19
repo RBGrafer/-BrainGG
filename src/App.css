@@ -5183,3 +5183,70 @@ input::placeholder, textarea::placeholder { color: #887e9c; }
 @media (max-width: 600px) {
   .admin-events-card .admin-event-card .main-button { margin-top: 8px; }
 }
+
+/* MOBILE ADMIN 3.1 — visible command centre and read-only event monitoring. */
+.admin-mobile-build-stamp,
+.admin-events-readonly-mobile { display: none; }
+.admin-events-readonly-desktop { display: block; }
+.admin-mobile-control-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 12px 0; }
+.admin-mobile-control-meta > div { min-width: 0; padding: 9px 10px; border: 1px solid rgba(126, 203, 235, .16); border-radius: 10px; background: rgba(4, 20, 34, .58); }
+.admin-mobile-control-meta small,
+.admin-mobile-control-meta b { display: block; }
+.admin-mobile-control-meta small { color: #78a9bf; font-size: 8px; font-weight: 900; letter-spacing: .7px; }
+.admin-mobile-control-meta b { margin-top: 5px; color: #e2f7ff; font-size: 10px; line-height: 1.3; overflow-wrap: anywhere; }
+.admin-mobile-player-search { display: grid; gap: 7px; margin: 12px 0; padding: 11px; border: 1px solid rgba(126, 203, 235, .16); border-radius: 12px; background: rgba(4, 20, 34, .46); }
+.admin-mobile-player-search label { color: #b6d8e8; font-size: 10px; font-weight: 900; }
+.admin-mobile-player-search > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+.admin-mobile-player-search .admin-input { min-width: 0; min-height: 42px; }
+.admin-mobile-player-search .main-button { min-height: 42px; padding: 8px 13px; white-space: nowrap; }
+.admin-mobile-control-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; color: #789eb2; font-size: 9px; }
+.admin-mobile-control-footer button { min-height: 34px; padding: 6px 9px; border: 1px solid rgba(126, 203, 235, .18); border-radius: 9px; background: rgba(15, 45, 64, .7); color: #b6dff0; font-size: 9px; font-weight: 800; }
+.admin-event-readonly-status { display: grid; gap: 5px; margin: 10px 0 12px; padding: 13px; border: 1px solid rgba(106, 207, 247, .22); border-radius: 13px; background: linear-gradient(145deg, rgba(11, 47, 68, .82), rgba(5, 22, 36, .92)); }
+.admin-event-readonly-status small { color: #75cbe9; font-size: 8px; font-weight: 900; letter-spacing: 1px; }
+.admin-event-readonly-status b { color: #f1fbff; font-size: 13px; }
+.admin-event-readonly-status span { color: #9bf2ce; font-size: 11px; font-weight: 800; }
+.admin-events-readonly-list { display: grid; gap: 7px; margin-top: 10px; }
+.admin-events-readonly-list article { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px; border: 1px solid rgba(113, 192, 229, .14); border-radius: 11px; background: rgba(4, 20, 34, .56); }
+.admin-events-readonly-list article > span { flex: 0 0 30px; font-size: 20px; }
+.admin-events-readonly-list article > div { flex: 1; min-width: 0; }
+.admin-events-readonly-list article b,
+.admin-events-readonly-list article small { display: block; }
+.admin-events-readonly-list article b { color: #e6f8ff; font-size: 10px; }
+.admin-events-readonly-list article small { margin-top: 4px; color: #91b1c2; font-size: 9px; line-height: 1.4; }
+.admin-events-readonly-list article > button { flex: 0 0 32px; width: 32px; height: 32px; border: 1px solid rgba(110, 188, 222, .16); border-radius: 8px; background: rgba(15, 45, 64, .7); color: #a9d9ed; }
+.admin-event-readonly-history { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(126, 203, 235, .12); }
+.admin-event-readonly-history > b { color: #dff6ff; font-size: 11px; }
+.admin-event-readonly-history > div { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 9px; background: rgba(4, 20, 34, .48); }
+.admin-event-readonly-history > div > span { color: #8ce7bd; font-size: 12px; }
+.admin-event-readonly-history > div > div { display: grid; gap: 3px; min-width: 0; }
+.admin-event-readonly-history strong { color: #d8eff9; font-size: 9px; }
+.admin-event-readonly-history small { color: #789eb2; font-size: 8px; }
+
+@media (max-width: 600px) {
+  .admin-mobile-build-stamp { display: inline-flex; width: max-content; margin-top: 8px; padding: 6px 9px; border: 1px solid rgba(109, 220, 190, .25); border-radius: 999px; background: rgba(18, 103, 78, .18); color: #9df0cf; font-size: 8px; font-weight: 900; letter-spacing: .9px; }
+  .admin-mobile-control-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-mobile-control-footer { align-items: flex-start; flex-direction: column; }
+  .admin-events-readonly-mobile { display: block; }
+  .admin-events-readonly-desktop { display: none; }
+}
+
+/* Some Telegram WebViews report a wider CSS viewport than the handset width.
+   The mobile user-agent class keeps the mobile admin tools visible in that case. */
+.admin-content.admin-mobile-device .admin-mobile-build-stamp { display: inline-flex; width: max-content; margin-top: 8px; padding: 6px 9px; border: 1px solid rgba(109, 220, 190, .25); border-radius: 999px; background: rgba(18, 103, 78, .18); color: #9df0cf; font-size: 8px; font-weight: 900; letter-spacing: .9px; }
+.admin-content.admin-mobile-device .admin-mobile-quick-panel { display: block !important; margin: 13px 0 14px; padding: 14px; border: 1px solid rgba(116, 202, 240, .25); border-radius: 18px; background: radial-gradient(circle at 100% 0%, rgba(88, 202, 245, .16), transparent 48%), linear-gradient(145deg, rgba(18, 58, 81, .78), rgba(7, 25, 42, .94)); }
+.admin-content.admin-mobile-device .admin-mobile-quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.admin-content.admin-mobile-device .admin-mobile-quick-grid button { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 58px; padding: 9px; border: 1px solid rgba(143, 207, 234, .16); border-radius: 12px; background: linear-gradient(145deg, rgba(16, 48, 69, .88), rgba(7, 27, 44, .92)); color: #effaff; text-align: left; }
+.admin-content.admin-mobile-device .admin-mobile-quick-grid button > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.admin-content.admin-mobile-device .admin-mobile-quick-grid strong { font-size: 10px; }
+.admin-content.admin-mobile-device .admin-mobile-quick-grid small { color: #8eb8cd; font-size: 8px; }
+.admin-content.admin-mobile-device .admin-mobile-only-tab { display: flex !important; }
+.admin-content.admin-mobile-device .admin-event-mobile-tools,
+.admin-content.admin-mobile-device .admin-event-history-mobile { display: block !important; }
+.admin-content.admin-mobile-device .admin-event-mobile-actions { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 9px; }
+.admin-content.admin-mobile-device .admin-event-preview { display: block !important; }
+.admin-content.admin-mobile-device .admin-tools-view { display: grid !important; gap: 1px; }
+.admin-content.admin-mobile-device .admin-mobile-global-feedback { display: block !important; }
+.admin-content.admin-mobile-device .admin-events-readonly-mobile { display: block !important; }
+.admin-content.admin-mobile-device .admin-events-readonly-desktop { display: none !important; }
+.admin-content.admin-mobile-device .admin-tabs { display: flex !important; max-width: 100%; overflow-x: auto; flex-wrap: nowrap !important; }
+.admin-content.admin-mobile-device .admin-tabs button { flex: 0 0 auto !important; }
