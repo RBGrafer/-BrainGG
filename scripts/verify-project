@@ -51,6 +51,16 @@ assert.match(appSource, /adminEventFavoritesOnly[\s\S]*?adminEventCompareA[\s\S]
   'Mobile event command center must include favorites, comparison, and history filters');
 assert.match(appSource, /admin-event-mobile-tools[\s\S]*?admin-event-history-mobile/,
   'Mobile-only event command center and event history must be present');
+assert.match(appSource, /MOBILE ADMIN · BUILD 3\.1/,
+  'The mobile admin release marker must be visible so deployment can be verified on-device');
+assert.match(appSource, /admin-mobile-player-search[\s\S]*?searchAdminPlayer\(event, true\)/,
+  'The mobile admin overview must include a working quick player search');
+assert.match(appSource, /copyAdminControlSnapshot[\s\S]*?Сводка админ-панели/,
+  'The mobile admin overview must include a copyable control-center snapshot');
+assert.match(appSource, /admin-events-readonly-mobile[\s\S]*?globalActivities\.filter/,
+  'Non-owner admins must receive a read-only event monitor instead of an empty dead end');
+assert.match(appSource, /admin-mobile-device/,
+  'Mobile admin tools must remain visible when Telegram WebView reports a wider viewport');
 
 const assetCheck = spawnSync(process.execPath, [path.join(root, 'scripts/verify-assets')], {
   cwd: root,
