@@ -48,19 +48,31 @@ assert.match(backend, /durationSeconds < 30 \|\| durationSeconds > 1800/,
 assert.match(backend, /currentEvent\?\.event_name === requestedEvent && !forceRestart/,
   'Owner must be able to restart the same active global event');
 assert.match(appSource, /adminEventFavoritesOnly[\s\S]*?adminEventCompareA[\s\S]*?adminEventHistoryPeriod/,
-  'Mobile event command center must include favorites, comparison, and history filters');
+  'Cross-device event command center must include favorites, comparison, and history filters');
 assert.match(appSource, /admin-event-mobile-tools[\s\S]*?admin-event-history-mobile/,
-  'Mobile-only event command center and event history must be present');
-assert.match(appSource, /MOBILE ADMIN · BUILD 3\.1/,
-  'The mobile admin release marker must be visible so deployment can be verified on-device');
+  'Responsive event command center and event history must be present');
+assert.match(appSource, /ADMIN CONSOLE · BUILD 3\.2/,
+  'The cross-device admin release marker must be visible so deployment can be verified');
 assert.match(appSource, /admin-mobile-player-search[\s\S]*?searchAdminPlayer\(event, true\)/,
-  'The mobile admin overview must include a working quick player search');
+  'The admin overview must include a working quick player search on all devices');
 assert.match(appSource, /copyAdminControlSnapshot[\s\S]*?Сводка админ-панели/,
-  'The mobile admin overview must include a copyable control-center snapshot');
+  'The admin overview must include a copyable control-center snapshot on all devices');
 assert.match(appSource, /admin-events-readonly-mobile[\s\S]*?globalActivities\.filter/,
   'Non-owner admins must receive a read-only event monitor instead of an empty dead end');
 assert.match(appSource, /admin-mobile-device/,
-  'Mobile admin tools must remain visible when Telegram WebView reports a wider viewport');
+  'Admin tools must remain responsive when Telegram WebView reports a wider viewport');
+
+assert.match(appSource, /adminSection === key \? "active" : ""/,
+  'The tools tab must be part of the shared admin navigation');
+const appCss = read('src/App.css');
+assert.match(appCss, /@media \(min-width:\s*601px\)[\s\S]*?\.admin-tools-view\s*\{[^}]*display:\s*grid/s,
+  'Desktop admin tools must be visible outside the mobile-only layout');
+assert.match(appCss, /@media \(min-width:\s*601px\)[\s\S]*?\.admin-event-mobile-tools\s*\{[^}]*display:\s*grid/s,
+  'Desktop event controls must be visible outside the mobile-only layout');
+assert.match(appCss, /@media \(min-width:\s*601px\)[\s\S]*?\.admin-event-history-mobile\s*\{[^}]*display:\s*block/s,
+  'Desktop event history must be visible outside the mobile-only layout');
+assert.doesNotMatch(appSource, /restoreDesktopAdminDefaults/,
+  'Desktop resizing must not reset the selected admin section or filters');
 
 const assetCheck = spawnSync(process.execPath, [path.join(root, 'scripts/verify-assets')], {
   cwd: root,
