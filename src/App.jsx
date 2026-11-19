@@ -307,6 +307,11 @@ function effectiveCasePrice(item, eventName) {
   return eventName === "case_sale" ? Math.max(1, Math.floor(base * 0.75)) : base;
 }
 
+function formatAdminEventDuration(value) {
+  const safe = Math.max(0, Math.floor(Number(value) || 0));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
+}
+
 export default function App() {
   const [page, setPage] = useState("Главная");
   const [minesBet, setMinesBet] = useState("10");
@@ -460,6 +465,27 @@ export default function App() {
   const [adminEventLoading, setAdminEventLoading] = useState(false);
   const [adminEventFeedback, setAdminEventFeedback] = useState("");
   const [adminEventFeedbackError, setAdminEventFeedbackError] = useState(false);
+  const [adminEventDuration, setAdminEventDuration] = useState("179");
+  const [adminEventQuery, setAdminEventQuery] = useState("");
+  const [adminEventCategory, setAdminEventCategory] = useState("all");
+  const [adminEventSort, setAdminEventSort] = useState("default");
+  const [adminEventFavoritesOnly, setAdminEventFavoritesOnly] = useState(false);
+  const [adminEventFavorites, setAdminEventFavorites] = useState(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem("braingg-admin-event-favorites") || "[]");
+      return Array.isArray(saved) ? saved.filter((key) => typeof key === "string") : [];
+    } catch { return []; }
+  });
+  const [adminEventPreview, setAdminEventPreview] = useState("");
+  const [adminEventCompareA, setAdminEventCompareA] = useState("lucky");
+  const [adminEventCompareB, setAdminEventCompareB] = useState("gold_rush");
+  const [adminEventHistory, setAdminEventHistory] = useState([]);
+  const [adminEventHistoryLoading, setAdminEventHistoryLoading] = useState(false);
+  const [adminEventHistoryQuery, setAdminEventHistoryQuery] = useState("");
+  const [adminEventHistoryType, setAdminEventHistoryType] = useState("all");
+  const [adminEventHistoryPeriod, setAdminEventHistoryPeriod] = useState("7d");
+  const [adminEventHistorySort, setAdminEventHistorySort] = useState("newest");
+  const [adminEventRefreshing, setAdminEventRefreshing] = useState(false);
   const [adminGameId, setAdminGameId] = useState("");
 
   useEffect(() => {
@@ -538,6 +564,12 @@ export default function App() {
       setAdminDepositStatus("all");
       setAdminPromoQuery("");
       setAdminPromoStatus("all");
+      setAdminEventDuration("179");
+      setAdminEventQuery("");
+      setAdminEventCategory("all");
+      setAdminEventSort("default");
+      setAdminEventFavoritesOnly(false);
+      setAdminEventPreview("");
     };
     restoreDesktopAdminDefaults();
     window.addEventListener("resize", restoreDesktopAdminDefaults);
@@ -553,6 +585,10 @@ export default function App() {
   useEffect(() => {
     try { window.localStorage.setItem(STREAMER_MODE_STORAGE_KEY, streamerMode ? "1" : "0"); } catch (error) { console.warn("Could not persist streamer mode preference:", error); }
   }, [streamerMode]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem("braingg-admin-event-favorites", JSON.stringify(adminEventFavorites)); } catch { /* Local favorites are optional. */ }
+  }, [adminEventFavorites]);
 
   useEffect(() => {
     try { window.localStorage.setItem(SITE_THEME_STORAGE_KEY, siteTheme); } catch (error) { console.warn("Could not persist BrainGG theme preference:", error); }
@@ -1687,22 +1723,145 @@ export default function App() {
     }
   }
 
-  async function toggleAdminEvent(eventName) {
+  async function loadAdminEventHistory() {
+    if (!isOwner) return [];
+    setAdminEventHistoryLoading(true);
+    try {
+      const { data, error } = await supabase.from("game_global_activity")
+        .select("id, username, event_type, title, description, created_at, success")
+        .in("event_type", ["event_started", "event_ended"])
+        .order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      setAdminEventHistory(data || []);
+      return data || [];
+    } catch (error) {
+      console.error("Admin event history loading failed:", error);
+      setAdminEventFeedback(error?.message || "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0438\u0441\u0442\u043e\u0440\u0438\u044e \u0438\u0432\u0435\u043d\u0442\u043e\u0432.");
+      setAdminEventFeedbackError(true);
+      throw error;
+    } finally {
+      setAdminEventHistoryLoading(false);
+    }
+  }
+
+  async function refreshAdminEvents() {
+    if (adminEventRefreshing) return;
+    setAdminEventRefreshing(true);
+    setAdminEventFeedback("");
+    setAdminEventFeedbackError(false);
+    const results = await Promise.allSettled([loadGlobalState(), loadAdminEventHistory()]);
+    const failed = results.some((result) => result.status === "rejected");
+    if (failed) {
+      setAdminEventFeedback("\u041d\u0435 \u0432\u0441\u0435 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u0438 \u0441\u043e\u0431\u044b\u0442\u0438\u0439 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c. \u041f\u0440\u043e\u0432\u0435\u0440\u044c \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435 \u0438 \u043f\u043e\u0432\u0442\u043e\u0440\u0438 \u043f\u043e\u043f\u044b\u0442\u043a\u0443.");
+      setAdminEventFeedbackError(true);
+    } else {
+      setAdminEventFeedback("\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u0438 \u0438\u0441\u0442\u043e\u0440\u0438\u044f \u0438\u0432\u0435\u043d\u0442\u043e\u0432 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b.");
+      setAdminEventFeedbackError(false);
+    }
+    setAdminEventRefreshing(false);
+  }
+
+  function toggleAdminEventFavorite(eventName) {
+    setAdminEventFavorites((current) => current.includes(eventName)
+      ? current.filter((key) => key !== eventName)
+      : [...current, eventName]);
+  }
+
+  function copyAdminEventDetails(eventName) {
+    const event = adminEventCatalog.find((item) => item.key === eventName);
+    if (!event) return;
+    const presentation = eventPresentation[eventName] || {};
+    copyAdminText([
+      presentation.title || event.title,
+      "\u0422\u0438\u043f: " + event.category,
+      presentation.subtitle || event.description,
+      "\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0437\u0430\u043f\u0443\u0441\u043a\u0430: " + formatAdminEventDuration(Number(adminEventDuration)),
+      "\u0421\u0442\u0430\u0442\u0443\u0441: " + (globalEvent?.event_name === eventName ? "\u0430\u043a\u0442\u0438\u0432\u0435\u043d" : "\u043d\u0435 \u0430\u043a\u0442\u0438\u0432\u0435\u043d"),
+    ].join("\n"), "\u041a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0438\u0432\u0435\u043d\u0442\u0430");
+  }
+
+  function copyAdminEventStatus() {
+    if (!globalEvent?.event_name) {
+      setAdminToolFeedback("\u0421\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0433\u043e \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u0438\u0432\u0435\u043d\u0442\u0430.");
+      return;
+    }
+    const presentation = eventPresentation[globalEvent.event_name] || {};
+    copyAdminText([
+      "\u0410\u043a\u0442\u0438\u0432\u043d\u044b\u0439 \u0438\u0432\u0435\u043d\u0442: " + (presentation.title || globalEvent.event_name),
+      "\u041d\u0430\u0447\u0430\u043b\u043e: " + (globalEvent.event_started_at ? new Date(globalEvent.event_started_at).toLocaleString("ru-RU") : "—"),
+      "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u0435: " + (globalEvent.event_ends_at ? new Date(globalEvent.event_ends_at).toLocaleString("ru-RU") : "—"),
+      "\u041e\u0441\u0442\u0430\u043b\u043e\u0441\u044c: " + eventRemainingLabel,
+      "\u042d\u0444\u0444\u0435\u043a\u0442: " + (presentation.subtitle || "—"),
+    ].join("\n"), "\u0421\u0442\u0430\u0442\u0443\u0441 \u0438\u0432\u0435\u043d\u0442\u0430");
+  }
+
+  function exportAdminEventHistoryCsv() {
+    if (!filteredAdminEventHistory.length) return;
+    const rows = filteredAdminEventHistory.map((entry) => [
+      entry.created_at ? new Date(entry.created_at).toLocaleString("ru-RU") : "",
+      entry.event_type === "event_started" ? "\u0421\u0442\u0430\u0440\u0442" : "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u0435",
+      entry.title || "",
+      entry.description || "",
+      entry.username || "",
+    ]);
+    const ok = downloadCsvFile("braingg-global-event-history.csv", ["\u0414\u0430\u0442\u0430", "\u0422\u0438\u043f", "\u0421\u043e\u0431\u044b\u0442\u0438\u0435", "\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435", "\u0418\u0433\u0440\u043e\u043a"], rows);
+    setAdminToolFeedback(ok ? "\u042d\u043a\u0441\u043f\u043e\u0440\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0437\u0430\u043f\u0438\u0441\u0435\u0439 \u0438\u0432\u0435\u043d\u0442\u043e\u0432: " + rows.length + "." : "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0437\u0434\u0430\u0442\u044c CSV-\u0444\u0430\u0439\u043b \u0432 \u044d\u0442\u043e\u043c WebView.");
+  }
+
+  function copyAdminLatestEventHistory() {
+    const entry = filteredAdminEventHistory[0];
+    if (!entry) return;
+    copyAdminText([
+      entry.title || "BrainGG event",
+      entry.description || "",
+      "\u0422\u0438\u043f: " + (entry.event_type === "event_started" ? "\u0417\u0430\u043f\u0443\u0441\u043a" : "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u0438\u0435"),
+      "\u0414\u0430\u0442\u0430: " + (entry.created_at ? new Date(entry.created_at).toLocaleString("ru-RU") : "—"),
+    ].join("\n"), "\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0438\u0432\u0435\u043d\u0442");
+  }
+
+  function prepareAdminEventMessage(eventName, stage) {
+    const presentation = eventPresentation[eventName] || {};
+    const title = presentation.title || eventName;
+    const effect = presentation.subtitle || "BrainGG global event";
+    const messages = {
+      started: "\u{1F30D} " + title + " \u0437\u0430\u043f\u0443\u0449\u0435\u043d \u0434\u043b\u044f \u0432\u0441\u0435\u0445 \u0438\u0433\u0440\u043e\u043a\u043e\u0432! " + effect,
+      ending: "\u{23F3} " + title + ": \u0441\u043e\u0431\u044b\u0442\u0438\u0435 \u0441\u043a\u043e\u0440\u043e \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0441\u044f. \u0423\u0441\u043f\u0435\u0439 \u0432\u043e\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c\u0441\u044f \u0431\u043e\u043d\u0443\u0441\u043e\u043c!",
+      ended: "\u{1F3C1} " + title + " \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043d. \u0421\u043f\u0430\u0441\u0438\u0431\u043e \u0432\u0441\u0435\u043c, \u043a\u0442\u043e \u0443\u0447\u0430\u0441\u0442\u0432\u043e\u0432\u0430\u043b \u0432 \u0441\u043e\u0431\u044b\u0442\u0438\u0438 BrainGG!",
+    };
+    setGlobalMessageDraft(messages[stage] || messages.started);
+    setAdminEventFeedback("\u0428\u0430\u0431\u043b\u043e\u043d \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d \u0432 \u043f\u043e\u043b\u0435 \u0433\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f. \u041f\u0440\u043e\u0432\u0435\u0440\u044c \u0442\u0435\u043a\u0441\u0442 \u0438 \u043d\u0430\u0436\u043c\u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0443 \u0432\u0440\u0443\u0447\u043d\u0443\u044e.");
+    setAdminEventFeedbackError(false);
+  }
+
+  async function toggleAdminEvent(eventName, options = {}) {
     if (!isOwner || adminEventLoading) return;
+    const durationSeconds = Number(adminEventDuration);
+    if (eventName && (!Number.isSafeInteger(durationSeconds) || durationSeconds < 30 || durationSeconds > 1800)) {
+      setAdminEventFeedback("\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0434\u043e\u043b\u0436\u043d\u0430 \u0431\u044b\u0442\u044c \u0446\u0435\u043b\u044b\u043c \u0447\u0438\u0441\u043b\u043e\u043c \u043e\u0442 30 \u0434\u043e 1800 \u0441\u0435\u043a\u0443\u043d\u0434.");
+      setAdminEventFeedbackError(true);
+      return;
+    }
     setAdminEventLoading(true);
     setAdminEventFeedback("");
     setAdminEventFeedbackError(false);
     try {
       const { data, error } = await supabase.functions.invoke("braingg-api", {
-        body: { initData: initData(), action: "admin_set_event", eventName },
+        body: {
+          initData: initData(),
+          action: "admin_set_event",
+          eventName,
+          durationSeconds: eventName ? durationSeconds : undefined,
+          forceRestart: options.forceRestart === true,
+        },
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Не удалось изменить ивент");
       setGlobalEvent(data.event || null);
       setAdminEventFeedback(data.event
-        ? "Ивент запущен. Он автоматически завершится через 2:59."
-        : "Ивент остановлен. Оформление и бонусы возвращены к обычным.");
+        ? "\u0418\u0432\u0435\u043d\u0442 \u0437\u0430\u043f\u0443\u0449\u0435\u043d \u043d\u0430 " + formatAdminEventDuration(durationSeconds) + ". \u0422\u0430\u0439\u043c\u0435\u0440 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u043d\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435 \u0438 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u0441\u044f \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438."
+        : "\u0418\u0432\u0435\u043d\u0442 \u043e\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d. \u041e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435 \u0438 \u0431\u043e\u043d\u0443\u0441\u044b \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0435\u043d\u044b \u043a \u043e\u0431\u044b\u0447\u043d\u044b\u043c.");
       setAdminEventFeedbackError(false);
+      loadAdminEventHistory().catch(() => {});
     } catch (error) {
       setAdminEventFeedback(error?.message || "Не удалось изменить ивент.");
       setAdminEventFeedbackError(true);
@@ -2720,6 +2879,50 @@ export default function App() {
     jackpot_hunt: { title: "JACKPOT HUNT", subtitle: "Легендарные, мифические и OG дропы ×3 по весу", emoji: "👑", particle: "✦" },
     night_shift: { title: "NIGHT SHIFT", subtitle: "Ночная атмосфера и отдельный саундтрек", emoji: "🌙", particle: "✦" },
   };
+  const adminEventCatalog = [
+    { key: "tacos", icon: "\u{1F32E}", title: "It's Raining Tacos", category: "visual", description: "\u0422\u0451\u043f\u043b\u044b\u0439 \u0444\u043e\u043d, \u043f\u0430\u0434\u0430\u044e\u0449\u0438\u0435 \u0442\u0430\u043a\u043e \u0438 \u043e\u0440\u0438\u0433\u0438\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u043c\u0443\u0437\u044b\u043a\u0430." },
+    { key: "lucky", icon: "\u{1F340}", title: "LUCKY DAY!", category: "gameplay", description: "\u0428\u0430\u043d\u0441 \u0440\u0435\u0434\u043a\u0438\u0445 \u0434\u0440\u043e\u043f\u043e\u0432 \u0438 \u0430\u043f\u0433\u0440\u0435\u0439\u0434\u0430 \u00d72." },
+    { key: "strawberry", icon: "\u{1F353}", title: "STRAWBERRY DAY!", category: "gameplay", description: "5% \u0448\u0430\u043d\u0441 \u043a\u043b\u0443\u0431\u043d\u0438\u0447\u043d\u043e\u0439 \u043c\u0443\u0442\u0430\u0446\u0438\u0438 \u00d72.5." },
+    { key: "red_fever", icon: "\u{1F525}", title: "RED FEVER", category: "gameplay", description: "\u0412\u0435\u0441 \u0440\u0435\u0434\u043a\u0438\u0445 \u0438 \u0432\u044b\u0448\u0435 \u0440\u0435\u0434\u043a\u0438\u0445 \u043d\u0430\u0433\u0440\u0430\u0434 \u00d71.5." },
+    { key: "gold_rush", icon: "\u{1F4B0}", title: "GOLD RUSH", category: "economy", description: "\u041f\u0440\u043e\u0434\u0430\u0436\u0430 \u0431\u0440\u0435\u0439\u043d\u0440\u043e\u0442\u043e\u0432 \u043f\u0440\u0438\u043d\u043e\u0441\u0438\u0442 \u0432 2 \u0440\u0430\u0437\u0430 \u0431\u043e\u043b\u044c\u0448\u0435 GG." },
+    { key: "case_sale", icon: "\u{1F3F7}\u{FE0F}", title: "CASE SALE", category: "economy", description: "\u0421\u043a\u0438\u0434\u043a\u0430 25% \u043d\u0430 \u0432\u0441\u0435 \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044f \u043a\u0435\u0439\u0441\u043e\u0432." },
+    { key: "power_upgrade", icon: "\u{26A1}", title: "POWER UPGRADE", category: "gameplay", description: "\u0428\u0430\u043d\u0441 \u0430\u043f\u0433\u0440\u0435\u0439\u0434\u0430 \u0443\u0432\u0435\u043b\u0438\u0447\u0435\u043d \u0432 1.5 \u0440\u0430\u0437\u0430." },
+    { key: "jackpot_hunt", icon: "\u{1F451}", title: "JACKPOT HUNT", category: "gameplay", description: "\u0412\u0435\u0441 \u043b\u0435\u0433\u0435\u043d\u0434\u0430\u0440\u043d\u044b\u0445, \u043c\u0438\u0444\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u0438 OG \u043d\u0430\u0433\u0440\u0430\u0434 \u00d73." },
+    { key: "night_shift", icon: "\u{1F319}", title: "NIGHT SHIFT", category: "visual", description: "\u041d\u043e\u0447\u043d\u0430\u044f \u0442\u0435\u043c\u0430 \u0438 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 \u043c\u0443\u0437\u044b\u043a\u0430\u043b\u044c\u043d\u044b\u0439 \u043b\u0443\u043f." },
+  ];
+  const filteredAdminEventCatalog = adminEventCatalog
+    .filter((event) => {
+      const query = adminEventQuery.trim().toLowerCase();
+      const matchesQuery = !query || [event.key, event.title, event.description, event.category].some((value) => String(value || "").toLowerCase().includes(query));
+      const matchesCategory = adminEventCategory === "all" || event.category === adminEventCategory;
+      const matchesFavorites = !adminEventFavoritesOnly || adminEventFavorites.includes(event.key);
+      return matchesQuery && matchesCategory && matchesFavorites;
+    })
+    .sort((a, b) => adminEventSort === "name" ? a.title.localeCompare(b.title, "ru") : adminEventSort === "category" ? a.category.localeCompare(b.category, "ru") || a.title.localeCompare(b.title, "ru") : 0);
+  const adminEventHistoryPeriodMs = adminEventHistoryPeriod === "24h" ? 24 * 60 * 60 * 1000 : adminEventHistoryPeriod === "7d" ? 7 * 24 * 60 * 60 * 1000 : adminEventHistoryPeriod === "30d" ? 30 * 24 * 60 * 60 * 1000 : null;
+  const filteredAdminEventHistory = adminEventHistory
+    .filter((entry) => {
+      const query = adminEventHistoryQuery.trim().toLowerCase();
+      const matchesQuery = !query || [entry.title, entry.description, entry.username, entry.event_type].some((value) => String(value || "").toLowerCase().includes(query));
+      const matchesType = adminEventHistoryType === "all" || entry.event_type === (adminEventHistoryType === "started" ? "event_started" : "event_ended");
+      const timestamp = Date.parse(entry.created_at || "");
+      const matchesPeriod = !adminEventHistoryPeriodMs || !Number.isFinite(timestamp) || Date.now() - timestamp <= adminEventHistoryPeriodMs;
+      return matchesQuery && matchesType && matchesPeriod;
+    })
+    .sort((a, b) => adminEventHistorySort === "oldest" ? Date.parse(a.created_at || "") - Date.parse(b.created_at || "") : Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
+  const adminEventHistoryStarts = filteredAdminEventHistory.filter((entry) => entry.event_type === "event_started").length;
+  const adminEventHistoryEnds = filteredAdminEventHistory.filter((entry) => entry.event_type === "event_ended").length;
+  const adminEventTopLaunch = adminEventCatalog.map((event) => ({
+    ...event,
+    launches: filteredAdminEventHistory.filter((entry) => entry.event_type === "event_started" && String(entry.description || "").toLowerCase().includes(event.key)).length,
+  })).sort((a, b) => b.launches - a.launches)[0];
+  const adminEventPreviewDetails = adminEventCatalog.find((event) => event.key === adminEventPreview);
+  const adminEventCompareLeft = adminEventCatalog.find((event) => event.key === adminEventCompareA);
+  const adminEventCompareRight = adminEventCatalog.find((event) => event.key === adminEventCompareB);
+  const adminEventDurationValue = Math.min(1800, Math.max(30, Number(adminEventDuration) || 179));
+  const adminEventProgressPercent = globalEvent?.event_started_at && globalEvent?.event_ends_at
+    ? Math.max(0, Math.min(100, (eventRemainingSeconds / Math.max(1, (Date.parse(globalEvent.event_ends_at) - Date.parse(globalEvent.event_started_at)) / 1000)) * 100))
+    : 0;
   const activeEventPresentation = globalEvent?.event_name ? eventPresentation[globalEvent.event_name] : null;
   const eventParticles = Array.from({ length: 30 }, (_, index) => ({
     id: index,
@@ -3921,6 +4124,7 @@ export default function App() {
                       setAdminSection(key);
                       if (key === "promocodes") loadAdminPromoCodes();
                       if (key === "deposits") loadAdminDepositData();
+                      if (key === "events" && isOwner) { loadGlobalState().catch(() => {}); loadAdminEventHistory().catch(() => {}); }
                     }}
                   >
                     <span>{icon}</span>{label}
@@ -3974,8 +4178,8 @@ export default function App() {
                       <button type="button" onClick={() => { setAdminSection("history"); loadAdminLogs(); }}><b>◷</b><span><strong>Журнал</strong><small>История операций</small></span></button>
                       <button type="button" onClick={() => { setAdminSection("deposits"); loadAdminDepositData(); }}><b>🔁</b><span><strong>Очередь</strong><small>Заявки пополнений</small></span></button>
                       <button type="button" onClick={() => { setAdminSection("deposits"); loadAdminDepositData(); }}><b>💎</b><span><strong>Цены предметов</strong><small>Каталог и стоимость</small></span></button>
-                      <button type="button" onClick={() => { setAdminSection("events"); }}><b>🌍</b><span><strong>Глобальные ивенты</strong><small>Запуск и остановка</small></span></button>
-                      {isOwner && <button type="button" onClick={() => { setAdminSection("events"); }}><b>📣</b><span><strong>Сообщение всем</strong><small>Объявление игрокам</small></span></button>}
+                      <button type="button" onClick={() => { setAdminSection("events"); if (isOwner) { loadGlobalState().catch(() => {}); loadAdminEventHistory().catch(() => {}); } }}><b>🌍</b><span><strong>Глобальные ивенты</strong><small>Запуск и остановка</small></span></button>
+                      {isOwner && <button type="button" onClick={() => { setAdminSection("events"); loadGlobalState().catch(() => {}); loadAdminEventHistory().catch(() => {}); }}><b>📣</b><span><strong>Сообщение всем</strong><small>Объявление игрокам</small></span></button>}
                       {isOwner && <button type="button" onClick={() => { setAdminSection("promocodes"); loadAdminPromoCodes(); }}><b>🎟️</b><span><strong>Промокоды</strong><small>Создать и отключить</small></span></button>}
                       <button type="button" onClick={() => { setAdminSection("tools"); }}><b>⌘</b><span><strong>Мобильные инструменты</strong><small>Копирование и CSV</small></span></button>
                       <button type="button" onClick={exportAdminLogsCsv} disabled={!filteredAdminLogs.length}><b>⇩</b><span><strong>Экспорт журнала</strong><small>Скачать CSV</small></span></button>
@@ -4249,31 +4453,101 @@ export default function App() {
                           <textarea className="admin-input global-message-textarea" maxLength={500} value={globalMessageDraft} onChange={(event) => setGlobalMessageDraft(event.target.value)} placeholder="Напиши сообщение всем игрокам онлайн..." />
                           <div className="global-message-form-footer"><small>{globalMessageDraft.length}/500 · Отправка только владельцем</small><button className="main-button" type="submit" disabled={globalMessageSending || !globalMessageDraft.trim()}>{globalMessageSending ? "Отправляем..." : "📣 Отправить всем онлайн"}</button></div>
                         </form>
+                        <div className="admin-event-message-templates admin-event-message-templates-inline">
+                          <div className="admin-event-tool-heading"><b>{'\u0428\u0430\u0431\u043b\u043e\u043d\u044b \u0430\u043d\u043e\u043d\u0441\u043e\u0432'}</b><small>{'\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u044c \u0442\u0435\u043a\u0441\u0442 \u043e \u0438\u0432\u0435\u043d\u0442\u0435; \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u043e \u043d\u0430\u0436\u0430\u0442\u0438\u044e.'}</small></div>
+                          <div className="admin-event-mobile-actions"><button type="button" onClick={() => prepareAdminEventMessage(globalEvent?.event_name || 'lucky', 'started')}>{'📣 \u0421\u0442\u0430\u0440\u0442'}</button><button type="button" onClick={() => prepareAdminEventMessage(globalEvent?.event_name || 'lucky', 'ending')}>{'⏳ \u0421\u043a\u043e\u0440\u043e \u0444\u0438\u043d\u0438\u0448'}</button><button type="button" onClick={() => prepareAdminEventMessage(globalEvent?.event_name || 'lucky', 'ended')}>{'🏁 \u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043d'}</button></div>
+                        </div>
+                      </section>
+
+                      <section className="admin-panel-card admin-event-mobile-tools">
+                        <div className="admin-section-title">
+                          <span className="admin-section-icon">🧭</span>
+                          <div><h3>{'\u041f\u0443\u043b\u044c\u0442 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0438\u0432\u0435\u043d\u0442\u0430\u043c\u0438'}</h3><p>{'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438, \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433 \u0438 \u0431\u044b\u0441\u0442\u0440\u044b\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f \u0441 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430.'}</p></div>
+                          <button className="admin-refresh-button" type="button" onClick={refreshAdminEvents} disabled={adminEventRefreshing || adminEventLoading}>{adminEventRefreshing ? '...' : '↻'}</button>
+                        </div>
+
+                        <div className="admin-event-mobile-status">
+                          {globalEvent?.event_name ? (
+                            <>
+                              <div className="admin-event-mobile-status-head"><span className="admin-event-live-dot" /><div><small>{'\u0413\u041b\u041e\u0411\u0410\u041b\u042c\u041d\u042b\u0419 \u0418\u0412\u0415\u041d\u0422 \u0410\u041a\u0422\u0418\u0412\u0415\u041d'}</small><b>{eventPresentation[globalEvent.event_name]?.title || globalEvent.event_name}</b></div><strong>{eventRemainingLabel}</strong></div>
+                              <div className="admin-event-progress-track"><span style={{ width: `${adminEventProgressPercent}%` }} /></div>
+                              <div className="admin-event-mobile-status-meta"><span>{'\u0421\u0442\u0430\u0440\u0442: '}{globalEvent.event_started_at ? new Date(globalEvent.event_started_at).toLocaleTimeString('ru-RU') : '—'}</span><span>{'\u0424\u0438\u043d\u0438\u0448: '}{globalEvent.event_ends_at ? new Date(globalEvent.event_ends_at).toLocaleTimeString('ru-RU') : '—'}</span></div>
+                              <div className="admin-event-mobile-actions admin-event-status-actions">
+                                <button type="button" onClick={copyAdminEventStatus}>{'⧉ \u0421\u0442\u0430\u0442\u0443\u0441'}</button>
+                                <button type="button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(globalEvent.event_name, { forceRestart: true })}>{'↻ \u041f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c'}</button>
+                                <button type="button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(null)}>{'■ \u0421\u0442\u043e\u043f'}</button>
+                              </div>
+                            </>
+                          ) : <div className="admin-event-no-active"><span>🌐</span><div><b>{'\u041d\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u043e\u0433\u043e \u0438\u0432\u0435\u043d\u0442\u0430'}</b><small>{'\u0412\u044b\u0431\u0435\u0440\u0438 \u043e\u0434\u0438\u043d \u0438\u0437 9 \u0441\u043e\u0431\u044b\u0442\u0438\u0439 \u043d\u0438\u0436\u0435, \u0447\u0442\u043e\u0431\u044b \u0437\u0430\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0435\u0433\u043e \u0434\u043b\u044f \u0432\u0441\u0435\u0445.'}</small></div></div>}
+                        </div>
+
+                        <div className="admin-event-duration-box">
+                          <div className="admin-event-tool-heading"><b>{'\u0414\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u043d\u043e\u0432\u043e\u0433\u043e \u0437\u0430\u043f\u0443\u0441\u043a\u0430'}</b><strong>{formatAdminEventDuration(adminEventDurationValue)}</strong></div>
+                          <div className="admin-event-duration-presets">
+                            {[[60, '1:00'], [179, '2:59'], [300, '5:00'], [600, '10:00'], [900, '15:00'], [1800, '30:00']].map(([seconds, label]) => <button key={seconds} type="button" className={Number(adminEventDuration) === seconds ? 'active' : ''} onClick={() => setAdminEventDuration(String(seconds))}>{label}</button>)}
+                          </div>
+                          <label className="admin-event-custom-duration"><span>{'\u0421\u0432\u043e\u044f \u0434\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c, \u0441\u0435\u043a.'}</span><input className="admin-input" type="number" min="30" max="1800" step="1" value={adminEventDuration} onChange={(event) => setAdminEventDuration(event.target.value)} /><small>{'\u041e\u0442 30 \u0441\u0435\u043a\u0443\u043d\u0434 \u0434\u043e 30 \u043c\u0438\u043d\u0443\u0442. \u0422\u0430\u0439\u043c\u0435\u0440 \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u0442\u0441\u044f \u043d\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435.'}</small></label>
+                        </div>
+
+                        <div className="admin-event-catalog-filters">
+                          <input className="admin-input" value={adminEventQuery} onChange={(event) => setAdminEventQuery(event.target.value)} placeholder={'\u041f\u043e\u0438\u0441\u043a \u0438\u0432\u0435\u043d\u0442\u0430 \u0438\u043b\u0438 \u0431\u043e\u043d\u0443\u0441\u0430'} aria-label="Search events" />
+                          <select className="admin-input" value={adminEventCategory} onChange={(event) => setAdminEventCategory(event.target.value)} aria-label="Event category"><option value="all">{'\u0412\u0441\u0435 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438'}</option><option value="gameplay">{'\u0418\u0433\u0440\u043e\u0432\u044b\u0435 \u0431\u043e\u043d\u0443\u0441\u044b'}</option><option value="economy">{'\u042d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430'}</option><option value="visual">{'\u041e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435'}</option></select>
+                          <select className="admin-input" value={adminEventSort} onChange={(event) => setAdminEventSort(event.target.value)} aria-label="Sort events"><option value="default">{'\u0421\u0442\u0430\u043d\u0434\u0430\u0440\u0442\u043d\u044b\u0439 \u043f\u043e\u0440\u044f\u0434\u043e\u043a'}</option><option value="name">{'\u041f\u043e \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044e'}</option><option value="category">{'\u041f\u043e \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438'}</option></select>
+                          <button type="button" className={`admin-event-favorite-filter ${adminEventFavoritesOnly ? 'active' : ''}`} onClick={() => setAdminEventFavoritesOnly((value) => !value)}>{adminEventFavoritesOnly ? '★ ' : '☆ '}{'\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435'} ({adminEventFavorites.length})</button>
+                          <button type="button" className="admin-event-reset-filter" onClick={() => { setAdminEventQuery(''); setAdminEventCategory('all'); setAdminEventSort('default'); setAdminEventFavoritesOnly(false); }}>{'\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u0442\u0440\u044b'}</button>
+                        </div>
+                        <div className="admin-event-filter-count">{'\u041d\u0430\u0439\u0434\u0435\u043d\u043e'}: <b>{filteredAdminEventCatalog.length}</b> / {adminEventCatalog.length}</div>
+
+                        <div className="admin-event-compare">
+                          <div className="admin-event-tool-heading"><b>{'\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u0438\u0432\u0435\u043d\u0442\u043e\u0432'}</b><small>{'\u0412\u044b\u0431\u0435\u0440\u0438 \u0434\u0432\u0430 \u0438 \u0441\u0440\u0430\u0432\u043d\u0438 \u0438\u0445 \u044d\u0444\u0444\u0435\u043a\u0442\u044b.'}</small></div>
+                          <div className="admin-event-compare-selects"><select className="admin-input" value={adminEventCompareA} onChange={(event) => setAdminEventCompareA(event.target.value)}>{adminEventCatalog.map((event) => <option key={event.key} value={event.key}>{event.title}</option>)}</select><select className="admin-input" value={adminEventCompareB} onChange={(event) => setAdminEventCompareB(event.target.value)}>{adminEventCatalog.map((event) => <option key={event.key} value={event.key}>{event.title}</option>)}</select></div>
+                          <div className="admin-event-compare-cards">{[adminEventCompareLeft, adminEventCompareRight].filter(Boolean).map((event) => <article key={event.key}><span>{event.icon}</span><b>{event.title}</b><small>{event.category === 'visual' ? '\u0412\u0438\u0437\u0443\u0430\u043b' : event.category === 'economy' ? '\u042d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430' : '\u0418\u0433\u0440\u043e\u0432\u043e\u0439 \u0431\u043e\u043d\u0443\u0441'}</small><p>{event.description}</p></article>)}</div>
+                        </div>
+
                       </section>
 
                       <section className="admin-panel-card admin-events-card">
-                        <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG. Каждый запуск длится 2 минуты 59 секунд.</p></div></div>
+                        <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG. <span className="admin-event-desktop-duration-copy">Каждый запуск длится 2 минуты 59 секунд.</span><span className="admin-event-mobile-duration-copy">Длительность настраивается в мобильном пульте.</span></p></div></div>
                         {globalEvent?.event_name && <div className="admin-active-event"><b>Сейчас активен: {eventPresentation[globalEvent.event_name]?.title || globalEvent.event_name}</b><span>Осталось {Math.floor(eventRemainingSeconds / 60)}:{String(eventRemainingSeconds % 60).padStart(2, "0")}</span></div>}
                         <div className="admin-event-grid">
-                          {[
-                            ["tacos", "🌮", "It's Raining Tacos", "Тёплый фон, падающие тако и оригинальная музыка."],
-                            ["lucky", "🍀", "LUCKY DAY!", "Шанс редких дропов и апгрейда ×2."],
-                            ["strawberry", "🍓", "STRAWBERRY DAY!", "5% шанс клубничной мутации ×2.5."],
-                            ["red_fever", "🔥", "RED FEVER", "Вес редких и выше редких наград ×1.5."],
-                            ["gold_rush", "💰", "GOLD RUSH", "Продажа брейнротов приносит в 2 раза больше GG."],
-                            ["case_sale", "🏷️", "CASE SALE", "Скидка 25% на все открытия кейсов."],
-                            ["power_upgrade", "⚡", "POWER UPGRADE", "Шанс апгрейда увеличен в 1.5 раза."],
-                            ["jackpot_hunt", "👑", "JACKPOT HUNT", "Вес легендарных, мифических и OG наград ×3."],
-                            ["night_shift", "🌙", "NIGHT SHIFT", "Ночная тема и отдельный музыкальный луп."],
-                          ].map(([key, icon, title, description]) => (
+                          {filteredAdminEventCatalog.map(({ key, icon, title, description }) => (
                             <article className={`admin-event-card admin-event-${key} ${globalEvent?.event_name === key ? "is-active" : ""}`} key={key}>
                               <div className="admin-event-icon">{icon}</div><h4>{title}</h4><p>{description}</p>
-                              <button type="button" className="main-button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(key)}>{adminEventLoading ? "Подождите..." : globalEvent?.event_name === key ? "Остановить ивент" : "Запустить на 2:59"}</button>
+                              <button type="button" className="main-button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(key)}>{adminEventLoading ? "Подождите..." : globalEvent?.event_name === key ? "Остановить ивент" : "Запустить на " + formatAdminEventDuration(adminEventDurationValue)}</button>
+                              <div className="admin-event-mobile-actions">
+                                <button type="button" onClick={() => setAdminEventPreview(key)}>{'▶ Превью'}</button>
+                                <button type="button" onClick={() => toggleAdminEventFavorite(key)}>{adminEventFavorites.includes(key) ? '★ ' : '☆ '}{'В избранное'}</button>
+                                <button type="button" onClick={() => copyAdminEventDetails(key)}>{'⧉ Копировать'}</button>
+                              </div>
                             </article>
                           ))}
                         </div>
+                        {!filteredAdminEventCatalog.length && <p className="admin-muted admin-event-empty">{'Нет ивентов по выбранным фильтрам. Сбрось фильтры или добавь событие в избранное.'}</p>}
+                        {adminEventPreviewDetails && <section className={`admin-event-preview admin-event-preview-${adminEventPreviewDetails.key}`}>
+                          <div className="admin-event-preview-head"><span>{adminEventPreviewDetails.icon}</span><div><small>{'ЛОКАЛЬНЫЙ ПРЕДПРОСМОТР'}</small><b>{adminEventPreviewDetails.title}</b></div><button type="button" onClick={() => setAdminEventPreview("")}>×</button></div>
+                          <p>{adminEventPreviewDetails.description}</p>
+                          <div className="admin-event-mobile-actions"><button type="button" onClick={() => copyAdminEventDetails(adminEventPreviewDetails.key)}>{'⧉ Копировать параметры'}</button><button type="button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(adminEventPreviewDetails.key)}>{'▶ Запустить этот ивент'}</button></div>
+                        </section>}
                         {globalEvent?.event_name && <button type="button" className="admin-event-stop-button" disabled={adminEventLoading} onClick={() => toggleAdminEvent(null)}>■ Остановить текущий ивент</button>}
                         <p className="admin-data-note">Доступ к запуску и остановке проверяется на сервере по Telegram ID владельца. Другие администраторы не могут запускать ивенты или отправлять глобальные сообщения.</p>
+                      </section>
+                      <section className="admin-panel-card admin-event-history-mobile">
+                        <div className="admin-section-title"><span className="admin-section-icon">📈</span><div><h3>{'Аналитика и история'}</h3><p>{'До 200 последних серверных записей о стартах и завершениях.'}</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminEventHistory} disabled={adminEventHistoryLoading}>{adminEventHistoryLoading ? '...' : '↻'}</button></div>
+                        <div className="admin-event-analytics-grid">
+                          <article><small>{'ЗАПУСКИ'}</small><b>{adminEventHistoryStarts}</b></article>
+                          <article><small>{'ЗАВЕРШЕНИЯ'}</small><b>{adminEventHistoryEnds}</b></article>
+                          <article><small>{'В ВЫБРАННОМ ПЕРИОДЕ'}</small><b>{filteredAdminEventHistory.length}</b></article>
+                          <article><small>{'ЧАЩЕ ЗАПУСКАЛИ'}</small><b>{adminEventTopLaunch?.launches ? adminEventTopLaunch.title : '—'}</b></article>
+                        </div>
+                        <div className="admin-event-history-filters">
+                          <input className="admin-input" value={adminEventHistoryQuery} onChange={(event) => setAdminEventHistoryQuery(event.target.value)} placeholder={'Поиск по истории'} aria-label="Search event history" />
+                          <select className="admin-input" value={adminEventHistoryType} onChange={(event) => setAdminEventHistoryType(event.target.value)}><option value="all">{'Все записи'}</option><option value="started">{'Только старты'}</option><option value="ended">{'Только завершения'}</option></select>
+                          <select className="admin-input" value={adminEventHistoryPeriod} onChange={(event) => setAdminEventHistoryPeriod(event.target.value)}><option value="24h">{'За 24 часа'}</option><option value="7d">{'За 7 дней'}</option><option value="30d">{'За 30 дней'}</option><option value="all">{'За всё время из загруженных'}</option></select>
+                          <select className="admin-input" value={adminEventHistorySort} onChange={(event) => setAdminEventHistorySort(event.target.value)}><option value="newest">{'Сначала новые'}</option><option value="oldest">{'Сначала старые'}</option></select>
+                        </div>
+                        <div className="admin-event-mobile-actions"><button type="button" onClick={exportAdminEventHistoryCsv} disabled={!filteredAdminEventHistory.length}>{'⇩ CSV'}</button><button type="button" onClick={copyAdminLatestEventHistory} disabled={!filteredAdminEventHistory.length}>{'⧉ Крайняя запись'}</button><button type="button" onClick={() => { setAdminEventHistoryQuery(''); setAdminEventHistoryType('all'); setAdminEventHistoryPeriod('7d'); setAdminEventHistorySort('newest'); }}>{'Сбросить'}</button></div>
+                        {adminEventHistoryLoading && !adminEventHistory.length ? <p className="admin-muted">{'Загружаем историю...'}</p> : filteredAdminEventHistory.length ? <div className="admin-event-history-list">{filteredAdminEventHistory.map((entry) => <article key={entry.id}><span className={entry.event_type === 'event_started' ? 'started' : 'ended'}>{entry.event_type === 'event_started' ? '▶' : '■'}</span><div><b>{entry.title || 'BrainGG event'}</b><p>{entry.description || ''}</p><small>{entry.created_at ? new Date(entry.created_at).toLocaleString('ru-RU') : '—'}</small></div><button type="button" onClick={() => copyAdminText([entry.title, entry.description, entry.created_at].filter(Boolean).join('\n'), 'Event log')}>⧉</button></article>)}</div> : <p className="admin-muted">{'Записей по этим фильтрам нет.'}</p>}
+                        <p className="admin-data-note">{'Аналитика считает только загруженные сервером записи. Это не полная история за всё время, если записей больше 200.'}</p>
                       </section>
                     </>
                   ) : (
