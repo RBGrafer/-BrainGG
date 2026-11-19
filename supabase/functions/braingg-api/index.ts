@@ -574,13 +574,18 @@ Deno.serve(async (req) => {
       if (requestedEvent && !allowedEvents.includes(requestedEvent)) {
         return respond({ error: "Неизвестный ивент." }, 400);
       }
+      const durationSeconds = body.durationSeconds == null ? 179 : Number(body.durationSeconds);
+      if (requestedEvent && (!Number.isSafeInteger(durationSeconds) || durationSeconds < 30 || durationSeconds > 1800)) {
+        return respond({ error: "Длительность ивента должна быть от 30 до 1800 секунд." }, 400);
+      }
+      const forceRestart = body.forceRestart === true;
       try {
         const currentEvent = await getActiveEvent();
-        const shouldStop = !requestedEvent || currentEvent?.event_name === requestedEvent;
+        const shouldStop = !requestedEvent || (currentEvent?.event_name === requestedEvent && !forceRestart);
         const now = new Date();
         const update = shouldStop
           ? { event_name: null, event_started_at: null, event_ends_at: null, updated_at: now.toISOString() }
-          : { event_name: requestedEvent, event_started_at: now.toISOString(), event_ends_at: new Date(now.getTime() + 179000).toISOString(), updated_at: now.toISOString() };
+          : { event_name: requestedEvent, event_started_at: now.toISOString(), event_ends_at: new Date(now.getTime() + durationSeconds * 1000).toISOString(), updated_at: now.toISOString() };
         const { data, error } = await supabase.from("game_global_state")
           .update(update).eq("id", 1)
           .select("id, event_name, event_started_at, event_ends_at, updated_at").single();
