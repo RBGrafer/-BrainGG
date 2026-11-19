@@ -41,6 +41,17 @@ assert.match(appSource, /Telegram's native Back button|Telegram\u2019s native Ba
 assert.match(entrySource, /class AppErrorBoundary extends React\.Component/,
   'The app must show a recovery screen instead of a blank page after a render crash');
 
+assert.match(backend, /durationSeconds = body\.durationSeconds == null \? 179 : Number\(body\.durationSeconds\)/,
+  'Global event duration must retain the legacy 179-second default when omitted');
+assert.match(backend, /durationSeconds < 30 \|\| durationSeconds > 1800/,
+  'Global event duration must be bounded on the server');
+assert.match(backend, /currentEvent\?\.event_name === requestedEvent && !forceRestart/,
+  'Owner must be able to restart the same active global event');
+assert.match(appSource, /adminEventFavoritesOnly[\s\S]*?adminEventCompareA[\s\S]*?adminEventHistoryPeriod/,
+  'Mobile event command center must include favorites, comparison, and history filters');
+assert.match(appSource, /admin-event-mobile-tools[\s\S]*?admin-event-history-mobile/,
+  'Mobile-only event command center and event history must be present');
+
 const assetCheck = spawnSync(process.execPath, [path.join(root, 'scripts/verify-assets')], {
   cwd: root,
   encoding: 'utf8',
