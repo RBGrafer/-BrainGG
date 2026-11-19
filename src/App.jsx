@@ -557,29 +557,36 @@ export default function App() {
   const [adminDepositBusy, setAdminDepositBusy] = useState(false);
   const [adminDepositFeedback, setAdminDepositFeedback] = useState("");
 
-  useEffect(() => {
-    const restoreDesktopAdminDefaults = () => {
-      if (window.innerWidth <= 600) return;
-      setAdminSection((current) => current === "tools" ? "overview" : current);
-      setAdminDepositQuery("");
-      setAdminDepositStatus("all");
-      setAdminPromoQuery("");
-      setAdminPromoStatus("all");
-      setAdminEventDuration("179");
-      setAdminEventQuery("");
-      setAdminEventCategory("all");
-      setAdminEventSort("default");
-      setAdminEventFavoritesOnly(false);
-      setAdminEventPreview("");
-    };
-    restoreDesktopAdminDefaults();
-    window.addEventListener("resize", restoreDesktopAdminDefaults);
-    return () => window.removeEventListener("resize", restoreDesktopAdminDefaults);
-  }, []);
-
   const initData = () => window.Telegram?.WebApp?.initData;
   const telegramIdentity = window.Telegram?.WebApp?.initDataUnsafe?.user || {};
   const isMobileAdminDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+
+  useEffect(() => {
+    if (!isAdmin || isMobileAdminDevice) return undefined;
+    const handleDesktopAdminShortcut = (event) => {
+      if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("input, textarea, select, [contenteditable='true']")) return;
+      const sections = {
+        Digit1: "overview",
+        Digit2: "players",
+        Digit3: "events",
+        Digit4: "history",
+        Digit5: "tools",
+      };
+      const nextSection = sections[event.code];
+      if (!nextSection) return;
+      event.preventDefault();
+      setAdminSection(nextSection);
+      if (nextSection === "events") {
+        loadGlobalState().catch(() => {});
+        if (isOwner) loadAdminEventHistory().catch(() => {});
+      }
+      if (nextSection === "history") loadAdminLogs();
+    };
+    window.addEventListener("keydown", handleDesktopAdminShortcut);
+    return () => window.removeEventListener("keydown", handleDesktopAdminShortcut);
+  }, [isAdmin, isMobileAdminDevice, isOwner]);
   const greetingLabel = streamerMode
     ? "Стример"
     : (telegramIdentity.username ? `@${telegramIdentity.username}` : (telegramIdentity.first_name || player?.username || "друг"));
@@ -2072,7 +2079,7 @@ export default function App() {
   function copyAdminDiagnostics() {
     const telegram = window.Telegram?.WebApp;
     const diagnostics = [
-      "BrainGG mobile diagnostics",
+      "BrainGG desktop + mobile diagnostics",
       `Telegram WebApp: ${telegram ? "available" : "not detected"}`,
       `Signed initData: ${initData() ? "present" : "missing"}`,
       `Network: ${navigator.onLine ? "online" : "offline"}`,
@@ -2090,11 +2097,13 @@ export default function App() {
       ? `${eventPresentation[globalEvent.event_name]?.title || globalEvent.event_name} · ${eventRemainingLabel}`
       : "Нет активного события";
     const snapshot = [
-      "BrainGG · мобильная админ-панель",
-      "Сборка интерфейса: MOBILE ADMIN 3.1",
+      "BrainGG · единая админ-панель",
+      "Сборка интерфейса: ADMIN CONSOLE 3.2",
       `Права: ${isOwner ? "Владелец" : "Администратор"}`,
       `Сеть: ${navigator.onLine ? "Подключена" : "Нет соединения"}`,
       `Telegram WebApp: ${window.Telegram?.WebApp ? "Подключён" : "Не обнаружен"}`,
+      `Устройство: ${isMobileAdminDevice ? "Телефон / планшет" : "ПК / ноутбук"}`,
+      `Окно: ${window.innerWidth} × ${window.innerHeight}`,
       `Активный ивент: ${activeEvent}`,
       `Операций в журнале: ${adminTotalOperations}`,
       `Уникальных игроков в журнале: ${adminUniquePlayers}`,
@@ -4131,7 +4140,7 @@ export default function App() {
                   <span className="admin-kicker">CONTROL CENTER</span>
                   <h2>🛡️ BrainGG Admin Panel</h2>
                   <p>Управление игроками, балансом, кейсами и коллекциями.</p>
-                  <span className="admin-mobile-build-stamp">MOBILE ADMIN · BUILD 3.1</span>
+                  <span className="admin-mobile-build-stamp">ADMIN CONSOLE · BUILD 3.2</span>
                 </div>
                 <div className="admin-secure-badge">● ЗАЩИЩЁННЫЙ ДОСТУП</div>
               </div>
@@ -4149,7 +4158,7 @@ export default function App() {
                   <button
                     key={key}
                     type="button"
-                    className={`${adminSection === key ? "active" : ""} ${key === "tools" ? "admin-mobile-only-tab" : ""}`}
+                    className={adminSection === key ? "active" : ""}
                     onClick={() => {
                       setAdminSection(key);
                       if (key === "promocodes") loadAdminPromoCodes();
@@ -4195,7 +4204,7 @@ export default function App() {
 
                   <section className="admin-mobile-quick-panel">
                     <div className="admin-mobile-quick-heading">
-                      <div><span>MOBILE ADMIN · BUILD 3.1</span><h3>Центр управления</h3><p>Новая мобильная панель: быстрый поиск, события, мониторинг и инструменты.</p></div>
+                      <div><span>ADMIN CONSOLE · BUILD 3.2</span><h3>Центр управления</h3><p>Единая панель управления для ПК и телефона: быстрый поиск, события, мониторинг и инструменты.</p></div>
                       <span className={`admin-mobile-live-dot ${navigator.onLine ? "" : "is-offline"}`}>{navigator.onLine ? "● ONLINE" : "● OFFLINE"}</span>
                     </div>
                     <div className="admin-mobile-control-meta">
@@ -4221,12 +4230,12 @@ export default function App() {
                       <button type="button" onClick={() => { setAdminSection("events"); loadGlobalState().catch(() => {}); if (isOwner) loadAdminEventHistory().catch(() => {}); }}><b>🌍</b><span><strong>Глобальные ивенты</strong><small>Мониторинг и управление</small></span></button>
                       {isOwner && <button type="button" onClick={() => { setAdminSection("events"); loadGlobalState().catch(() => {}); loadAdminEventHistory().catch(() => {}); }}><b>📣</b><span><strong>Сообщение всем</strong><small>Объявление игрокам</small></span></button>}
                       {isOwner && <button type="button" onClick={() => { setAdminSection("promocodes"); loadAdminPromoCodes(); }}><b>🎟️</b><span><strong>Промокоды</strong><small>Создать и отключить</small></span></button>}
-                      <button type="button" onClick={() => { setAdminSection("tools"); }}><b>⌘</b><span><strong>Мобильные инструменты</strong><small>Копирование и CSV</small></span></button>
+                      <button type="button" onClick={() => { setAdminSection("tools"); }}><b>⌘</b><span><strong>Инструменты админки</strong><small>Копирование, фильтры и CSV</small></span></button>
                       <button type="button" onClick={exportAdminLogsCsv} disabled={!filteredAdminLogs.length}><b>⇩</b><span><strong>Экспорт журнала</strong><small>Скачать CSV</small></span></button>
                       <button type="button" onClick={refreshAdminTools} disabled={adminToolsRefreshing}><b>↻</b><span><strong>Обновить всё</strong><small>{adminToolsRefreshing ? "Обновляем..." : "Журнал, очередь, события"}</small></span></button>
                       <button type="button" onClick={copyAdminControlSnapshot}><b>⧉</b><span><strong>Сводка админки</strong><small>Скопировать статус и цифры</small></span></button>
                     </div>
-                    <div className="admin-mobile-control-footer"><span>Последнее обновление: {adminLastRefreshAt ? new Date(adminLastRefreshAt).toLocaleTimeString("ru-RU") : "ещё не выполнялось"}</span><button type="button" onClick={copyAdminDiagnostics}>Диагностика устройства</button></div>
+                    <div className="admin-mobile-control-footer"><span>Последнее обновление: {adminLastRefreshAt ? new Date(adminLastRefreshAt).toLocaleTimeString("ru-RU") : "ещё не выполнялось"}</span><span className="admin-desktop-shortcuts">ПК: Alt+Shift+1-5 — переход между разделами</span><button type="button" onClick={copyAdminDiagnostics}>Диагностика устройства</button></div>
                   </section>
 
                   <section className="admin-panel-card"><div className="admin-section-title"><span className="admin-section-icon">🧠</span><div><h3>BrainGG v16 · Red & White</h3><p>Состояние новых игровых модулей.</p></div><button className="admin-refresh-button" type="button" onClick={loadAdminGameStats}>↻</button></div><div className="admin-metrics-grid"><article className="admin-metric-card"><small>ВСЕ ИГРОКИ</small><strong>{adminGameStats?.players ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРЕДМЕТОВ В ИНВЕНТАРЯХ</small><strong>{adminGameStats?.inventory_items ?? "—"}</strong></article><article className="admin-metric-card"><small>ПРОФИЛЕЙ С XP</small><strong>{adminGameStats?.active_profiles ?? "—"}</strong></article></div><p className="admin-data-note">Показатели доступны после применения SQL-миграций из папки supabase/migrations и migrations_arctic_season2.sql.</p></section>
@@ -4504,7 +4513,7 @@ export default function App() {
                       <section className="admin-panel-card admin-event-mobile-tools">
                         <div className="admin-section-title">
                           <span className="admin-section-icon">🧭</span>
-                          <div><h3>{'\u041f\u0443\u043b\u044c\u0442 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0438\u0432\u0435\u043d\u0442\u0430\u043c\u0438'}</h3><p>{'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438, \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433 \u0438 \u0431\u044b\u0441\u0442\u0440\u044b\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f \u0441 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430.'}</p></div>
+                          <div><h3>{'\u041f\u0443\u043b\u044c\u0442 \u0443\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f \u0438\u0432\u0435\u043d\u0442\u0430\u043c\u0438'}</h3><p>{'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438, \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433 \u0438 \u0431\u044b\u0441\u0442\u0440\u044b\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044f \u043d\u0430 \u041f\u041a \u0438 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0435.'}</p></div>
                           <button className="admin-refresh-button" type="button" onClick={refreshAdminEvents} disabled={adminEventRefreshing || adminEventLoading}>{adminEventRefreshing ? '...' : '↻'}</button>
                         </div>
 
@@ -4549,7 +4558,7 @@ export default function App() {
                       </section>
 
                       <section className="admin-panel-card admin-events-card">
-                        <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG. <span className="admin-event-desktop-duration-copy">Каждый запуск длится 2 минуты 59 секунд.</span><span className="admin-event-mobile-duration-copy">Длительность настраивается в мобильном пульте.</span></p></div></div>
+                        <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG. <span className="admin-event-desktop-duration-copy">Каждый запуск длится 2 минуты 59 секунд.</span><span className="admin-event-mobile-duration-copy">Длительность настраивается в пульте управления.</span></p></div></div>
                         {globalEvent?.event_name && <div className="admin-active-event"><b>Сейчас активен: {eventPresentation[globalEvent.event_name]?.title || globalEvent.event_name}</b><span>Осталось {Math.floor(eventRemainingSeconds / 60)}:{String(eventRemainingSeconds % 60).padStart(2, "0")}</span></div>}
                         <div className="admin-event-grid">
                           {filteredAdminEventCatalog.map(({ key, icon, title, description }) => (
@@ -4841,9 +4850,9 @@ export default function App() {
                   <section className="admin-tools-hero">
                     <div className="admin-tools-hero-icon">⌘</div>
                     <div className="admin-tools-hero-copy">
-                      <span>POCKET CONTROL · MOBILE</span>
-                      <h3>Мобильная консоль</h3>
-                      <p>Быстрые действия, фильтры, копирование данных и CSV-экспорт. Никаких фиктивных показателей.</p>
+                      <span>ADMIN COMMAND CENTER · BUILD 3.2</span>
+                      <h3>Центр инструментов</h3>
+                      <p>Быстрые действия, фильтры, история, инвентарь, экспорт и диагностика — на ПК и телефоне.</p>
                     </div>
                     <button type="button" onClick={refreshAdminTools} disabled={adminToolsRefreshing} aria-label="Обновить все данные">{adminToolsRefreshing ? "…" : "↻"}</button>
                   </section>
@@ -4955,12 +4964,16 @@ export default function App() {
                   </section>}
 
                   <section className="admin-panel-card admin-tools-card admin-tools-diagnostics">
-                    <div className="admin-section-title"><span className="admin-section-icon">📡</span><div><h3>Состояние приложения</h3><p>Локальная проверка окружения телефона и Telegram WebView.</p></div></div>
+                    <div className="admin-section-title"><span className="admin-section-icon">📡</span><div><h3>Состояние приложения</h3><p>Проверка браузера, Telegram WebView, сети и размера окна.</p></div></div>
                     <div className="admin-diagnostic-list">
                       <div><span>Telegram WebApp</span><b>{window.Telegram?.WebApp ? "Обнаружен" : "Не обнаружен"}</b></div>
                       <div><span>Подписанные данные</span><b>{initData() ? "Получены" : "Не получены"}</b></div>
                       <div><span>Интернет</span><b>{navigator.onLine ? "Подключён" : "Нет соединения"}</b></div>
                       <div><span>Supabase config</span><b>{import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY ? "Настроен" : "Не настроен"}</b></div>
+                      <div><span>Устройство</span><b>{isMobileAdminDevice ? "Телефон / планшет" : "ПК / ноутбук"}</b></div>
+                      <div><span>Размер окна</span><b>{window.innerWidth} × {window.innerHeight}</b></div>
+                      <div><span>Разрешение экрана</span><b>{window.screen?.width || "—"} × {window.screen?.height || "—"}</b></div>
+                      <div><span>Последняя синхронизация</span><b>{adminLastRefreshAt ? new Date(adminLastRefreshAt).toLocaleTimeString("ru-RU") : "Ещё не выполнялась"}</b></div>
                     </div>
                     <button type="button" className="admin-tools-empty-action" onClick={copyAdminDiagnostics}>⧉ Скопировать диагностику для поддержки</button>
                   </section>
