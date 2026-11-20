@@ -5690,3 +5690,56 @@ input::placeholder, textarea::placeholder { color: #887e9c; }
   .case-card-art.case-artwork { width: min(100%, 300px) !important; }
   .case-detail-art-frame.case-artwork { width: min(100%, 260px) !important; max-width: 260px !important; }
 }
+
+
+/* Admin Abuse category tabs */
+.admin-abuse-tabs { display:flex; flex-wrap:wrap; gap:8px; margin: 16px 0 14px; padding: 8px; border:1px solid rgba(176,126,255,.22); border-radius:15px; background:rgba(18,9,31,.72); }
+.admin-abuse-tabs button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:8px 13px; border:1px solid rgba(181,142,226,.16); border-radius:10px; background:rgba(255,255,255,.035); color:#cbb9df; font:inherit; font-size:12px; font-weight:800; cursor:pointer; transition:transform .18s ease, background .18s ease, border-color .18s ease, color .18s ease; }
+.admin-abuse-tabs button:hover { transform:translateY(-1px); border-color:rgba(204,158,255,.48); color:#fff; }
+.admin-abuse-tabs button.active { color:#fff; border-color:rgba(221,177,255,.62); background:linear-gradient(135deg,rgba(126,75,173,.72),rgba(74,39,110,.88)); box-shadow:0 5px 18px rgba(95,48,145,.2),inset 0 1px rgba(255,255,255,.12); }
+.admin-abuse-tabs button span { font-size:15px; }
+@media (max-width:600px) { .admin-abuse-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } .admin-abuse-tabs button { min-width:0; padding:8px 7px; font-size:11px; } }
+
+
+/* Admin Abuse visual theme fallback */
+body[data-braingg-theme="red"][data-braingg-event="meteor_rain"],
+body[data-braingg-theme="red"][data-braingg-event="glitch_storm"],
+body[data-braingg-theme="red"][data-braingg-event="void_portal"],
+body[data-braingg-theme="red"][data-braingg-event="rainbow_burst"],
+body[data-braingg-theme="red"][data-braingg-event="thunder_chaos"],
+body[data-braingg-theme="red"][data-braingg-event="neon_overload"],
+body[data-braingg-theme="red"][data-braingg-event="pixel_invasion"],
+body[data-braingg-theme="red"][data-braingg-event="shadow_realm"],
+body[data-braingg-theme="red"][data-braingg-event="crystal_rain"],
+body[data-braingg-theme="red"][data-braingg-event="volcano_mode"],
+body[data-braingg-theme="red"][data-braingg-event="frostbite"],
+body[data-braingg-theme="red"][data-braingg-event="blizzard"],
+body[data-braingg-theme="red"][data-braingg-event="candy_world"],
+body[data-braingg-theme="red"][data-braingg-event="spooky_night"],
+body[data-braingg-theme="red"][data-braingg-event="winter_magic"],
+body[data-braingg-theme="red"][data-braingg-event="summer_wave"],
+body[data-braingg-theme="red"][data-braingg-event="spring_bloom"],
+body[data-braingg-theme="red"][data-braingg-event="love_storm"],
+body[data-braingg-theme="red"][data-braingg-event="halloween_carnival"],
+body[data-braingg-theme="red"][data-braingg-event="new_year_countdown"],
+body[data-braingg-theme="red"][data-braingg-event="easter_party"],
+body[data-braingg-theme="red"][data-braingg-event="anniversary_blast"],
+body[data-braingg-theme="red"][data-braingg-event="toxic_waste"],
+body[data-braingg-theme="red"][data-braingg-event="matrix_rush"],
+body[data-braingg-theme="red"][data-braingg-event="earthquake"],
+body[data-braingg-theme="red"][data-braingg-event="blackout"],
+body[data-braingg-theme="red"][data-braingg-event="laser_show"],
+body[data-braingg-theme="red"][data-braingg-event="cosmic_rift"],
+body[data-braingg-theme="red"][data-braingg-event="underwater"],
+body[data-braingg-theme="red"][data-braingg-event="desert_dust"],
+body[data-braingg-theme="red"][data-braingg-event="cyber_city"],
+body[data-braingg-theme="red"][data-braingg-event="pirate_raid"],
+body[data-braingg-theme="red"][data-braingg-event="alien_contact"],
+body[data-braingg-theme="red"][data-braingg-event="robot_revolt"],
+body[data-braingg-theme="red"][data-braingg-event="dragon_awakening"],
+body[data-braingg-theme="red"][data-braingg-event="haunted_mansion"],
+body[data-braingg-theme="red"][data-braingg-event="golden_hour"],
+body[data-braingg-theme="red"][data-braingg-event="moon_eclipse"],
+body[data-braingg-theme="red"][data-braingg-event="starfall"],
+body[data-braingg-theme="red"][data-braingg-event="party_confetti"],
+body[data-braingg-theme="red"][data-braingg-event="admin_mayhem"] { background: radial-gradient(ellipse at 50% -18%, rgba(170, 89, 230, .28), transparent 58%), radial-gradient(ellipse at 88% 75%, rgba(231, 52, 104, .16), transparent 42%), linear-gradient(155deg, #230b2f 0%, #180817 52%, #080307 100%) !important; background-attachment: fixed !important; }
