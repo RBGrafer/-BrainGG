@@ -9,7 +9,7 @@ import freeCaseArt from "../assets/cases/v18/free-case.webp";
 import anniversaryCaseArt from "../assets/cases/v18/anniversary-case.webp";
 import nickCaseArt from "../assets/cases/v18/nick-case.webp";
 import seaCaseArt from "../assets/cases/v18/sea-case.webp";
-import darkCaseArt from "../assets/cases/v18/dark-case-new.webp";
+import darkCaseArt from "../assets/cases/v18/dark-case.webp";
 import headlessAllInArt from "../assets/cases/v18/headless-horseman-all-in.webp";
 import strawberryAllInArt from "../assets/cases/v18/strawberry-elephant-all-in.webp";
 import cheapCaseArt from "../assets/cases/v18/cheap-case.webp";
