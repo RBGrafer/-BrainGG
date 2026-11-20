@@ -4140,7 +4140,7 @@ export default function App() {
                   <span className="admin-kicker">CONTROL CENTER</span>
                   <h2>🛡️ BrainGG Admin Panel</h2>
                   <p>Управление игроками, балансом, кейсами и коллекциями.</p>
-                  <span className="admin-mobile-build-stamp">ADMIN CONSOLE · BUILD 3.2</span>
+                  <span className="admin-mobile-build-stamp">ADMIN CONSOLE · BUILD 3.3</span>
                 </div>
                 <div className="admin-secure-badge">● ЗАЩИЩЁННЫЙ ДОСТУП</div>
               </div>
@@ -4204,7 +4204,7 @@ export default function App() {
 
                   <section className="admin-mobile-quick-panel">
                     <div className="admin-mobile-quick-heading">
-                      <div><span>ADMIN CONSOLE · BUILD 3.2</span><h3>Центр управления</h3><p>Единая панель управления для ПК и телефона: быстрый поиск, события, мониторинг и инструменты.</p></div>
+                      <div><span>ADMIN CONSOLE · BUILD 3.3</span><h3>Центр управления</h3><p>Единая панель управления для ПК и телефона: быстрый поиск, события, мониторинг и инструменты.</p></div>
                       <span className={`admin-mobile-live-dot ${navigator.onLine ? "" : "is-offline"}`}>{navigator.onLine ? "● ONLINE" : "● OFFLINE"}</span>
                     </div>
                     <div className="admin-mobile-control-meta">
