@@ -5546,3 +5546,75 @@ input::placeholder, textarea::placeholder { color: #887e9c; }
   .admin-content select,
   .admin-content textarea { transition: none !important; animation: none !important; }
 }
+
+/* BrainGG v20: unify all case artwork sizing and correct the detail hero scale. */
+.case-card-art.case-artwork {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+  padding: clamp(10px, 2.2%, 18px) !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  background: radial-gradient(circle at 50% 45%, rgba(175,132,255,.18), rgba(24,14,38,.98) 74%) !important;
+}
+.case-card-art.case-artwork img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  padding: 0 !important;
+  border-radius: 10px;
+  transform: scale(.88) !important;
+  filter: drop-shadow(0 8px 16px rgba(0,0,0,.3)) !important;
+  transition: transform .28s ease, filter .28s ease !important;
+}
+.case-card-reference:hover .case-card-art.case-artwork img {
+  transform: scale(.93) !important;
+  filter: drop-shadow(0 10px 20px rgba(0,0,0,.38)) !important;
+}
+.case-card-special .case-card-art.case-artwork img {
+  transform: scale(.86) !important;
+}
+.case-card-special:hover .case-card-art.case-artwork img {
+  transform: scale(.91) !important;
+}
+.case-detail-visual {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 0;
+  padding: 16px !important;
+}
+.case-detail-art-frame.case-artwork {
+  width: min(100%, 340px) !important;
+  max-width: 340px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+  padding: 12px !important;
+  margin-inline: auto;
+  overflow: hidden !important;
+  border-radius: 18px !important;
+}
+.case-detail-art-frame.case-artwork img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  transform: scale(.84) !important;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.32)) !important;
+}
+@media (max-width: 700px) {
+  .case-card-art.case-artwork { padding: 8px !important; }
+  .case-card-art.case-artwork img { transform: scale(.86) !important; }
+  .case-detail-art-frame.case-artwork { width: min(100%, 280px) !important; max-width: 280px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .case-card-reference, .case-card-art.case-artwork img { transition: none !important; }
+}
