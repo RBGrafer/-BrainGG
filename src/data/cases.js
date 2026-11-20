@@ -40,12 +40,12 @@ export const cases = [
     image: moonCaseArt, category: "Обычные кейсы",
   },
   {
-    id: 5, name: "CHEAP CASE", caseName: "Truckini Case",
+    id: 5, name: "CHEAP CASE", caseName: "Cheap Case",
     description: "Доступный кейс с неожиданными находками", price: 9,
     color: "orange", image: cheapCaseArt, category: "Обычные кейсы",
   },
   {
-    id: 6, name: "Юбилейный кейс", caseName: "All In Strawberry Elephant",
+    id: 6, name: "Юбилейный кейс", caseName: "Anniversary Case",
     description: "Красный праздничный кейс BrainGG с персонажем и подарками", price: 209,
     color: "anniversary", image: anniversaryCaseArt,
     category: "All In", maxReward: 24000,
