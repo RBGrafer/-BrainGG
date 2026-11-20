@@ -4,6 +4,7 @@ import { cases, specialCases } from "./data/cases.js";
 import { supabase } from "./supabase.js";
 import redHomeBackground from "./assets/braingg-red-home.svg";
 import partyHomeBackground from "./assets/braingg-party-home.png";
+import brainrotPlaceholderArt from "./assets/brainrots/brainrot-placeholder.svg";
 import artCappuccinoBallerina from "./assets/brainrots/v17/cappuccino-ballerina.webp";
 import artCrocodileAviator from "./assets/brainrots/v17/crocodile-aviator.webp";
 import artNinjaEspresso from "./assets/brainrots/v17/ninja-espresso.webp";
@@ -178,12 +179,7 @@ const BRAINROT_ART = [
   { match: ["персонаж с летающими часами", "flying clock"], image: depFlyingClockCharacter },
   { match: ["два пиксельных персонажа", "pixel duo"], image: depPixelDuo },
 ];
-const BRAINROT_FALLBACK_ART = [
-  artCappuccinoBallerina, artCrocodileAviator, artNinjaEspresso, artPineappleElephant,
-  artIceDragon, artCactusJellyfish, artPizzaGolem, artGeckoPilot,
-  artRollerShrimp, artSlimeSquad, artMaskedCoffeeBean, artMushroomKnight,
-  artStrawberryRhino, artToastCrab, artRaccoonVendor, artElectricSheep,
-];
+const BRAINROT_FALLBACK_ART = [brainrotPlaceholderArt];
 const DEPOSIT_BRAINROT_DISPLAY_NAMES = {
   "cookie-batter": "Tang Tang Keletang",
   "monocycle-rider": "Tic Tac Sahur",
@@ -226,11 +222,9 @@ const DEPOSIT_BRAINROT_IMAGES = {
 };
 
 function brainrotImage(item) {
-  const name = String(item?.item_name || item?.name || "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N} ]/gu, " ").replace(/\s+/g, " ").trim();
-  const local = BRAINROT_ART.find((entry) => entry.match.some((key) => name.includes(key)))?.image;
-  if (local) return local;
-  const hash = [...name].reduce((value, char) => ((value * 31) + char.charCodeAt(0)) >>> 0, 7);
-  return BRAINROT_FALLBACK_ART[hash % BRAINROT_FALLBACK_ART.length] || BRAINROT_FALLBACK_ART[0];
+  // Do not show unrelated generated characters as if they were official game art.
+  // Exact Steal a Brainrot artwork can be added per character when licensed assets are supplied.
+  return brainrotPlaceholderArt;
 }
 
 function depositBrainrotImage(item) {
