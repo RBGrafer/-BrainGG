@@ -5618,3 +5618,75 @@ input::placeholder, textarea::placeholder { color: #887e9c; }
 @media (prefers-reduced-motion: reduce) {
   .case-card-reference, .case-card-art.case-artwork img { transition: none !important; }
 }
+
+
+/* BrainGG v21 — final override: keep artwork compact even when a category has one card. */
+.case-grid-reference {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)) !important;
+  align-items: start !important;
+}
+.case-card-reference {
+  min-width: 0 !important;
+  height: 100%;
+}
+.case-card-reference-button {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+.case-card-art.case-artwork {
+  width: min(100%, 340px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+  flex: 0 0 auto !important;
+  align-self: center !important;
+  margin: 12px auto 0 !important;
+  padding: 12px !important;
+  border-radius: 16px !important;
+}
+.case-card-art.case-artwork img {
+  width: 86% !important;
+  height: 86% !important;
+  max-width: 86% !important;
+  max-height: 86% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  padding: 0 !important;
+  transform: none !important;
+}
+.case-card-reference:hover .case-card-art.case-artwork img,
+.case-card-special:hover .case-card-art.case-artwork img { transform: scale(1.035) !important; }
+.case-card-details { width: 100% !important; box-sizing: border-box !important; }
+.case-detail-hero { grid-template-columns: minmax(0, 340px) minmax(0, 1fr) !important; }
+.case-detail-visual {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 14px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+.case-detail-art-frame.case-artwork {
+  width: min(100%, 300px) !important;
+  max-width: 300px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+  padding: 10px !important;
+  margin: 0 auto !important;
+}
+.case-detail-art-frame.case-artwork img {
+  width: 86% !important;
+  height: 86% !important;
+  max-width: 86% !important;
+  max-height: 86% !important;
+  object-fit: contain !important;
+  transform: none !important;
+}
+@media (max-width: 760px) {
+  .case-detail-hero { grid-template-columns: minmax(0, 1fr) !important; }
+  .case-card-art.case-artwork { width: min(100%, 300px) !important; }
+  .case-detail-art-frame.case-artwork { width: min(100%, 260px) !important; max-width: 260px !important; }
+}
