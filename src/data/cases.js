@@ -1,5 +1,5 @@
-// BrainGG — обновлённый каталог из 10 кейсов.
-// caseName/rewardCaseName оставлены прежними для совместимости с существующими пулами наград и экономикой.
+// BrainGG — каталог кейсов. Идентификаторы caseName сохраняют совместимость
+// с уже существующими пулами наград в Supabase.
 import iceCaseArt from "../assets/cases/v18/ice-case.webp";
 import snowCaseArt from "../assets/cases/v18/snow-case.webp";
 import crystalCaseArt from "../assets/cases/v18/crystal-case.webp";
@@ -9,10 +9,11 @@ import freeCaseArt from "../assets/cases/v18/free-case.webp";
 import anniversaryCaseArt from "../assets/cases/v18/anniversary-case.webp";
 import nickCaseArt from "../assets/cases/v18/nick-case.webp";
 import seaCaseArt from "../assets/cases/v18/sea-case.webp";
-import darkCaseArt from "../assets/cases/v18/dark-case.webp";
+import darkCaseArt from "../assets/cases/v18/dark-case-new.webp";
+import headlessAllInArt from "../assets/cases/v18/headless-horseman-all-in.webp";
+import strawberryAllInArt from "../assets/cases/v18/strawberry-elephant-all-in.webp";
+import cheapCaseArt from "../assets/cases/v18/cheap-case.webp";
 
-// Семь платных кейсов используют прежние серверные caseName и цены.
-// Новые индивидуальные пулы наград можно настроить отдельно в Supabase.
 export const cases = [
   {
     id: 1, name: "Ледяной кейс", caseName: "Truckini Case",
@@ -39,64 +40,64 @@ export const cases = [
     image: moonCaseArt, category: "Обычные кейсы",
   },
   {
-    id: 7, name: "Юбилейный кейс", caseName: "All In Strawberry Elephant",
-    description: "Праздничный золотой кейс BrainGG", price: 26,
-    oldPrice: 39, discount: 33, color: "anniversary",
-    image: anniversaryCaseArt, category: "All In", maxReward: 24000,
+    id: 5, name: "CHEAP CASE", caseName: "Truckini Case",
+    description: "Доступный кейс с неожиданными находками", price: 9,
+    color: "orange", image: cheapCaseArt, category: "Обычные кейсы",
   },
   {
-    id: 8, name: "Морской кейс", caseName: "Legend Case",
+    id: 6, name: "Юбилейный кейс", caseName: "All In Strawberry Elephant",
+    description: "Праздничный золотой кейс BrainGG", price: 209,
+    color: "anniversary", image: anniversaryCaseArt,
+    category: "All In", maxReward: 24000,
+  },
+  {
+    id: 7, name: "Headless Horseman All-In", caseName: "All In Headless Horseman",
+    description: "Мистический всадник и редкие награды", price: 59,
+    color: "horseman", image: headlessAllInArt, category: "All In",
+  },
+  {
+    id: 8, name: "Strawberry Elephant All-In", caseName: "All In Strawberry Elephant",
+    description: "Яркая клубничная коллекция и ценные находки", price: 39,
+    color: "strawberry", image: strawberryAllInArt, category: "All In",
+  },
+  {
+    id: 9, name: "Морской кейс", caseName: "Legend Case",
     description: "Морское приключение за редкими сокровищами", price: 1133,
     oldPrice: 1700, discount: 33, color: "sea",
     image: seaCaseArt, category: "Премиум", maxReward: 10860,
   },
   {
-    id: 9, name: "DARK кейс", caseName: "Elite Case",
-    description: "Тёмная коллекция для самых смелых", price: 4250,
-    oldPrice: 6375, discount: 33, color: "dark",
-    image: darkCaseArt, category: "Премиум", maxReward: 120000,
+    id: 10, name: "DARK кейс", caseName: "Elite Case",
+    description: "Тёмная коллекция для самых смелых", price: 99,
+    color: "dark", image: darkCaseArt, category: "Премиум", maxReward: 120000,
   },
 ];
 
-// Три специальных кейса сохраняют текущие серверные механики и ограничения.
+// Специальные кейсы отделены от платного каталога: их доступ бесплатный
+// и определяется серверными условиями Telegram/Supabase.
 export const specialCases = [
   {
-    id: "referral-case",
-    name: "Реферальный кейс",
-    caseName: "BrainGG Case",
-    rewardCaseName: "Summer Case",
-    specialType: "deposit",
+    id: "referral-case", name: "Реферальный кейс", caseName: "BrainGG Case",
+    rewardCaseName: "Summer Case", specialType: "deposit",
     description: "Временно работает на прежнем условии BrainGG CASE: пополнение минимум на 60 GG за последние 7 дней, одно открытие в неделю. Реферальные условия можно подключить отдельно.",
     requirementShort: "60 GG пополнений за 7 дней · 1 открытие / 7 дней",
-    price: 0,
-    color: "special-referral",
-    image: referralCaseArt,
+    price: 0, color: "special-referral", image: referralCaseArt,
     category: "Специальные кейсы",
   },
   {
-    id: "free-case",
-    name: "Бесплатный кейс",
-    caseName: "Free Case",
-    rewardCaseName: "Summer Case",
-    specialType: "free",
+    id: "free-case", name: "Бесплатный кейс", caseName: "Free Case",
+    rewardCaseName: "Summer Case", specialType: "free",
     description: "Одно бесплатное открытие раз в 12 часов для подписчиков Telegram-канала @Brainrot_GG.",
     requirementShort: "Подписка на @Brainrot_GG · 1 открытие / 12 ч",
-    price: 0,
-    color: "special-green",
-    image: freeCaseArt,
+    price: 0, color: "special-green", image: freeCaseArt,
     category: "Специальные кейсы",
   },
   {
-    id: "nick-case",
-    name: "Ник кейс",
-    caseName: "Nick Case",
-    rewardCaseName: "Truckini Case",
-    specialType: "nick",
+    id: "nick-case", name: "Ник кейс", caseName: "Nick Case",
+    rewardCaseName: "Truckini Case", specialType: "nick",
     description: "Одно бесплатное открытие раз в 12 часов, пока @Brain_GG_Bot указан в имени или фамилии Telegram.",
     requirementShort: "@Brain_GG_Bot в имени/фамилии · 1 открытие / 12 ч",
-    price: 0,
-    color: "special-blue",
-    image: nickCaseArt,
+    price: 0, color: "special-blue", image: nickCaseArt,
     category: "Специальные кейсы",
   },
 ];
