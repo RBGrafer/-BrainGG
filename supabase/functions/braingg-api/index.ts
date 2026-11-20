@@ -570,7 +570,7 @@ Deno.serve(async (req) => {
       const requestedEvent = body.eventName == null || body.eventName === ""
         ? null
         : String(body.eventName).trim();
-      const allowedEvents = ["tacos", "lucky", "strawberry", "red_fever", "gold_rush", "case_sale", "power_upgrade", "jackpot_hunt", "night_shift"];
+      const allowedEvents = ["tacos", "lucky", "strawberry", "red_fever", "gold_rush", "case_sale", "power_upgrade", "jackpot_hunt", "night_shift", "meteor_rain", "glitch_storm", "void_portal", "rainbow_burst", "thunder_chaos", "neon_overload", "pixel_invasion", "shadow_realm", "crystal_rain", "volcano_mode", "frostbite", "blizzard", "candy_world", "spooky_night", "winter_magic", "summer_wave", "spring_bloom", "love_storm", "halloween_carnival", "new_year_countdown", "easter_party", "anniversary_blast", "toxic_waste", "matrix_rush", "earthquake", "blackout", "laser_show", "cosmic_rift", "underwater", "desert_dust", "cyber_city", "pirate_raid", "alien_contact", "robot_revolt", "dragon_awakening", "haunted_mansion", "golden_hour", "moon_eclipse", "starfall", "party_confetti", "admin_mayhem"];
       if (requestedEvent && !allowedEvents.includes(requestedEvent)) {
         return respond({ error: "Неизвестный ивент." }, 400);
       }
