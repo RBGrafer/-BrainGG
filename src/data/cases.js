@@ -46,7 +46,7 @@ export const cases = [
   },
   {
     id: 6, name: "Юбилейный кейс", caseName: "All In Strawberry Elephant",
-    description: "Праздничный золотой кейс BrainGG", price: 209,
+    description: "Красный праздничный кейс BrainGG с персонажем и подарками", price: 209,
     color: "anniversary", image: anniversaryCaseArt,
     category: "All In", maxReward: 24000,
   },
