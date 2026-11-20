@@ -51,7 +51,7 @@ assert.match(appSource, /adminEventFavoritesOnly[\s\S]*?adminEventCompareA[\s\S]
   'Cross-device event command center must include favorites, comparison, and history filters');
 assert.match(appSource, /admin-event-mobile-tools[\s\S]*?admin-event-history-mobile/,
   'Responsive event command center and event history must be present');
-assert.match(appSource, /ADMIN CONSOLE · BUILD 3\.2/,
+assert.match(appSource, /ADMIN CONSOLE · BUILD 3\.3/,
   'The cross-device admin release marker must be visible so deployment can be verified');
 assert.match(appSource, /admin-mobile-player-search[\s\S]*?searchAdminPlayer\(event, true\)/,
   'The admin overview must include a working quick player search on all devices');
@@ -97,3 +97,20 @@ assert.match(minesSql, /mines_one_active_game_per_player/, 'A player may have on
 assert.match(minesSql, /for update/i, 'Mines balance and game updates must be transactionally locked');
 assert.match(minesSql, /grant execute on function public\.cashout_mines_game\(bigint,uuid\) to service_role/i, 'Only service role may pay out Mines winnings');
 console.log('BrainGG Mines: OK — server-side RNG, locked balance transactions, RLS, one active game, and trusted cashout checked.');
+
+// v19 catalogue contract: prevent the anniversary/referral entries from being
+// accidentally swapped and keep requested visible catalogue prices/assets.
+assert.match(cases, /name: "Юбилейный кейс"[\s\S]*?price: 209[\s\S]*?category: "All In"/,
+  'Anniversary case must remain a paid All In case at 209 GG');
+assert.match(cases, /name: "CHEAP CASE"[\s\S]*?price: 9/,
+  'CHEAP CASE must be listed at 9 GG');
+assert.match(cases, /name: "Headless Horseman All-In"[\s\S]*?price: 59/,
+  'Headless Horseman All-In must be listed at 59 GG');
+assert.match(cases, /name: "Strawberry Elephant All-In"[\s\S]*?price: 39/,
+  'Strawberry Elephant All-In must be listed at 39 GG');
+assert.match(cases, /name: "DARK кейс"[\s\S]*?price: 99/,
+  'DARK case must be listed at 99 GG');
+assert.match(cases, /id: "referral-case", name: "Реферальный кейс"[\s\S]*?specialType: "deposit"/,
+  'Referral case must remain the deposit-gated special case');
+assert.match(appCss, /\.case-card-art\.case-artwork\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/s,
+  'Case artwork containers must be square');
