@@ -312,6 +312,53 @@ function formatAdminEventDuration(value) {
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
 }
 
+
+// Дополнительные Admin Abuse события. Это глобальные визуальные/атмосферные темы;
+// экономические множители применяются только для явно поддержанных игровых событий.
+const ADMIN_ABUSE_EXTRA_EVENTS = [
+  { key: "meteor_rain", icon: "☄️", title: "METEOR RAIN", category: "chaos", description: "Метеоритный дождь и огненные вспышки по всему BrainGG." },
+  { key: "glitch_storm", icon: "🌀", title: "GLITCH STORM", category: "chaos", description: "Глитч-шторм, цифровые помехи и неоновая атмосфера." },
+  { key: "void_portal", icon: "🕳️", title: "VOID PORTAL", category: "visual", description: "Открывается портал в пустоту с тёмной аурой." },
+  { key: "rainbow_burst", icon: "🌈", title: "RAINBOW BURST", category: "visual", description: "Радужные вспышки и яркая праздничная тема." },
+  { key: "thunder_chaos", icon: "🌩️", title: "THUNDER CHAOS", category: "chaos", description: "Грозовые вспышки и электрическая атмосфера." },
+  { key: "neon_overload", icon: "💡", title: "NEON OVERLOAD", category: "visual", description: "Неоновые огни и насыщенное свечение интерфейса." },
+  { key: "pixel_invasion", icon: "👾", title: "PIXEL INVASION", category: "chaos", description: "Пиксельное вторжение и ретро-аркадная тема." },
+  { key: "shadow_realm", icon: "🌑", title: "SHADOW REALM", category: "visual", description: "Мрачная теневая атмосфера и затемнённая сцена." },
+  { key: "crystal_rain", icon: "💎", title: "CRYSTAL RAIN", category: "visual", description: "Кристаллические частицы и холодное сияние." },
+  { key: "volcano_mode", icon: "🌋", title: "VOLCANO MODE", category: "chaos", description: "Вулканическая тема с лавовыми вспышками." },
+  { key: "frostbite", icon: "🥶", title: "FROSTBITE", category: "seasonal", description: "Ледяная атмосфера, иней и снежные частицы." },
+  { key: "blizzard", icon: "🌨️", title: "BLIZZARD", category: "seasonal", description: "Сильная метель и зимнее оформление." },
+  { key: "candy_world", icon: "🍬", title: "CANDY WORLD", category: "seasonal", description: "Сладкая конфетная тема с яркими цветами." },
+  { key: "spooky_night", icon: "🎃", title: "SPOOKY NIGHT", category: "seasonal", description: "Хэллоуинская ночь, тыквы и жуткая атмосфера." },
+  { key: "winter_magic", icon: "❄️", title: "WINTER MAGIC", category: "seasonal", description: "Зимнее волшебство и мерцающий снег." },
+  { key: "summer_wave", icon: "🏖️", title: "SUMMER WAVE", category: "seasonal", description: "Летняя пляжная тема и солнечные вспышки." },
+  { key: "spring_bloom", icon: "🌸", title: "SPRING BLOOM", category: "seasonal", description: "Весеннее цветение и лепестки сакуры." },
+  { key: "love_storm", icon: "💗", title: "LOVE STORM", category: "seasonal", description: "Розовая романтическая тема с сердцами." },
+  { key: "halloween_carnival", icon: "🕸️", title: "HALLOWEEN CARNIVAL", category: "seasonal", description: "Карнавал ужасов с паутиной и свечением." },
+  { key: "new_year_countdown", icon: "🎆", title: "NEW YEAR COUNTDOWN", category: "seasonal", description: "Новогодние огни, салюты и праздничный фон." },
+  { key: "easter_party", icon: "🐣", title: "EASTER PARTY", category: "seasonal", description: "Пасхальная тема с весенними украшениями." },
+  { key: "anniversary_blast", icon: "🎂", title: "ANNIVERSARY BLAST", category: "seasonal", description: "Праздничный режим дня рождения BrainGG." },
+  { key: "toxic_waste", icon: "☢️", title: "TOXIC WASTE", category: "chaos", description: "Токсичная зелёная тема с предупреждающими сигналами." },
+  { key: "matrix_rush", icon: "💻", title: "MATRIX RUSH", category: "chaos", description: "Падающий цифровой код и матричная атмосфера." },
+  { key: "earthquake", icon: "🌍", title: "EARTHQUAKE", category: "chaos", description: "Тема землетрясения с визуальными импульсами." },
+  { key: "blackout", icon: "🔦", title: "BLACKOUT", category: "chaos", description: "Затемнение и аварийные световые акценты." },
+  { key: "laser_show", icon: "🔴", title: "LASER SHOW", category: "visual", description: "Лазерное шоу и динамические цветные лучи." },
+  { key: "cosmic_rift", icon: "🌌", title: "COSMIC RIFT", category: "visual", description: "Космический разлом, звёзды и фиолетовое свечение." },
+  { key: "underwater", icon: "🫧", title: "UNDERWATER", category: "visual", description: "Подводная тема с пузырьками и синими оттенками." },
+  { key: "desert_dust", icon: "🏜️", title: "DESERT DUST", category: "visual", description: "Песчаная буря и пустынная цветовая тема." },
+  { key: "cyber_city", icon: "🌃", title: "CYBER CITY", category: "visual", description: "Киберпанк-город, неон и ночные огни." },
+  { key: "pirate_raid", icon: "🏴‍☠️", title: "PIRATE RAID", category: "chaos", description: "Пиратский налёт и морская атмосфера." },
+  { key: "alien_contact", icon: "🛸", title: "ALIEN CONTACT", category: "chaos", description: "Первый контакт с пришельцами и НЛО." },
+  { key: "robot_revolt", icon: "🤖", title: "ROBOT REVOLT", category: "chaos", description: "Восстание роботов и механическая тема." },
+  { key: "dragon_awakening", icon: "🐉", title: "DRAGON AWAKENING", category: "chaos", description: "Пробуждение дракона и огненная аура." },
+  { key: "haunted_mansion", icon: "👻", title: "HAUNTED MANSION", category: "seasonal", description: "Особняк с привидениями и призрачный туман." },
+  { key: "golden_hour", icon: "🌅", title: "GOLDEN HOUR", category: "visual", description: "Тёплая золотая цветовая тема заката." },
+  { key: "moon_eclipse", icon: "🌘", title: "MOON ECLIPSE", category: "visual", description: "Лунное затмение и глубокая ночная палитра." },
+  { key: "starfall", icon: "🌠", title: "STARFALL", category: "visual", description: "Звездопад и мерцающие космические частицы." },
+  { key: "party_confetti", icon: "🎊", title: "PARTY CONFETTI", category: "seasonal", description: "Конфетти, праздничные огни и вечеринка." },
+  { key: "admin_mayhem", icon: "💥", title: "ADMIN MAYHEM", category: "chaos", description: "Финальная хаотичная тема с яркими визуальными вспышками." },
+];
+
 export default function App() {
   const [page, setPage] = useState("Главная");
   const [minesBet, setMinesBet] = useState("10");
@@ -466,6 +513,7 @@ export default function App() {
   const [adminEventFeedback, setAdminEventFeedback] = useState("");
   const [adminEventFeedbackError, setAdminEventFeedbackError] = useState(false);
   const [adminEventDuration, setAdminEventDuration] = useState("179");
+  const [adminAbuseTab, setAdminAbuseTab] = useState("all");
   const [adminEventQuery, setAdminEventQuery] = useState("");
   const [adminEventCategory, setAdminEventCategory] = useState("all");
   const [adminEventSort, setAdminEventSort] = useState("default");
@@ -1450,7 +1498,7 @@ export default function App() {
     const colors = { tacos: "#4a0a1b", lucky: "#5d0c20", strawberry: "#7a0e2a", red_fever: "#6a0a1f", gold_rush: "#5a0b1d", case_sale: "#820d29", power_upgrade: "#6e0d24", jackpot_hunt: "#7d0b29", night_shift: "#15050b" };
     if (eventName && !streamerMode) {
       document.body.dataset.brainggEvent = eventName;
-      try { window.Telegram?.WebApp?.setBackgroundColor?.(colors[eventName]); } catch { /* Telegram theme is optional. */ }
+      try { window.Telegram?.WebApp?.setBackgroundColor?.(colors[eventName] || (eventName.includes("frost") || eventName.includes("winter") || eventName.includes("blizzard") ? "#102b49" : eventName.includes("gold") || eventName.includes("anniversary") ? "#4a2b08" : eventName.includes("void") || eventName.includes("shadow") || eventName.includes("eclipse") ? "#170d2d" : "#2a102b")); } catch { /* Telegram theme is optional. */ }
     } else {
       delete document.body.dataset.brainggEvent;
       try { window.Telegram?.WebApp?.setBackgroundColor?.("#2a0710"); } catch { /* Telegram theme is optional. */ }
@@ -2916,6 +2964,7 @@ export default function App() {
     power_upgrade: { title: "POWER UPGRADE", subtitle: "Шанс апгрейда увеличен в 1.5 раза", emoji: "⚡", particle: "⚡" },
     jackpot_hunt: { title: "JACKPOT HUNT", subtitle: "Легендарные, мифические и OG дропы ×3 по весу", emoji: "👑", particle: "✦" },
     night_shift: { title: "NIGHT SHIFT", subtitle: "Ночная атмосфера и отдельный саундтрек", emoji: "🌙", particle: "✦" },
+    ...Object.fromEntries(ADMIN_ABUSE_EXTRA_EVENTS.map((event) => [event.key, { title: event.title, subtitle: event.description, emoji: event.icon, particle: event.icon }])),
   };
   const adminEventCatalog = [
     { key: "tacos", icon: "\u{1F32E}", title: "It's Raining Tacos", category: "visual", description: "\u0422\u0451\u043f\u043b\u044b\u0439 \u0444\u043e\u043d, \u043f\u0430\u0434\u0430\u044e\u0449\u0438\u0435 \u0442\u0430\u043a\u043e \u0438 \u043e\u0440\u0438\u0433\u0438\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u043c\u0443\u0437\u044b\u043a\u0430." },
@@ -2927,6 +2976,7 @@ export default function App() {
     { key: "power_upgrade", icon: "\u{26A1}", title: "POWER UPGRADE", category: "gameplay", description: "\u0428\u0430\u043d\u0441 \u0430\u043f\u0433\u0440\u0435\u0439\u0434\u0430 \u0443\u0432\u0435\u043b\u0438\u0447\u0435\u043d \u0432 1.5 \u0440\u0430\u0437\u0430." },
     { key: "jackpot_hunt", icon: "\u{1F451}", title: "JACKPOT HUNT", category: "gameplay", description: "\u0412\u0435\u0441 \u043b\u0435\u0433\u0435\u043d\u0434\u0430\u0440\u043d\u044b\u0445, \u043c\u0438\u0444\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u0438 OG \u043d\u0430\u0433\u0440\u0430\u0434 \u00d73." },
     { key: "night_shift", icon: "\u{1F319}", title: "NIGHT SHIFT", category: "visual", description: "\u041d\u043e\u0447\u043d\u0430\u044f \u0442\u0435\u043c\u0430 \u0438 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 \u043c\u0443\u0437\u044b\u043a\u0430\u043b\u044c\u043d\u044b\u0439 \u043b\u0443\u043f." },
+    ...ADMIN_ABUSE_EXTRA_EVENTS,
   ];
   const filteredAdminEventCatalog = adminEventCatalog
     .filter((event) => {
@@ -2934,7 +2984,9 @@ export default function App() {
       const matchesQuery = !query || [event.key, event.title, event.description, event.category].some((value) => String(value || "").toLowerCase().includes(query));
       const matchesCategory = adminEventCategory === "all" || event.category === adminEventCategory;
       const matchesFavorites = !adminEventFavoritesOnly || adminEventFavorites.includes(event.key);
-      return matchesQuery && matchesCategory && matchesFavorites;
+      const matchesAbuseTab = adminAbuseTab === "all"
+        || (adminAbuseTab === "favorites" ? adminEventFavorites.includes(event.key) : event.category === adminAbuseTab);
+      return matchesQuery && matchesCategory && matchesFavorites && matchesAbuseTab;
     })
     .sort((a, b) => adminEventSort === "name" ? a.title.localeCompare(b.title, "ru") : adminEventSort === "category" ? a.category.localeCompare(b.category, "ru") || a.title.localeCompare(b.title, "ru") : 0);
   const adminEventHistoryPeriodMs = adminEventHistoryPeriod === "24h" ? 24 * 60 * 60 * 1000 : adminEventHistoryPeriod === "7d" ? 7 * 24 * 60 * 60 * 1000 : adminEventHistoryPeriod === "30d" ? 30 * 24 * 60 * 60 * 1000 : null;
@@ -4540,9 +4592,24 @@ export default function App() {
                           <label className="admin-event-custom-duration"><span>{'\u0421\u0432\u043e\u044f \u0434\u043b\u0438\u0442\u0435\u043b\u044c\u043d\u043e\u0441\u0442\u044c, \u0441\u0435\u043a.'}</span><input className="admin-input" type="number" min="30" max="1800" step="1" value={adminEventDuration} onChange={(event) => setAdminEventDuration(event.target.value)} /><small>{'\u041e\u0442 30 \u0441\u0435\u043a\u0443\u043d\u0434 \u0434\u043e 30 \u043c\u0438\u043d\u0443\u0442. \u0422\u0430\u0439\u043c\u0435\u0440 \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u0435\u0442\u0441\u044f \u043d\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435.'}</small></label>
                         </div>
 
+                        <div className="admin-abuse-tabs" role="tablist" aria-label="Вкладки Admin Abuse">
+                          {[
+                            ["all", "Все события", "✦"],
+                            ["gameplay", "Игровые", "🎮"],
+                            ["economy", "Экономика", "💰"],
+                            ["visual", "Визуал", "✨"],
+                            ["seasonal", "Сезонные", "🎉"],
+                            ["chaos", "Хаос", "💥"],
+                            ["favorites", "Избранное", "★"],
+                          ].map(([key, label, icon]) => (
+                            <button key={key} type="button" role="tab" aria-selected={adminAbuseTab === key} className={adminAbuseTab === key ? "active" : ""} onClick={() => { setAdminAbuseTab(key); setAdminEventCategory("all"); setAdminEventFavoritesOnly(false); }}>
+                              <span>{icon}</span>{label}{key === "all" ? ` (${adminEventCatalog.length})` : key === "favorites" ? ` (${adminEventFavorites.length})` : ` (${adminEventCatalog.filter((event) => event.category === key).length})`}
+                            </button>
+                          ))}
+                        </div>
                         <div className="admin-event-catalog-filters">
                           <input className="admin-input" value={adminEventQuery} onChange={(event) => setAdminEventQuery(event.target.value)} placeholder={'\u041f\u043e\u0438\u0441\u043a \u0438\u0432\u0435\u043d\u0442\u0430 \u0438\u043b\u0438 \u0431\u043e\u043d\u0443\u0441\u0430'} aria-label="Search events" />
-                          <select className="admin-input" value={adminEventCategory} onChange={(event) => setAdminEventCategory(event.target.value)} aria-label="Event category"><option value="all">{'\u0412\u0441\u0435 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438'}</option><option value="gameplay">{'\u0418\u0433\u0440\u043e\u0432\u044b\u0435 \u0431\u043e\u043d\u0443\u0441\u044b'}</option><option value="economy">{'\u042d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430'}</option><option value="visual">{'\u041e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435'}</option></select>
+                          <select className="admin-input" value={adminEventCategory} onChange={(event) => setAdminEventCategory(event.target.value)} aria-label="Event category"><option value="all">{'\u0412\u0441\u0435 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438'}</option><option value="gameplay">{'\u0418\u0433\u0440\u043e\u0432\u044b\u0435 \u0431\u043e\u043d\u0443\u0441\u044b'}</option><option value="economy">{'\u042d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430'}</option><option value="visual">{'\u041e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435'}</option><option value="seasonal">Сезонные</option><option value="chaos">Хаос / Admin Abuse</option></select>
                           <select className="admin-input" value={adminEventSort} onChange={(event) => setAdminEventSort(event.target.value)} aria-label="Sort events"><option value="default">{'\u0421\u0442\u0430\u043d\u0434\u0430\u0440\u0442\u043d\u044b\u0439 \u043f\u043e\u0440\u044f\u0434\u043e\u043a'}</option><option value="name">{'\u041f\u043e \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u044e'}</option><option value="category">{'\u041f\u043e \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438'}</option></select>
                           <button type="button" className={`admin-event-favorite-filter ${adminEventFavoritesOnly ? 'active' : ''}`} onClick={() => setAdminEventFavoritesOnly((value) => !value)}>{adminEventFavoritesOnly ? '★ ' : '☆ '}{'\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u043e\u0435'} ({adminEventFavorites.length})</button>
                           <button type="button" className="admin-event-reset-filter" onClick={() => { setAdminEventQuery(''); setAdminEventCategory('all'); setAdminEventSort('default'); setAdminEventFavoritesOnly(false); }}>{'\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u0442\u0440\u044b'}</button>
@@ -4558,7 +4625,7 @@ export default function App() {
                       </section>
 
                       <section className="admin-panel-card admin-events-card">
-                        <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG. <span className="admin-event-desktop-duration-copy">Каждый запуск длится 2 минуты 59 секунд.</span><span className="admin-event-mobile-duration-copy">Длительность настраивается в пульте управления.</span></p></div></div>
+                        <div className="admin-section-title"><span className="admin-section-icon">🌍</span><div><h3>Глобальные админ-ивенты</h3><p>Один активный ивент на весь BrainGG; каталог расширен до 49+ событий. <span className="admin-event-desktop-duration-copy">Каждый запуск длится 2 минуты 59 секунд.</span><span className="admin-event-mobile-duration-copy">Длительность настраивается в пульте управления.</span></p></div></div>
                         {globalEvent?.event_name && <div className="admin-active-event"><b>Сейчас активен: {eventPresentation[globalEvent.event_name]?.title || globalEvent.event_name}</b><span>Осталось {Math.floor(eventRemainingSeconds / 60)}:{String(eventRemainingSeconds % 60).padStart(2, "0")}</span></div>}
                         <div className="admin-event-grid">
                           {filteredAdminEventCatalog.map(({ key, icon, title, description }) => (
@@ -4612,7 +4679,7 @@ export default function App() {
                         </div>
                         <div className="admin-event-catalog-filters">
                           <input className="admin-input" value={adminEventQuery} onChange={(event) => setAdminEventQuery(event.target.value)} placeholder="Поиск события или эффекта" aria-label="Поиск ивентов" />
-                          <select className="admin-input" value={adminEventCategory} onChange={(event) => setAdminEventCategory(event.target.value)} aria-label="Категория ивента"><option value="all">Все категории</option><option value="gameplay">Игровые бонусы</option><option value="economy">Экономика</option><option value="visual">Оформление</option></select>
+                          <select className="admin-input" value={adminEventCategory} onChange={(event) => setAdminEventCategory(event.target.value)} aria-label="Категория ивента"><option value="all">Все категории</option><option value="gameplay">Игровые бонусы</option><option value="economy">Экономика</option><option value="visual">Оформление</option><option value="seasonal">Сезонные</option><option value="chaos">Хаос / Admin Abuse</option></select>
                         </div>
                         <div className="admin-events-readonly-list">
                           {filteredAdminEventCatalog.map((event) => <article key={event.key}><span>{event.icon}</span><div><b>{event.title}</b><small>{event.description}</small></div><button type="button" onClick={() => copyAdminEventDetails(event.key)}>⧉</button></article>)}
