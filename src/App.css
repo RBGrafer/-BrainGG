@@ -5879,3 +5879,69 @@ body[data-braingg-theme="red"][data-braingg-event="admin_mayhem"] { background: 
 .beta-player-result > div small { margin-top:5px; color:#9f91ad; font-size:11px; }
 .beta-player-result .maintenance-toggle-button { grid-column:1/-1; width:100%; }
 @media(max-width:600px) { .beta-mode-banner { padding:12px; } .beta-access-search > div { grid-template-columns:1fr; } .beta-access-search .main-button { width:100%; } .beta-player-result { grid-template-columns:1fr; } .beta-player-result .maintenance-status-pill { justify-self:start; } }
+
+
+/* GLOBAL SCROLL FIX — beta testers, regular users, mobile and desktop.
+   Keep the document as the scroll container; never trap the app in a fixed-height panel. */
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  height: auto !important;
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto;
+}
+body {
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+#root {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto !important;
+  overflow-x: clip;
+  overflow-y: visible !important;
+  touch-action: pan-y;
+}
+.app {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto !important;
+  overflow: visible !important;
+  touch-action: pan-y;
+}
+.content {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  touch-action: pan-y;
+}
+.beta-mode-banner {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  touch-action: pan-y;
+}
+@media (max-width: 760px) {
+  html, body, #root {
+    height: auto !important;
+    min-height: 100%;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  body { overscroll-behavior-y: auto; }
+  .app {
+    min-height: 100dvh;
+    height: auto !important;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom));
+    overflow: visible !important;
+  }
+  .content { overflow: visible !important; max-height: none !important; }
+  .beta-mode-banner { margin-bottom: 14px; padding: 12px; }
+}
