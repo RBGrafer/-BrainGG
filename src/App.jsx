@@ -41,7 +41,7 @@ import depPixelDuo from "./assets/brainrots/deposits/pixel-duo.webp";
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
 const SITE_THEME_STORAGE_KEY = "braingg-site-theme-v1";
 const DISABLED_PAGES = new Set(["Коллекция", "Достижения", "Глобальные события"]);
-const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Мины", "Live Drops", "Глобальные события", "История", "Промокод", "Задания", "Достижения", "Админка"]);
+const STREAMER_RESTRICTED_PAGES = new Set(["Кейсы", "Апгрейдер", "Мины", "Live Drops", "Глобальные события", "Боссы", "История", "Промокод", "Задания", "Достижения", "Админка"]);
 
 // Human-readable case titles. Backend identifiers intentionally stay unchanged.
 const CASE_DISPLAY_NAMES = {
@@ -372,6 +372,9 @@ export default function App() {
   const [selectedCase, setSelectedCase] = useState(null);
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [maintenanceCheckedAt, setMaintenanceCheckedAt] = useState(0);
   const [opening, setOpening] = useState(false);
   const [authError, setAuthError] = useState("");
   const [lastRewards, setLastRewards] = useState([]);
@@ -405,6 +408,12 @@ export default function App() {
   const [musicNotice, setMusicNotice] = useState("");
 
   const [globalEvent, setGlobalEvent] = useState(null);
+  const [bossState, setBossState] = useState(null);
+  const [bossRewardClaimed, setBossRewardClaimed] = useState(false);
+  const [bossLoading, setBossLoading] = useState(false);
+  const [bossClaimLoading, setBossClaimLoading] = useState(false);
+  const [bossMessage, setBossMessage] = useState("");
+  const [bossClock, setBossClock] = useState(Date.now());
   const [globalMessage, setGlobalMessage] = useState(null);
   const [globalActivities, setGlobalActivities] = useState([]);
   const [globalActivityLoading, setGlobalActivityLoading] = useState(false);
@@ -464,6 +473,7 @@ export default function App() {
       { label: "Рекорды", page: "Рейтинг", icon: "🥇", description: "Сравнивай свой XP с игроками" },
       { label: "Live Drops", page: "Live Drops", icon: "🔥", description: "Смотри последние выпадения" },
       { label: "Глобальные события", page: "Глобальные события", icon: "🌍", description: "Все действия игроков в реальном времени" },
+      { label: "Боссы", page: "Боссы", icon: "❄️", description: "Объединяйся с игроками и побеждай боссов" },
     ]},
     { title: "АККАУНТ", items: [
       { label: "Профиль", page: "Профиль", icon: "👤", description: "Уровень, XP и твоя статистика" },
@@ -602,6 +612,49 @@ export default function App() {
   const initData = () => window.Telegram?.WebApp?.initData;
   const telegramIdentity = window.Telegram?.WebApp?.initDataUnsafe?.user || {};
   const isMobileAdminDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+
+  async function refreshMaintenanceStatus() {
+    if (!initData()) return false;
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "get_maintenance_status" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось проверить статус обновления");
+      setMaintenanceMode(Boolean(data.enabled));
+      setMaintenanceCheckedAt(Date.now());
+      return true;
+    } catch (error) {
+      console.warn("Maintenance status check failed:", error);
+      return false;
+    }
+  }
+
+  async function updateMaintenanceMode(enabled) {
+    if (!isOwner || maintenanceBusy) return;
+    setMaintenanceBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "admin_set_maintenance_mode", enabled: Boolean(enabled) },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось изменить режим обновления");
+      setMaintenanceMode(Boolean(data.enabled));
+      setAdminToolFeedback(data.enabled
+        ? "Режим «ОБНОВЛЕНИЕ» включён. Игроки увидят экран обслуживания."
+        : "Режим «ОБНОВЛЕНИЕ» выключен. Игроки снова могут войти.");
+    } catch (error) {
+      setAdminToolFeedback(error?.message || "Не удалось изменить режим обновления.");
+    } finally {
+      setMaintenanceBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!maintenanceMode || isOwner || !initData()) return undefined;
+    const timer = window.setInterval(() => { refreshMaintenanceStatus(); }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [maintenanceMode, isOwner]);
 
   useEffect(() => {
     if (!isAdmin || isMobileAdminDevice) return undefined;
@@ -982,6 +1035,43 @@ export default function App() {
     finally { setTopupBusy(false); }
   }
 
+  async function callBossApi(action) {
+    const { data, error } = await supabase.functions.invoke("braingg-api", { body: { initData: initData(), action } });
+    if (error || !data?.success) throw new Error(data?.error || error?.message || "Событие босса временно недоступно.");
+    return data;
+  }
+
+  async function loadBossState() {
+    if (!initData()) return;
+    setBossLoading(true);
+    try {
+      const data = await callBossApi("boss_get_state");
+      setBossState(data.boss || null);
+      setBossRewardClaimed(Boolean(data.rewardClaimed));
+      setBossMessage("");
+    } catch (error) { setBossMessage(error.message || "Не удалось загрузить YETIMATIC."); }
+    finally { setBossLoading(false); }
+  }
+
+  async function claimBossReward() {
+    setBossClaimLoading(true);
+    try {
+      const data = await callBossApi("boss_claim_reward");
+      setBossRewardClaimed(true);
+      if (data.balance != null) setPlayer(current => current ? { ...current, balance: data.balance, free_case_credits: data.free_case_credits || current.free_case_credits } : current);
+      setBossMessage(`Награда получена: +${Number(data.result?.coins || 0).toLocaleString("ru-RU")} GG и бесплатный ${displayCaseName(data.result?.case_name)}!`);
+      await loadBossState();
+    } catch (error) { setBossMessage(error.message || "Не удалось получить награду."); }
+    finally { setBossClaimLoading(false); }
+  }
+
+  function bossTimeLeft() {
+    const end = Date.parse(bossState?.ends_at || "");
+    const seconds = Number.isFinite(end) ? Math.max(0, Math.floor((end - bossClock) / 1000)) : 0;
+    const days = Math.floor(seconds / 86400), hours = Math.floor((seconds % 86400) / 3600), minutes = Math.floor((seconds % 3600) / 60), secs = seconds % 60;
+    return `${days}д ${String(hours).padStart(2,"0")}ч ${String(minutes).padStart(2,"0")}м ${String(secs).padStart(2,"0")}с`;
+  }
+
   async function callBrainrotDepositApi(action, payload = {}) {
     const { data, error } = await supabase.functions.invoke("braingg-api", {
       body: { initData: initData(), action, ...payload },
@@ -1283,6 +1373,10 @@ export default function App() {
         }
 
         setPlayer(data.player);
+        setMaintenanceMode(Boolean(data.maintenanceMode));
+        setIsOwner(Boolean(data.isOwner));
+        setMaintenanceCheckedAt(Date.now());
+        loadBossState();
         loadSpecialCaseAccess();
         // Игровой прогресс загружается отдельно, чтобы не затрагивать старую таблицу players.
         loadGameHub();
@@ -1418,6 +1512,19 @@ export default function App() {
     const { data, error } = await supabase.functions.invoke("braingg-api", { body: { initData: initData(), action: "admin_get_game_stats" } });
     if (!error && data?.success) setAdminGameStats(data.stats);
   }
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setBossClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!player?.telegram_id) return undefined;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadBossState();
+    }, 12000);
+    return () => window.clearInterval(timer);
+  }, [player?.telegram_id]);
 
   useEffect(() => {
     if (!player?.telegram_id) return undefined;
@@ -2500,6 +2607,7 @@ export default function App() {
 
     if (["Рейтинг", "Задания", "Достижения", "Профиль", "Live Drops"].includes(nextPage)) await loadGameHub();
     if (nextPage === "Глобальные события") await loadGlobalActivity().catch(() => {});
+    if (nextPage === "Боссы") await loadBossState();
     if (nextPage === "История") await loadPlayerHistory();
     if (nextPage === "Промокод") {
       setPromoFeedback("");
@@ -3059,6 +3167,22 @@ export default function App() {
     rejected: "Пополнение не удалось",
   };
 
+  if (maintenanceMode && !isOwner && !loading) {
+    return (
+      <main className="maintenance-screen" role="status" aria-live="polite">
+        <div className="maintenance-topbar"><b>BRAINGG</b><span>⋮</span><button type="button" aria-label="Закрыть" onClick={() => window.Telegram?.WebApp?.close?.()}>×</button></div>
+        <section className="maintenance-center">
+          <span className="maintenance-wordmark">BRAINGG</span>
+          <div className="maintenance-emblem"><span>♨</span><i>🔧</i></div>
+          <h1>Мы на обновлении</h1>
+          <p>Мы на обновлении — скоро вернёмся. Балансы и брейнроты в сохранности.</p>
+          <button type="button" className="maintenance-retry" onClick={refreshMaintenanceStatus}>Проверить снова</button>
+          <small>Проверим сами через минуту</small>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div className={`app theme-${siteTheme} ${!streamerMode && globalEvent?.event_name ? `event-theme-${globalEvent.event_name}` : ""}`}>
       <div className={`winter-snow ${!streamerMode && globalEvent?.event_name ? `event-particles event-particles-${globalEvent.event_name}` : ""}`} aria-hidden="true">
@@ -3261,6 +3385,11 @@ export default function App() {
                   <button className="main-button" onClick={() => changePage(streamerMode ? "Инвентарь" : "Кейсы")}>{streamerMode ? "Открыть коллекцию" : "Смотреть кейсы"}</button>
                   {!streamerMode && <button className="case-button" onClick={() => changePage("Апгрейдер")}>Перейти в апгрейдер</button>}
                 </div>
+                {!streamerMode && bossState && <button type="button" className="yetimatic-home-banner" onClick={() => changePage("Боссы")}>
+                  <img src={depIceYetiAtm} alt="YETIMATIC" />
+                  <span className="yetimatic-home-copy"><small>НОВОГОДНИЙ РЕЙД · 7 ДНЕЙ</small><b>❄️ YETIMATIC ПРОСНУЛСЯ!</b><em>{Number(bossState.current_hp || 0).toLocaleString("ru-RU")} / {Number(bossState.max_hp || 5000).toLocaleString("ru-RU")} HP · Твой вклад: {Number(bossState.my_damage || 0)} HP</em></span>
+                  <span className="yetimatic-home-arrow">→</span>
+                </button>}
                 <section className="home-stats-grid">
                   <article><small>Баланс</small><b>{Number(player?.balance || 0).toLocaleString("ru-RU")} GG</b></article>
                   <article><small>Инвентарь</small><b>{inventory.length} предметов</b></article>
@@ -3992,6 +4121,28 @@ export default function App() {
             </main>
           )}
 
+          {page === "Боссы" && !streamerMode && (
+            <main className="content season-page yetimatic-page">
+              <header className="season-page-heading"><span className="season-kicker">BRAIN GG · WINTER RAID</span><h2>❄️ Битва с боссом</h2><p>Все игроки объединяются, чтобы остановить ледяного YETIMATIC. Открывай кейсы и побеждай в апгрейдах, чтобы наносить урон.</p></header>
+              {bossMessage && <p className="hub-feedback">{bossMessage}</p>}
+              <section className="yetimatic-boss-card">
+                <div className="yetimatic-art-wrap"><img src={depIceYetiAtm} alt="Ледяной YETIMATIC" /></div>
+                <div className="yetimatic-boss-info"><span className="yetimatic-tag">НОВОГОДНИЙ БОСС · 7 ДНЕЙ</span><h3>YETIMATIC</h3><p>Он заморозил хранилище BrainGG. Нанесите вместе 5000 урона, пока не истекло время!</p>
+                  <div className="yetimatic-hp-line"><b>ЗДОРОВЬЕ БОССА</b><strong>{Number(bossState?.current_hp ?? 5000).toLocaleString("ru-RU")} / {Number(bossState?.max_hp ?? 5000).toLocaleString("ru-RU")} HP</strong></div>
+                  <div className="yetimatic-hp-track"><span style={{width:`${Math.max(0,Math.min(100,Number(bossState?.current_hp ?? 5000)/Math.max(1,Number(bossState?.max_hp ?? 5000))*100))}%`}} /></div>
+                  <div className="yetimatic-stats"><article><small>ТВОЙ УРОН</small><b>{Number(bossState?.my_damage || 0).toLocaleString("ru-RU")} HP</b></article><article><small>ТВОЁ МЕСТО</small><b>{bossState?.my_rank ? `#${bossState.my_rank}` : "—"}</b></article><article><small>ОСТАЛОСЬ</small><b>{bossState?.status === "active" ? bossTimeLeft() : "ЗАВЕРШЕНО"}</b></article></div>
+                  <div className="yetimatic-status">{bossLoading ? "Обновляем данные..." : bossState?.status === "won" ? "🏆 БОСС ПОБЕЖДЁН!" : bossState?.status === "lost" ? "❄️ ВРЕМЯ ВЫШЛО" : "⚔️ БИТВА ПРОДОЛЖАЕТСЯ"}</div>
+                </div>
+              </section>
+              <div className="yetimatic-columns">
+                <section className="season-panel"><h3>⚔️ Как наносить урон</h3><div className="yetimatic-damage-list"><p><span>Открытие обычного кейса</span><b>+5 HP</b></p><p><span>Открытие редкого / дорогого кейса</span><b>+15 HP</b></p><p><span>Открытие All In</span><b>+35 HP</b></p><p><span>Успешный апгрейд</span><b>+20 HP</b></p><p><span>Неудачный апгрейд</span><b>+5 HP</b></p></div><button className="main-button" onClick={() => changePage("Кейсы")}>Открыть кейсы</button> <button className="case-button" onClick={() => changePage("Апгрейдер")}>В апгрейдер</button></section>
+                <section className="season-panel"><h3>🎁 Награды</h3><div className="yetimatic-reward"><b>{bossState?.status === "won" ? "За победу" : "Если игроки не успеют"}</b><p>{bossState?.status === "won" ? "+250 GG и бесплатный Starter Case каждому участнику" : "+100 GG и бесплатный Starter Case каждому участнику"}</p><small>Топ-3 получат дополнительно: 1 место +500 GG · 2 место +300 GG · 3 место +150 GG.</small></div>{bossState?.status !== "active" && <button className="main-button" disabled={bossClaimLoading || bossRewardClaimed || !Number(bossState?.my_damage || 0)} onClick={claimBossReward}>{bossRewardClaimed ? "Награда уже получена" : bossClaimLoading ? "Получаем..." : "Забрать награду"}</button>}</section>
+              </div>
+              <section className="season-panel yetimatic-leaderboard"><div className="season-panel-title"><h3>🏆 Рейтинг урона</h3><button className="case-button" onClick={loadBossState} disabled={bossLoading}>↻ Обновить</button></div>{(bossState?.leaderboard || []).length ? (bossState.leaderboard || []).map(row => <div className="yetimatic-rank-row" key={`${row.rank}-${row.username}`}><b>#{row.rank}</b><span>{row.username}</span><strong>{Number(row.damage).toLocaleString("ru-RU")} HP</strong></div>) : <div className="season-empty">Пока никто не наносил урон. Стань первым!</div>}</section>
+              <p className="yetimatic-footnote">Урон начисляется сервером только после успешного открытия кейса или завершённого апгрейда. Повторно начислить его обновлением страницы нельзя.</p>
+            </main>
+          )}
+
           {page === "Глобальные события" && !streamerMode && (
             <main className="content season-page global-activity-page">
               <header className="season-page-heading global-activity-heading">
@@ -4247,6 +4398,21 @@ export default function App() {
                       <em>Проверка прав на сервере</em>
                     </article>
                   </div>
+
+                  {isOwner && <section className="admin-panel-card maintenance-admin-card">
+                    <div className="maintenance-admin-copy">
+                      <span className="maintenance-admin-icon">🛠️</span>
+                      <div><span className="admin-kicker">GLOBAL ACCESS CONTROL</span><h3>Режим «ОБНОВЛЕНИЕ»</h3>
+                        <p>При включении игроки увидят экран обслуживания вместо игры. Для владельца BrainGG приложение останется доступным.</p>
+                      </div>
+                    </div>
+                    <div className="maintenance-admin-status">
+                      <span className={`maintenance-status-pill ${maintenanceMode ? "is-enabled" : "is-disabled"}`}>{maintenanceMode ? "● ВКЛЮЧЕНО" : "● ВЫКЛЮЧЕНО"}</span>
+                      <button type="button" className={`maintenance-toggle-button ${maintenanceMode ? "is-enabled" : ""}`} onClick={() => updateMaintenanceMode(!maintenanceMode)} disabled={maintenanceBusy}>
+                        {maintenanceBusy ? "Сохраняем..." : maintenanceMode ? "Выключить обновление" : "Включить обновление"}
+                      </button>
+                    </div>
+                  </section>}
 
                   <section className="admin-mobile-quick-panel">
                     <div className="admin-mobile-quick-heading">
