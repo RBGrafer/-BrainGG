@@ -373,6 +373,7 @@ export default function App() {
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [betaMode, setBetaMode] = useState(false);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const [maintenanceCheckedAt, setMaintenanceCheckedAt] = useState(0);
   const [opening, setOpening] = useState(false);
@@ -539,6 +540,12 @@ export default function App() {
   const [adminEventHistorySort, setAdminEventHistorySort] = useState("newest");
   const [adminEventRefreshing, setAdminEventRefreshing] = useState(false);
   const [adminGameId, setAdminGameId] = useState("");
+  const [betaUsername, setBetaUsername] = useState("");
+  const [betaPlayer, setBetaPlayer] = useState(null);
+  const [betaSearchBusy, setBetaSearchBusy] = useState(false);
+  const [betaAccessBusy, setBetaAccessBusy] = useState(false);
+  const [betaAccessFeedback, setBetaAccessFeedback] = useState("");
+  const [betaAccessError, setBetaAccessError] = useState(false);
 
   useEffect(() => {
     if (DISABLED_PAGES.has(page)) setPage("Главная");
@@ -621,8 +628,13 @@ export default function App() {
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Не удалось проверить статус обновления");
+      const nextBetaMode = Boolean(data.betaMode);
       setMaintenanceMode(Boolean(data.enabled));
+      setBetaMode(nextBetaMode);
       setMaintenanceCheckedAt(Date.now());
+      if (nextBetaMode !== betaMode) {
+        window.location.reload();
+      }
       return true;
     } catch (error) {
       console.warn("Maintenance status check failed:", error);
@@ -651,10 +663,12 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!maintenanceMode || isOwner || !initData()) return undefined;
+    if (isOwner || !initData()) return undefined;
+    // Poll for maintenance changes even while the app is normally available,
+    // so an owner can put already-open sessions into maintenance mode too.
     const timer = window.setInterval(() => { refreshMaintenanceStatus(); }, 60_000);
     return () => window.clearInterval(timer);
-  }, [maintenanceMode, isOwner]);
+  }, [isOwner, betaMode]);
 
   useEffect(() => {
     if (!isAdmin || isMobileAdminDevice) return undefined;
@@ -1368,12 +1382,19 @@ export default function App() {
 
         if (error) throw error;
 
+        if (data?.blockedByMaintenance) {
+          setMaintenanceMode(true);
+          setBetaMode(false);
+          setLoading(false);
+          return;
+        }
         if (!data?.success || !data?.player) {
           throw new Error(data?.error || "Не удалось загрузить игрока");
         }
 
         setPlayer(data.player);
         setMaintenanceMode(Boolean(data.maintenanceMode));
+        setBetaMode(Boolean(data.betaMode));
         setIsOwner(Boolean(data.isOwner));
         setMaintenanceCheckedAt(Date.now());
         loadBossState();
@@ -2280,6 +2301,58 @@ export default function App() {
     setAdminToolsRefreshing(false);
   }
 
+  async function findBetaPlayer(event) {
+    event?.preventDefault();
+    const username = betaUsername.trim().replace(/^@/, "");
+    if (!username) {
+      setBetaAccessFeedback("Введи Telegram @username игрока.");
+      setBetaAccessError(true);
+      return;
+    }
+    setBetaSearchBusy(true);
+    setBetaAccessFeedback("");
+    setBetaPlayer(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "admin_beta_find_player", username },
+      });
+      if (error) throw error;
+      if (!data?.success || !data?.player) throw new Error(data?.error || "Игрок не найден.");
+      setBetaPlayer({ ...data.player, betaAccess: Boolean(data.betaAccess), grantedAt: data.grantedAt || null });
+      setBetaUsername(data.player.username || username);
+      setBetaAccessFeedback(data.betaAccess ? "У игрока уже есть доступ к бета-тесту." : "Игрок найден. Бета-доступ пока не выдан.");
+      setBetaAccessError(false);
+    } catch (error) {
+      setBetaAccessFeedback(error?.message || "Не удалось найти игрока.");
+      setBetaAccessError(true);
+    } finally {
+      setBetaSearchBusy(false);
+    }
+  }
+
+  async function setBetaPlayerAccess(enabled) {
+    if (!betaPlayer?.username || betaAccessBusy) return;
+    setBetaAccessBusy(true);
+    setBetaAccessFeedback("");
+    try {
+      const { data, error } = await supabase.functions.invoke("braingg-api", {
+        body: { initData: initData(), action: "admin_beta_set_access", username: betaPlayer.username, enabled: Boolean(enabled) },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Не удалось изменить бета-доступ.");
+      setBetaPlayer((previous) => previous ? { ...previous, betaAccess: Boolean(enabled), grantedAt: enabled ? new Date().toISOString() : null } : previous);
+      setBetaAccessFeedback(enabled
+        ? `Бета-доступ выдан игроку @${betaPlayer.username}. Он сможет войти после включения режима «ОБНОВЛЕНИЕ».`
+        : `Бета-доступ игрока @${betaPlayer.username} отозван.`);
+      setBetaAccessError(false);
+    } catch (error) {
+      setBetaAccessFeedback(error?.message || "Не удалось изменить бета-доступ.");
+      setBetaAccessError(true);
+    } finally {
+      setBetaAccessBusy(false);
+    }
+  }
+
   async function searchAdminPlayer(event, navigateOnSuccess = false) {
     event?.preventDefault();
     const gameId = adminGameId.trim();
@@ -3167,7 +3240,7 @@ export default function App() {
     rejected: "Пополнение не удалось",
   };
 
-  if (maintenanceMode && !isOwner && !loading) {
+  if (maintenanceMode && !isOwner && !betaMode && !loading) {
     return (
       <main className="maintenance-screen" role="status" aria-live="polite">
         <div className="maintenance-topbar"><b>BRAINGG</b><span>⋮</span><button type="button" aria-label="Закрыть" onClick={() => window.Telegram?.WebApp?.close?.()}>×</button></div>
@@ -3192,6 +3265,10 @@ export default function App() {
           <i className="snowflake" key={flake.id} style={{ left: flake.left, animationDelay: flake.delay, animationDuration: flake.duration, width: flake.size, height: flake.size, opacity: flake.opacity, "--snow-drift": flake.drift }} />
         ))}
       </div>
+      {betaMode && <div className="beta-mode-banner" role="status">
+        <span className="beta-mode-banner-icon">🧪</span>
+        <div><b>Вы находитесь в бета-тестировании!</b><small>Ваши монеты и брейнроты сохранятся. Это отдельный тестовый прогресс — основной аккаунт не затрагивается.</small></div>
+      </div>}
       <header className="header">
         <div className="header-brand">
           <button className="menu-trigger" type="button" onClick={() => setMenuOpen(true)} aria-label="Открыть меню" aria-expanded={menuOpen} aria-controls="braingg-navigation">
@@ -4412,6 +4489,20 @@ export default function App() {
                         {maintenanceBusy ? "Сохраняем..." : maintenanceMode ? "Выключить обновление" : "Включить обновление"}
                       </button>
                     </div>
+                  </section>}
+
+                  {isOwner && <section className="admin-panel-card beta-access-admin-card">
+                    <div className="admin-section-title"><span className="admin-section-icon">🧪</span><div><h3>Доступ к бета-тесту</h3><p>Выдавай и отзывай доступ по Telegram @username. Тестовый баланс и инвентарь будут отдельными от основного аккаунта.</p></div></div>
+                    <form className="beta-access-search" onSubmit={findBetaPlayer}>
+                      <label htmlFor="beta-player-username">Telegram username игрока</label>
+                      <div><input id="beta-player-username" className="admin-input" value={betaUsername} onChange={(event) => setBetaUsername(event.target.value.replace(/^@/, ""))} placeholder="@username" autoComplete="off" maxLength={32} /><button className="main-button" type="submit" disabled={betaSearchBusy}>{betaSearchBusy ? "Ищем…" : "Найти игрока"}</button></div>
+                    </form>
+                    {betaPlayer && <div className="beta-player-result">
+                      <div><b>@{betaPlayer.username || betaUsername}</b><small>Game ID: {betaPlayer.game_id || "—"}</small></div>
+                      <span className={`maintenance-status-pill ${betaPlayer.betaAccess ? "is-enabled" : "is-disabled"}`}>{betaPlayer.betaAccess ? "● БЕТА ДОСТУП ЕСТЬ" : "● НЕТ ДОСТУПА"}</span>
+                      <button type="button" className={`maintenance-toggle-button ${betaPlayer.betaAccess ? "is-enabled" : ""}`} onClick={() => setBetaPlayerAccess(!betaPlayer.betaAccess)} disabled={betaAccessBusy}>{betaAccessBusy ? "Сохраняем…" : betaPlayer.betaAccess ? "Отозвать доступ" : "Выдать бета-тест"}</button>
+                    </div>}
+                    {betaAccessFeedback && <div className={`admin-feedback ${betaAccessError ? "error" : "success"}`} role="status">{betaAccessFeedback}</div>}
                   </section>}
 
                   <section className="admin-mobile-quick-panel">
