@@ -175,12 +175,12 @@ async function findPlayerByPublicGameId(supabase: any, rawValue: string, columns
   const username = raw.replace(/^@/, "").trim();
   if (username) {
     const escapedUsername = username.replace(/[\\%_]/g, "\\$&");
-    const { data, error } = await supabase.from("players").select(columns).ilike("username", escapedUsername).maybeSingle();
+    const { data, error } = await supabase.from("players").select(columns).gt("telegram_id", 0).ilike("username", escapedUsername).maybeSingle();
     if (error) return { data: null, error };
     if (data) return { data, error: null };
   }
   // Backwards compatibility: administrators can still use an old internal ID for accounts without a Telegram username.
-  return await supabase.from("players").select(columns).eq("game_id", raw).maybeSingle();
+  return await supabase.from("players").select(columns).gt("telegram_id", 0).eq("game_id", raw).maybeSingle();
 }
 
 Deno.serve(async (req) => {
@@ -324,8 +324,28 @@ Deno.serve(async (req) => {
       return data?.value === true || data?.value?.enabled === true;
     };
 
+    // Beta access is granted by the owner to a real Telegram username.
+    // During maintenance, beta testers use a separate negative Telegram-ID namespace
+    // in all player-owned tables; the production profile remains untouched.
+    const maintenanceEnabled = await readMaintenanceMode();
+    let isBetaTester = false;
+    if (!isOwner) {
+      const { data: betaGrant, error: betaGrantError } = await supabase
+        .from("beta_testers")
+        .select("telegram_id")
+        .eq("telegram_id", telegramUser.id)
+        .maybeSingle();
+      if (betaGrantError) {
+        console.error("Beta tester access lookup failed:", betaGrantError.message);
+        return respond({ error: "Не удалось проверить бета-доступ. Проверь SQL-миграцию beta-testing.sql." }, 503);
+      }
+      isBetaTester = Boolean(betaGrant);
+    }
+    const betaMode = Boolean(maintenanceEnabled && isBetaTester && !isOwner);
+    const playerTelegramId = betaMode ? -Math.abs(telegramUser.id) : telegramUser.id;
+
     if (body.action === "get_maintenance_status") {
-      return respond({ success: true, enabled: await readMaintenanceMode() });
+      return respond({ success: true, enabled: maintenanceEnabled, betaTester: isBetaTester, betaMode, isOwner });
     }
 
     if (body.action === "admin_set_maintenance_mode") {
@@ -344,6 +364,60 @@ Deno.serve(async (req) => {
         return respond({ error: "Не удалось сохранить режим обновления. Проверь SQL-миграцию." }, 500);
       }
       return respond({ success: true, enabled: body.enabled });
+    }
+
+    if (body.action === "admin_beta_find_player") {
+      if (!isOwner) return respond({ error: "Доступ запрещён" }, 403);
+      const username = String(body.username || "").trim().replace(/^@/, "");
+      if (!/^[A-Za-z0-9_]{3,32}$/.test(username)) return respond({ error: "Укажи корректный Telegram @username." }, 400);
+      const { data: target, error: targetError } = await findPlayerByPublicGameId(supabase, `@${username}`, "telegram_id, username, game_id");
+      if (targetError) return respond({ error: "Не удалось найти Telegram-профиль игрока." }, 500);
+      if (!target) return respond({ error: "Игрок не найден. Он должен хотя бы один раз открыть BrainGG." }, 404);
+      const { data: grant, error: grantError } = await supabase.from("beta_testers")
+        .select("telegram_id, username, granted_at").eq("telegram_id", target.telegram_id).maybeSingle();
+      if (grantError) return respond({ error: "Не удалось проверить бета-доступ." }, 500);
+      return respond({ success: true, player: target, betaAccess: Boolean(grant), grantedAt: grant?.granted_at || null });
+    }
+
+    if (body.action === "admin_beta_set_access") {
+      if (!isOwner) return respond({ error: "Доступ запрещён" }, 403);
+      const username = String(body.username || "").trim().replace(/^@/, "");
+      const enabled = body.enabled;
+      if (!/^[A-Za-z0-9_]{3,32}$/.test(username) || typeof enabled !== "boolean") {
+        return respond({ error: "Укажи корректный Telegram @username и действие." }, 400);
+      }
+      const { data: target, error: targetError } = await findPlayerByPublicGameId(supabase, `@${username}`, "telegram_id, username, game_id");
+      if (targetError) return respond({ error: "Не удалось найти Telegram-профиль игрока." }, 500);
+      if (!target) return respond({ error: "Игрок не найден. Он должен хотя бы один раз открыть BrainGG." }, 404);
+      if (enabled) {
+        const { error } = await supabase.from("beta_testers").upsert({
+          telegram_id: target.telegram_id,
+          username: target.username || username,
+          granted_by: telegramUser.id,
+          granted_at: new Date().toISOString(),
+        }, { onConflict: "telegram_id" });
+        if (error) {
+          console.error("Beta access grant failed:", error.message);
+          return respond({ error: "Не удалось выдать бета-доступ." }, 500);
+        }
+      } else {
+        const { error } = await supabase.from("beta_testers").delete().eq("telegram_id", target.telegram_id);
+        if (error) {
+          console.error("Beta access revoke failed:", error.message);
+          return respond({ error: "Не удалось отозвать бета-доступ." }, 500);
+        }
+      }
+      return respond({ success: true, enabled, player: target });
+    }
+
+    // While maintenance is active, only the owner and explicitly approved beta
+    // testers may call game endpoints. Everyone else stays on the maintenance screen.
+    if (maintenanceEnabled && !isOwner && !isBetaTester) {
+      return respond({ success: true, blockedByMaintenance: true, maintenanceMode: true, betaMode: false });
+    }
+
+    if (betaMode && ["create_stars_invoice", "check_stars_payment", "get_brainrot_deposit_catalog", "create_brainrot_deposit_request", "get_my_brainrot_deposit_requests"].includes(String(body.action || ""))) {
+      return respond({ error: "Пополнения и внешние сделки временно отключены в бета-тесте. Твой основной аккаунт не затрагивается." }, 403);
     }
 
     const getActiveEvent = async () => {
@@ -379,6 +453,7 @@ Deno.serve(async (req) => {
       itemName?: string | null; caseName?: string | null; rarity?: string | null;
       valueGg?: number | null; success?: boolean | null;
     }) => {
+      if (betaMode) return; // Keep beta actions out of the production community feed.
       try {
         const usernameSource = activity.username !== undefined ? activity.username : telegramUser.username;
         const safeUsername = String(usernameSource ?? "").replace(/^@/, "").trim().slice(0, 32) || null;
@@ -420,22 +495,23 @@ Deno.serve(async (req) => {
     // YETIMATIC weekly boss: all damage is awarded only after the server has
     // successfully completed the corresponding paid/free game action.
     if (body.action === "boss_get_state") {
-      const { data, error } = await supabase.rpc("boss_get_state", { p_telegram_id: telegramUser.id });
+      const { data, error } = await supabase.rpc("boss_get_state", { p_telegram_id: playerTelegramId });
       if (error) { console.error("Boss state load failed:", error.message); return respond({ error: "Не удалось загрузить событие босса" }, 500); }
-      const { data: contribution } = await supabase.from("boss_contributions").select("reward_claimed").eq("telegram_id", telegramUser.id).maybeSingle();
+      const { data: contribution } = await supabase.from("boss_contributions").select("reward_claimed").eq("telegram_id", playerTelegramId).maybeSingle();
       return respond({ success: true, boss: data, rewardClaimed: Boolean(contribution?.reward_claimed) });
     }
     if (body.action === "boss_claim_reward") {
-      const { data, error } = await supabase.rpc("boss_claim_reward", { p_telegram_id: telegramUser.id });
+      const { data, error } = await supabase.rpc("boss_claim_reward", { p_telegram_id: playerTelegramId });
       if (error) return respond({ error: error.message || "Не удалось получить награду" }, 400);
-      const { data: refreshedPlayer } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
-      const credits = await getFreeCaseCredits(supabase, telegramUser.id);
+      const { data: refreshedPlayer } = await supabase.from("players").select("balance").eq("telegram_id", playerTelegramId).maybeSingle();
+      const credits = await getFreeCaseCredits(supabase, playerTelegramId);
       return respond({ success: true, result: data, balance: refreshedPlayer?.balance ?? null, ...credits });
     }
     const applyYetimaticDamage = async (damage: number) => {
+      if (betaMode) return; // Sandbox case openings do not damage the live boss.
       try {
         const { error } = await supabase.rpc("boss_apply_damage", {
-          p_telegram_id: telegramUser.id,
+          p_telegram_id: playerTelegramId,
           p_username: String(telegramUser.username || ""),
           p_damage: damage,
         });
@@ -524,7 +600,7 @@ Deno.serve(async (req) => {
       const { data: cooldownRows, error: cooldownError } = await supabase
         .from("special_case_cooldowns")
         .select("case_type, opened_at")
-        .eq("telegram_id", telegramUser.id);
+        .eq("telegram_id", playerTelegramId);
       if (cooldownError) throw cooldownError;
 
       const nickOpenedAt = cooldownRows?.find((row: any) => row.case_type === "nick")?.opened_at;
@@ -553,7 +629,7 @@ Deno.serve(async (req) => {
 
     // MINES: every outcome and balance change is server-side and atomic in SQL.
     if (body.action === "mines_get_active_game") {
-      const { data, error } = await supabase.rpc("get_active_mines_game", { p_telegram_id: telegramUser.id });
+      const { data, error } = await supabase.rpc("get_active_mines_game", { p_telegram_id: playerTelegramId });
       if (error) {
         console.error("Mines active game lookup failed:", error.message);
         return respond({ error: "Не удалось загрузить текущую игру. Проверь SQL-миграцию режима «Мины»." }, 500);
@@ -575,7 +651,7 @@ Deno.serve(async (req) => {
       }
       const minePositions = cells.slice(0, mineCount).sort((a, b) => a - b);
       const { data, error } = await supabase.rpc("start_mines_game", {
-        p_telegram_id: telegramUser.id, p_bet: bet, p_mine_count: mineCount, p_mine_positions: minePositions,
+        p_telegram_id: playerTelegramId, p_bet: bet, p_mine_count: mineCount, p_mine_positions: minePositions,
       });
       if (error) {
         console.warn("Mines start rejected:", error.message);
@@ -591,7 +667,7 @@ Deno.serve(async (req) => {
       const gameId = String(body.gameId || "");
       const cell = Number(body.cell);
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(gameId) || !Number.isInteger(cell) || cell < 0 || cell > 24) return respond({ error: "Некорректная клетка или игровой раунд." }, 400);
-      const { data, error } = await supabase.rpc("reveal_mines_cell", { p_telegram_id: telegramUser.id, p_game_id: gameId, p_cell: cell });
+      const { data, error } = await supabase.rpc("reveal_mines_cell", { p_telegram_id: playerTelegramId, p_game_id: gameId, p_cell: cell });
       if (error) {
         console.warn("Mines reveal rejected:", error.message);
         const message = String(error.message || "");
@@ -607,7 +683,7 @@ Deno.serve(async (req) => {
     if (body.action === "mines_cashout") {
       const gameId = String(body.gameId || "");
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(gameId)) return respond({ error: "Некорректный игровой раунд." }, 400);
-      const { data, error } = await supabase.rpc("cashout_mines_game", { p_telegram_id: telegramUser.id, p_game_id: gameId });
+      const { data, error } = await supabase.rpc("cashout_mines_game", { p_telegram_id: playerTelegramId, p_game_id: gameId });
       if (error) {
         console.warn("Mines cashout rejected:", error.message);
         const message = String(error.message || "");
@@ -787,7 +863,7 @@ Deno.serve(async (req) => {
       const code = String(body.code ?? "").trim().toUpperCase();
       if (!/^[A-Z0-9_-]{3,24}$/.test(code)) return respond({ error: "Введи корректный промокод длиной 3–24 символа." }, 400);
       const { data: result, error } = await supabase.rpc("redeem_promo_code", {
-        p_telegram_id: telegramUser.id, p_code: code,
+        p_telegram_id: playerTelegramId, p_code: code,
       });
       if (error) {
         console.warn("Promo code redemption rejected:", error.message);
@@ -800,7 +876,7 @@ Deno.serve(async (req) => {
         return respond({ error: "Не удалось активировать промокод. Попробуй ещё раз." }, 400);
       }
       let credits = { free_case_credits: [], free_cases_total: Number(result?.free_cases_total || 0) };
-      try { credits = await getFreeCaseCredits(supabase, telegramUser.id); }
+      try { credits = await getFreeCaseCredits(supabase, playerTelegramId); }
       catch (creditError) { console.warn("Promo redemption credits refresh failed:", creditError?.message || creditError); }
       await recordGlobalActivity({ eventType: "promo_redeemed", title: "Активировал промокод", description: "Игрок получил бонус BrainGG за промокод.", valueGg: Number(result?.reward_gg || 0), success: true });
       return respond({ success: true, result: { ...(result || {}), ...credits } });
@@ -846,7 +922,7 @@ Deno.serve(async (req) => {
         .eq("telegram_id", telegramUser.id).maybeSingle();
       if (orderError || !order) return respond({ error: "Заказ не найден" }, 404);
       const { data: currentPlayer } = await supabase.from("players").select("balance")
-        .eq("telegram_id", telegramUser.id).maybeSingle();
+        .eq("telegram_id", playerTelegramId).maybeSingle();
       return respond({ success: true, status: order.status, balance: currentPlayer?.balance ?? null,
         stars: order.stars, gg: Number(order.gg_amount) });
     }
@@ -1035,7 +1111,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
 
     const recordProgress = async (action: string, amount = 1) => {
       const { error } = await supabase.rpc("record_player_action", {
-        p_telegram_id: telegramUser.id,
+        p_telegram_id: playerTelegramId,
         p_action: action,
         p_amount: amount,
       });
@@ -1051,17 +1127,19 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
 
     // Игровой центр: публичная лента, прогресс, задания и рейтинг.
     if (body.action === "get_game_hub") {
-      const { error: ensureProgressError } = await supabase.from("player_progress").upsert({ telegram_id: telegramUser.id }, { onConflict: "telegram_id", ignoreDuplicates: true });
+      const { error: ensureProgressError } = await supabase.from("player_progress").upsert({ telegram_id: playerTelegramId }, { onConflict: "telegram_id", ignoreDuplicates: true });
       if (ensureProgressError) return respond({ error: "Не удалось инициализировать игровой профиль" }, 500);
       const { data: progress, error: progressError } = await supabase
         .from("player_progress")
         .select("xp, total_cases_opened, total_sales, total_upgrades, daily_streak, last_daily_claim")
-        .eq("telegram_id", telegramUser.id).maybeSingle();
+        .eq("telegram_id", playerTelegramId).maybeSingle();
       if (progressError) return respond({ error: "Не удалось загрузить прогресс" }, 500);
 
-      const { data: latestItems, error: dropsError } = await supabase
-        .from("game_live_drops")
-        .select("id, telegram_id, item_name, rarity, value_gg, case_name, mutation, created_at")
+      const liveDropsQuery = supabase.from("game_live_drops")
+        .select("id, telegram_id, item_name, rarity, value_gg, case_name, mutation, created_at");
+      const { data: latestItems, error: dropsError } = await (betaMode
+        ? liveDropsQuery.lt("telegram_id", 0)
+        : liveDropsQuery.gt("telegram_id", 0))
         .order("created_at", { ascending: false }).limit(25);
       if (dropsError) console.error("Live drops loading failed:", dropsError.message);
       const dropIds = [...new Set((latestItems || []).map((item: any) => item.telegram_id))];
@@ -1075,9 +1153,11 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
         username: usernames.get(String(item.telegram_id)) || "Игрок",
       }));
 
-      const { data: rankingRows, error: rankingError } = await supabase
-        .from("player_progress")
-        .select("telegram_id, xp, total_cases_opened, total_sales, total_upgrades")
+      const rankingQuery = supabase.from("player_progress")
+        .select("telegram_id, xp, total_cases_opened, total_sales, total_upgrades");
+      const { data: rankingRows, error: rankingError } = await (betaMode
+        ? rankingQuery.lt("telegram_id", 0)
+        : rankingQuery.gt("telegram_id", 0))
         .order("xp", { ascending: false }).limit(50);
       if (rankingError) console.error("Leaderboard loading failed:", rankingError.message);
       const rankIds = (rankingRows || []).map((row: any) => row.telegram_id);
@@ -1094,9 +1174,9 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
 
       const today = new Date().toISOString().slice(0, 10);
       const { data: dailyClaim } = await supabase.from("daily_reward_claims")
-        .select("claim_date, streak_day, reward_gg").eq("telegram_id", telegramUser.id).eq("claim_date", today).maybeSingle();
+        .select("claim_date, streak_day, reward_gg").eq("telegram_id", playerTelegramId).eq("claim_date", today).maybeSingle();
       const { data: taskClaims } = await supabase.from("task_reward_claims")
-        .select("task_id").eq("telegram_id", telegramUser.id).eq("claim_date", today);
+        .select("task_id").eq("telegram_id", playerTelegramId).eq("claim_date", today);
       const xp = Number(progress?.xp || 0);
       const level = Math.floor(Math.sqrt(xp / 100)) + 1;
       const nextLevelXp = level * level * 100;
@@ -1106,10 +1186,10 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
     }
 
     if (body.action === "claim_daily_reward") {
-      const { data, error } = await supabase.rpc("claim_daily_reward", { p_telegram_id: telegramUser.id });
+      const { data, error } = await supabase.rpc("claim_daily_reward", { p_telegram_id: playerTelegramId });
       if (error) { console.error("Daily reward claim failed:", error.message); return respond({ error: "Не удалось получить ежедневную награду" }, 400); }
       const rewardResult = typeof data === "string" ? JSON.parse(data) : data;
-      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", playerTelegramId).maybeSingle();
       if (rewardResult?.success) await recordGlobalActivity({ eventType: "daily_reward", title: "Забрал ежедневную награду", description: `Серия: ${Number(rewardResult.streak || 1)} дн.`, valueGg: Number(rewardResult.reward_gg || 0), success: true });
       return respond({ success: true, result: rewardResult, balance: player?.balance });
     }
@@ -1118,23 +1198,23 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       const taskId = String(body.taskId || "");
       const task = GAME_TASKS.find((entry) => entry.id === taskId);
       if (!task) return respond({ error: "Неизвестное задание" }, 400);
-      const { data, error } = await supabase.rpc("claim_task_reward", { p_telegram_id: telegramUser.id, p_task_id: taskId });
+      const { data, error } = await supabase.rpc("claim_task_reward", { p_telegram_id: playerTelegramId, p_task_id: taskId });
       if (error) { console.error("Task reward claim failed:", error.message); return respond({ error: "Не удалось получить награду" }, 400); }
       const taskResult = typeof data === "string" ? JSON.parse(data) : data;
-      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", playerTelegramId).maybeSingle();
       if (taskResult?.success) await recordGlobalActivity({ eventType: "task_reward", title: "Завершил игровое задание", description: `${task.title} · +${Number(taskResult.reward_gg || 0)} GG`, valueGg: Number(taskResult.reward_gg || 0), success: true });
       return respond({ success: true, result: taskResult, balance: player?.balance });
     }
 
     if (body.action === "get_quiz_status") {
-      const { data, error } = await supabase.from("brainrot_quiz_attempts").select("is_correct").eq("telegram_id", telegramUser.id).eq("attempt_date", new Date().toISOString().slice(0, 10));
+      const { data, error } = await supabase.from("brainrot_quiz_attempts").select("is_correct").eq("telegram_id", playerTelegramId).eq("attempt_date", new Date().toISOString().slice(0, 10));
       if (error) return respond({ error: "Викторина пока не настроена. Примени SQL-миграцию BrainGG Quiz." }, 503);
       const rows = data || [];
       return respond({ success: true, status: { used: rows.length, remaining: Math.max(0, 3 - rows.length), correct: rows.filter((row: any) => row.is_correct).length } });
     }
 
     if (body.action === "get_quiz_question") {
-      const { data: usedRows, error } = await supabase.from("brainrot_quiz_attempts").select("question_id, is_correct").eq("telegram_id", telegramUser.id).eq("attempt_date", new Date().toISOString().slice(0, 10));
+      const { data: usedRows, error } = await supabase.from("brainrot_quiz_attempts").select("question_id, is_correct").eq("telegram_id", playerTelegramId).eq("attempt_date", new Date().toISOString().slice(0, 10));
       if (error) return respond({ error: "Викторина пока не настроена. Примени SQL-миграцию BrainGG Quiz." }, 503);
       const used = new Set((usedRows || []).map((row: any) => row.question_id));
       const remaining = QUIZ_QUESTIONS.filter((question) => !used.has(question.id));
@@ -1150,10 +1230,10 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       const question = QUIZ_QUESTIONS.find((item) => item.id === questionId);
       if (!question || !Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= question.options.length) return respond({ error: "Некорректный ответ" }, 400);
       const correct = optionIndex === question.answer;
-      const { data, error } = await supabase.rpc("submit_brainrot_quiz_answer", { p_telegram_id: telegramUser.id, p_question_id: question.id, p_is_correct: correct });
+      const { data, error } = await supabase.rpc("submit_brainrot_quiz_answer", { p_telegram_id: playerTelegramId, p_question_id: question.id, p_is_correct: correct });
       if (error) { console.error("Quiz answer submit failed:", error.message); return respond({ error: error.message.includes("QUIZ_DAILY_LIMIT") ? "Все три попытки на сегодня использованы." : "Не удалось сохранить ответ. Проверь SQL-миграцию викторины." }, 400); }
       const result = typeof data === "string" ? JSON.parse(data) : data;
-      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      const { data: player } = await supabase.from("players").select("balance").eq("telegram_id", playerTelegramId).maybeSingle();
       await recordGlobalActivity({ eventType: correct ? "quiz_correct" : "quiz_answered", title: correct ? "Правильно ответил в викторине" : "Участвовал в викторине", description: correct ? "Верный ответ · +5 GG" : "Ответил на вопрос BrainGG.", valueGg: correct ? 5 : 0, success: correct });
       return respond({ success: true, correct, reward_gg: correct ? 5 : 0, correct_answer: question.options[question.answer], correct_index: question.answer, explanation: question.explanation, balance: player?.balance, status: { used: result.used, remaining: Math.max(0, 3 - Number(result.used || 0)), correct: result.correct_count } });
     }
@@ -1464,7 +1544,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       const { data: history, error } = await supabase
         .from("opening_history")
         .select("case_name, item_name, price, created_at")
-        .eq("telegram_id", telegramUser.id)
+        .eq("telegram_id", playerTelegramId)
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) {
@@ -1479,7 +1559,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       const { data: items, error } = await supabase
         .from("inventory")
         .select("id, item_name, rarity, value_gg, mutation, created_at")
-        .eq("telegram_id", telegramUser.id)
+        .eq("telegram_id", playerTelegramId)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -1506,11 +1586,11 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
 
       const { data: soldItem } = await supabase.from("inventory")
         .select("item_name, rarity, value_gg, mutation")
-        .eq("id", inventoryId).eq("telegram_id", telegramUser.id).maybeSingle();
+        .eq("id", inventoryId).eq("telegram_id", playerTelegramId).maybeSingle();
       const { data, error } = await supabase.rpc(
         "sell_inventory_item_with_event",
         {
-          p_telegram_id: telegramUser.id,
+          p_telegram_id: playerTelegramId,
           p_inventory_id: inventoryId,
         },
       );
@@ -1616,11 +1696,11 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       // avoiding a race between the Edge Function's event read and the actual upgrade.
       const { data: upgradeSource } = await supabase.from("inventory")
         .select("item_name, rarity, value_gg")
-        .eq("id", inventoryId).eq("telegram_id", telegramUser.id).maybeSingle();
+        .eq("id", inventoryId).eq("telegram_id", playerTelegramId).maybeSingle();
       const { data, error } = await supabase.rpc(
         "upgrade_inventory_item_fair_v2",
         {
-          p_telegram_id: telegramUser.id,
+          p_telegram_id: playerTelegramId,
           p_inventory_id: inventoryId,
           p_target_item: targetItem.trim(),
         },
@@ -1670,7 +1750,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       // player/case cannot both claim the opening; the other special case is independent.
       const { data: cooldownClaimData, error: cooldownClaimError } = await supabase.rpc(
         "claim_special_case_cooldown",
-        { p_telegram_id: telegramUser.id, p_case_type: specialCaseType },
+        { p_telegram_id: playerTelegramId, p_case_type: specialCaseType },
       );
       if (cooldownClaimError) {
         console.error("Special case cooldown claim failed:", cooldownClaimError.message);
@@ -1690,7 +1770,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
 
       const releaseCooldownClaim = async () => {
         const { error: releaseError } = await supabase.rpc("release_special_case_cooldown", {
-          p_telegram_id: telegramUser.id,
+          p_telegram_id: playerTelegramId,
           p_case_type: specialCaseType,
           p_claim_token: claimToken,
         });
@@ -1698,7 +1778,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       };
 
       const { error: grantError } = await supabase.rpc("grant_special_case_credit", {
-        p_telegram_id: telegramUser.id,
+        p_telegram_id: playerTelegramId,
         p_case_name: specialCase.rewardCaseName,
       });
       if (grantError) {
@@ -1708,12 +1788,12 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       }
 
       const { data, error } = await supabase.rpc("open_case", {
-        p_telegram_id: telegramUser.id,
+        p_telegram_id: playerTelegramId,
         p_case_name: specialCase.rewardCaseName,
       });
       if (error) {
         const { error: rollbackError } = await supabase.rpc("revoke_special_case_credit", {
-          p_telegram_id: telegramUser.id,
+          p_telegram_id: playerTelegramId,
           p_case_name: specialCase.rewardCaseName,
         });
         if (rollbackError) console.error("Special case credit rollback failed:", rollbackError.message);
@@ -1728,7 +1808,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       }
       if (!openedReward || typeof openedReward !== "object" || openedReward?.success === false) {
         const { error: rollbackError } = await supabase.rpc("revoke_special_case_credit", {
-          p_telegram_id: telegramUser.id,
+          p_telegram_id: playerTelegramId,
           p_case_name: specialCase.rewardCaseName,
         });
         if (rollbackError) console.error("Special case credit rollback failed:", rollbackError.message);
@@ -1740,7 +1820,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       const { data: completedAt, error: completeCooldownError } = await supabase.rpc(
         "complete_special_case_cooldown",
         {
-          p_telegram_id: telegramUser.id,
+          p_telegram_id: playerTelegramId,
           p_case_type: specialCaseType,
           p_claim_token: claimToken,
         },
@@ -1754,7 +1834,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
         const { data: fallbackRows, error: fallbackError } = await supabase
           .from("special_case_cooldowns")
           .update({ opened_at: fallbackOpenedAt, claim_token: null })
-          .eq("telegram_id", telegramUser.id)
+          .eq("telegram_id", playerTelegramId)
           .eq("case_type", specialCaseType)
           .eq("claim_token", claimToken)
           .select("opened_at");
@@ -1781,7 +1861,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
           success: true,
         });
         const { error: dropInsertError } = await supabase.from("game_live_drops").insert({
-          telegram_id: telegramUser.id,
+          telegram_id: playerTelegramId,
           item_name: dropItemName,
           rarity: openedReward.rarity || null,
           value_gg: Number(openedReward.value_gg || openedReward.sold_price || 0),
@@ -1793,7 +1873,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
 
       let credits;
       try {
-        credits = await getFreeCaseCredits(supabase, telegramUser.id);
+        credits = await getFreeCaseCredits(supabase, playerTelegramId);
       } catch {
         credits = { free_case_credits: [], free_cases_total: 0 };
       }
@@ -1828,7 +1908,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       }
 
       const { data, error } = await supabase.rpc("open_case", {
-        p_telegram_id: telegramUser.id,
+        p_telegram_id: playerTelegramId,
         p_case_name: caseName,
       });
 
@@ -1861,7 +1941,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
           success: true,
         });
         const { error: dropInsertError } = await supabase.from("game_live_drops").insert({
-          telegram_id: telegramUser.id,
+          telegram_id: playerTelegramId,
           item_name: dropItemName,
           rarity: openedReward.rarity || null,
           value_gg: Number(openedReward.value_gg || openedReward.sold_price || 0),
@@ -1877,7 +1957,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       try {
         credits = await getFreeCaseCredits(
           supabase,
-          telegramUser.id,
+          playerTelegramId,
         );
       } catch {
         credits = {
@@ -1898,7 +1978,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       .from("players")
       .upsert(
         {
-          telegram_id: telegramUser.id,
+          telegram_id: playerTelegramId,
           username: telegramUser.username ?? null,
         },
         { onConflict: "telegram_id" },
@@ -1919,7 +1999,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
     try {
       credits = await getFreeCaseCredits(
         supabase,
-        telegramUser.id,
+        playerTelegramId,
       );
     } catch {
       return respond(
@@ -1931,7 +2011,9 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
     return respond({
       success: true,
       isOwner,
-      maintenanceMode: isOwner ? false : await readMaintenanceMode(),
+      maintenanceMode: maintenanceEnabled,
+      betaTester: isBetaTester,
+      betaMode,
       player: {
         ...player,
         game_id: player.username ? `@${player.username}` : null,
