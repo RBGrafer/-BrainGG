@@ -32,6 +32,8 @@ const ALLOWED_CASES = [
   "Elite Case",
   "All In Strawberry Elephant",
   "All In Headless Horseman",
+  "Cheap Case",
+  "Anniversary Case",
   // Старые названия оставлены для совместимости с ранее выданными кредитами.
   "Starter Case",
   "Lucky Case",
@@ -309,6 +311,41 @@ Deno.serve(async (req) => {
       : telegramUsername === "rb_grafer";
     const isAdmin = isOwner || adminIds.includes(String(telegramUser.id));
 
+    const readMaintenanceMode = async () => {
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "maintenance_mode")
+        .maybeSingle();
+      if (error) {
+        console.error("Maintenance setting read failed:", error.message);
+        return false;
+      }
+      return data?.value === true || data?.value?.enabled === true;
+    };
+
+    if (body.action === "get_maintenance_status") {
+      return respond({ success: true, enabled: await readMaintenanceMode() });
+    }
+
+    if (body.action === "admin_set_maintenance_mode") {
+      if (!isOwner) return respond({ error: "Доступ запрещён" }, 403);
+      if (typeof body.enabled !== "boolean") {
+        return respond({ error: "Некорректное значение режима обновления" }, 400);
+      }
+      const { error } = await supabase.from("app_settings").upsert({
+        key: "maintenance_mode",
+        value: body.enabled,
+        updated_by: telegramUser.id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "key" });
+      if (error) {
+        console.error("Maintenance setting update failed:", error.message);
+        return respond({ error: "Не удалось сохранить режим обновления. Проверь SQL-миграцию." }, 500);
+      }
+      return respond({ success: true, enabled: body.enabled });
+    }
+
     const getActiveEvent = async () => {
       const { data: eventRow, error: eventError } = await supabase
         .from("game_global_state")
@@ -377,6 +414,34 @@ Deno.serve(async (req) => {
         if (!result?.ok) console.warn("BrainGG deposit Telegram notification failed:", result?.description || "unknown error");
       } catch (notificationError) {
         console.warn("BrainGG deposit Telegram notification failed:", notificationError instanceof Error ? notificationError.message : notificationError);
+      }
+    };
+
+    // YETIMATIC weekly boss: all damage is awarded only after the server has
+    // successfully completed the corresponding paid/free game action.
+    if (body.action === "boss_get_state") {
+      const { data, error } = await supabase.rpc("boss_get_state", { p_telegram_id: telegramUser.id });
+      if (error) { console.error("Boss state load failed:", error.message); return respond({ error: "Не удалось загрузить событие босса" }, 500); }
+      const { data: contribution } = await supabase.from("boss_contributions").select("reward_claimed").eq("telegram_id", telegramUser.id).maybeSingle();
+      return respond({ success: true, boss: data, rewardClaimed: Boolean(contribution?.reward_claimed) });
+    }
+    if (body.action === "boss_claim_reward") {
+      const { data, error } = await supabase.rpc("boss_claim_reward", { p_telegram_id: telegramUser.id });
+      if (error) return respond({ error: error.message || "Не удалось получить награду" }, 400);
+      const { data: refreshedPlayer } = await supabase.from("players").select("balance").eq("telegram_id", telegramUser.id).maybeSingle();
+      const credits = await getFreeCaseCredits(supabase, telegramUser.id);
+      return respond({ success: true, result: data, balance: refreshedPlayer?.balance ?? null, ...credits });
+    }
+    const applyYetimaticDamage = async (damage: number) => {
+      try {
+        const { error } = await supabase.rpc("boss_apply_damage", {
+          p_telegram_id: telegramUser.id,
+          p_username: String(telegramUser.username || ""),
+          p_damage: damage,
+        });
+        if (error) console.warn("YETIMATIC damage was not recorded:", error.message);
+      } catch (bossError) {
+        console.warn("YETIMATIC damage was not recorded:", bossError instanceof Error ? bossError.message : bossError);
       }
     };
 
@@ -1569,6 +1634,7 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       await recordProgress("upgrade_item", 1);
       const upgradeResult = typeof data === "string" ? JSON.parse(data) : data;
       const upgradeWon = Boolean(upgradeResult?.won);
+      await applyYetimaticDamage(upgradeWon ? 20 : 5);
       await recordGlobalActivity({
         eventType: upgradeWon ? "upgrade_won" : "upgrade_failed",
         title: upgradeWon ? "Успешный апгрейд" : "Попытка апгрейда",
@@ -1779,6 +1845,8 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
       }
 
       await recordProgress("open_case", 1);
+      const caseDamage = caseName.toLowerCase().includes("all in") ? 35 : (caseName.toLowerCase().includes("legend") || caseName.toLowerCase().includes("elite") || caseName.toLowerCase().includes("truckini") ? 15 : 5);
+      await applyYetimaticDamage(caseDamage);
       const openedReward: any = data || {};
       const dropItemName = String(openedReward.item_name || openedReward.name || "").trim();
       if (dropItemName) {
@@ -1862,6 +1930,8 @@ ${reason ? `Причина: ${reason}` : "Трейд отклонён или н�
 
     return respond({
       success: true,
+      isOwner,
+      maintenanceMode: isOwner ? false : await readMaintenanceMode(),
       player: {
         ...player,
         game_id: player.username ? `@${player.username}` : null,
