@@ -114,3 +114,15 @@ assert.match(cases, /id: "referral-case", name: "Реферальный кейс
   'Referral case must remain the deposit-gated special case');
 assert.match(appCss, /\.case-card-art\.case-artwork\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/s,
   'Case artwork containers must be square');
+
+// YETIMATIC shared boss event contract: server-only damage, one-time rewards,
+// weekly lifecycle and both entry points (home banner + dedicated boss page).
+const bossSql = read('supabase/manual-sql/yetimatic-boss-event.sql');
+assert.match(bossSql, /max_hp integer not null default 5000/, 'YETIMATIC must start with 5,000 HP');
+assert.match(bossSql, /ends_at timestamptz not null default \(now\(\) \+ interval '7 days'\)/, 'YETIMATIC must run for seven days');
+assert.match(bossSql, /boss_claim_reward[\s\S]*?reward_claimed=true/, 'Boss rewards must be claimed only once');
+assert.match(backend, /applyYetimaticDamage\(upgradeWon \? 20 : 5\)/, 'Upgrade outcomes must apply server-side boss damage');
+assert.match(backend, /applyYetimaticDamage\(caseDamage\)/, 'Successful case opens must apply server-side boss damage');
+assert.match(appSource, /yetimatic-home-banner[\s\S]*?changePage\("Боссы"\)/, 'Home page must link to the YETIMATIC event');
+assert.match(appSource, /page === "Боссы"[\s\S]*?yetimatic-leaderboard/, 'Dedicated boss page must show the damage leaderboard');
+console.log('BrainGG YETIMATIC: OK — shared 5,000 HP / 7-day boss, server-side damage, one-time rewards and UI entry points checked.');
