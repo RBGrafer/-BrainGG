@@ -5945,3 +5945,36 @@ body {
   .content { overflow: visible !important; max-height: none !important; }
   .beta-mode-banner { margin-bottom: 14px; padding: 12px; }
 }
+
+/* Unified admin payout area: GG grants + beta access */
+.admin-payout-intro {
+  margin: 0 0 18px;
+  padding: 20px 22px;
+  border: 1px solid rgba(177, 112, 255, .24);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(104, 54, 170, .18), rgba(23, 17, 39, .92));
+}
+.admin-payout-intro h3 { margin: 5px 0 6px; color: #fff; font-size: 20px; }
+.admin-payout-intro p { margin: 0; color: #bcb2cc; line-height: 1.5; }
+.admin-payout-shortcuts { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+.admin-payout-shortcuts span {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 34px;
+  padding: 7px 12px; border-radius: 10px; color: #eadcff;
+  border: 1px solid rgba(185, 139, 255, .24); background: rgba(130, 78, 194, .16);
+  font-size: 13px; font-weight: 750;
+}
+.beta-access-admin-card { margin-top: 0; margin-bottom: 18px; }
+.beta-access-search > div { display: flex; gap: 10px; }
+.beta-access-search .admin-input { min-width: 0; flex: 1; }
+.beta-player-result { min-width: 0; }
+@media (max-width: 680px) {
+  .admin-payout-intro { padding: 16px; border-radius: 15px; }
+  .admin-payout-intro h3 { font-size: 18px; }
+  .admin-payout-shortcuts { gap: 7px; }
+  .admin-payout-shortcuts span { flex: 1 1 135px; justify-content: center; }
+  .beta-access-search > div { flex-direction: column; }
+  .beta-access-search > div .main-button { width: 100%; min-height: 44px; }
+  .beta-player-result { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  .beta-player-result > * { min-width: 0; }
+  .beta-player-result .maintenance-toggle-button { width: 100%; min-height: 44px; }
+}
