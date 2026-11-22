@@ -4422,7 +4422,7 @@ export default function App() {
               <nav className="admin-tabs" aria-label="Разделы админ-панели">
                 {[
                   ["overview", "Обзор", "▦"],
-                  ["players", "Игроки", "♙"],
+                  ["players", "Выдача", "🪙"],
                   ["history", "Журнал", "◷"],
                   ["events", "События", "✦"],
                   ["deposits", "Пополнения", "🧠"],
@@ -4491,19 +4491,7 @@ export default function App() {
                     </div>
                   </section>}
 
-                  {isOwner && <section className="admin-panel-card beta-access-admin-card">
-                    <div className="admin-section-title"><span className="admin-section-icon">🧪</span><div><h3>Доступ к бета-тесту</h3><p>Выдавай и отзывай доступ по Telegram @username. Тестовый баланс и инвентарь будут отдельными от основного аккаунта.</p></div></div>
-                    <form className="beta-access-search" onSubmit={findBetaPlayer}>
-                      <label htmlFor="beta-player-username">Telegram username игрока</label>
-                      <div><input id="beta-player-username" className="admin-input" value={betaUsername} onChange={(event) => setBetaUsername(event.target.value.replace(/^@/, ""))} placeholder="@username" autoComplete="off" maxLength={32} /><button className="main-button" type="submit" disabled={betaSearchBusy}>{betaSearchBusy ? "Ищем…" : "Найти игрока"}</button></div>
-                    </form>
-                    {betaPlayer && <div className="beta-player-result">
-                      <div><b>@{betaPlayer.username || betaUsername}</b><small>Game ID: {betaPlayer.game_id || "—"}</small></div>
-                      <span className={`maintenance-status-pill ${betaPlayer.betaAccess ? "is-enabled" : "is-disabled"}`}>{betaPlayer.betaAccess ? "● БЕТА ДОСТУП ЕСТЬ" : "● НЕТ ДОСТУПА"}</span>
-                      <button type="button" className={`maintenance-toggle-button ${betaPlayer.betaAccess ? "is-enabled" : ""}`} onClick={() => setBetaPlayerAccess(!betaPlayer.betaAccess)} disabled={betaAccessBusy}>{betaAccessBusy ? "Сохраняем…" : betaPlayer.betaAccess ? "Отозвать доступ" : "Выдать бета-тест"}</button>
-                    </div>}
-                    {betaAccessFeedback && <div className={`admin-feedback ${betaAccessError ? "error" : "success"}`} role="status">{betaAccessFeedback}</div>}
-                  </section>}
+
 
                   <section className="admin-mobile-quick-panel">
                     <div className="admin-mobile-quick-heading">
@@ -4571,6 +4559,15 @@ export default function App() {
 
               {adminSection === "players" && (
                 <>
+              <section className="admin-payout-intro">
+                <span className="admin-kicker">REWARDS & BETA ACCESS</span>
+                <h3>🪙 Выдача наград и доступов</h3>
+                <p>Выдавай монеты GG и управляй списком бета-тестеров в одном разделе.</p>
+                <div className="admin-payout-shortcuts">
+                  <span>🪙 Монеты GG</span>
+                  {isOwner && <span>🧪 Бета-тест</span>}
+                </div>
+              </section>
               <section className="admin-panel-card">
                 <div className="admin-section-title">
                   <span className="admin-section-icon">⌕</span>
@@ -4655,14 +4652,14 @@ export default function App() {
                     <div className="admin-section-title">
                       <span className="admin-section-icon">✦</span>
                       <div>
-                        <h3>Выдать награду</h3>
+                        <h3>Выдача монет GG и бета-теста</h3>
                         <p>Выдача применяется сервером и записывается в историю.</p>
                       </div>
                     </div>
 
                     <form className="admin-grant-form" onSubmit={grantAdminReward}>
                       <label className="admin-field">
-                        <span>Тип награды</span>
+                        <span>Категория выдачи</span>
                         <select
                           className="admin-input"
                           value={adminGrantType}
@@ -4675,8 +4672,36 @@ export default function App() {
                           <option value="cases">🎁 Бесплатные кейсы</option>
                           <option value="brainrot">🧠 Брейнрот</option>
                           <option value="xp">✦ Опыт профиля (XP)</option>
+                          {isOwner && <option value="beta">🧪 Бета-тест</option>}
                         </select>
                       </label>
+
+                      {adminGrantType === "beta" && isOwner && (
+                        <section className="beta-access-admin-card admin-full-field">
+                          <div className="admin-section-title">
+                            <span className="admin-section-icon">🧪</span>
+                            <div>
+                              <h3>Управление бета-тестом</h3>
+                              <p>Найди игрока по Telegram @username, затем выдай или отзови доступ. Его тестовый прогресс хранится отдельно от основного.</p>
+                            </div>
+                          </div>
+                          <div className="beta-access-search">
+                            <label htmlFor="beta-player-username">Telegram username игрока</label>
+                            <div>
+                              <input id="beta-player-username" className="admin-input" value={betaUsername} onChange={(event) => setBetaUsername(event.target.value.replace(/^@/, ""))} placeholder="@username" autoComplete="off" maxLength={32} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
+                              <button className="main-button" type="button" onClick={() => findBetaPlayer()} disabled={betaSearchBusy}>{betaSearchBusy ? "Ищем…" : "Найти игрока"}</button>
+                            </div>
+                          </div>
+                          {betaPlayer && (
+                            <div className="beta-player-result">
+                              <div><b>@{betaPlayer.username || betaUsername}</b><small>Game ID: {betaPlayer.game_id || "—"}</small></div>
+                              <span className={`maintenance-status-pill ${betaPlayer.betaAccess ? "is-enabled" : "is-disabled"}`}>{betaPlayer.betaAccess ? "● БЕТА ДОСТУП ЕСТЬ" : "● НЕТ ДОСТУПА"}</span>
+                              <button type="button" className={`maintenance-toggle-button ${betaPlayer.betaAccess ? "is-enabled" : ""}`} onClick={() => setBetaPlayerAccess(!betaPlayer.betaAccess)} disabled={betaAccessBusy}>{betaAccessBusy ? "Сохраняем…" : betaPlayer.betaAccess ? "Отозвать доступ" : "Выдать бета-тест"}</button>
+                            </div>
+                          )}
+                          {betaAccessFeedback && <div className={`admin-feedback ${betaAccessError ? "error" : "success"}`} role="status">{betaAccessFeedback}</div>}
+                        </section>
+                      )}
 
                       {adminGrantType === "cases" && (
                         <label className="admin-field admin-full-field">
@@ -4713,7 +4738,7 @@ export default function App() {
                         </label>
                       )}
 
-                      <label className="admin-field">
+                      {adminGrantType !== "beta" && <label className="admin-field">
                         <span>Количество</span>
                         <input
                           className="admin-input"
@@ -4724,15 +4749,15 @@ export default function App() {
                           value={adminAmount}
                           onChange={(event) => setAdminAmount(event.target.value)}
                         />
-                      </label>
+                      </label>}
 
-                      <button
+                      {adminGrantType !== "beta" && <button
                         className="main-button admin-grant-button"
                         type="submit"
                         disabled={adminGrantLoading}
                       >
                         {adminGrantLoading ? "Выполняем выдачу..." : "✦ ВЫДАТЬ НАГРАДУ"}
-                      </button>
+                      </button>}
                     </form>
                   </section>
 
