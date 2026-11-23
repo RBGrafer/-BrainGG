@@ -40,7 +40,7 @@ export const cases = [
     image: moonCaseArt, category: "Обычные кейсы",
   },
   {
-    id: 5, name: "CHEAP", caseName: "Cheap Case",
+    id: 5, name: "CHEAP CASE", caseName: "Cheap Case",
     description: "Доступный кейс с неожиданными находками", price: 9,
     color: "orange", image: cheapCaseArt, category: "Обычные кейсы",
   },
