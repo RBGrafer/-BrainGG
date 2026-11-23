@@ -37,6 +37,37 @@ import depBoneCageMonster from "./assets/brainrots/deposits/bone-cage-monster.we
 import depArcadeMonster from "./assets/brainrots/deposits/arcade-monster.webp";
 import depFlyingClockCharacter from "./assets/brainrots/deposits/flying-clock-character.webp";
 import depPixelDuo from "./assets/brainrots/deposits/pixel-duo.webp";
+import communityFrogoElfo from "./assets/brainrots/community/frogo-elfo.webp";
+import communityTricTracBaraboom from "./assets/brainrots/community/tric-trac-baraboom.webp";
+import communityCupcakeKoala from "./assets/brainrots/community/cupcake-koala.webp";
+import communityBonecaAmbalabu from "./assets/brainrots/community/boneca-ambalabu.webp";
+import communityPipiCorni from "./assets/brainrots/community/pipi-corni.webp";
+import communityHolyArepa from "./assets/brainrots/community/holy-arepa.webp";
+import communityAvocadiniGuffo from "./assets/brainrots/community/avocadini-guffo.webp";
+import communityBrriBrri from "./assets/brainrots/community/brri-brri-bicus-dicus-bombicus.webp";
+import communityFrogatoPirato from "./assets/brainrots/community/frogato-pirato.webp";
+import communityPenguinoCocosino from "./assets/brainrots/community/penguino-cocosino.webp";
+import communityGatoCelesto from "./assets/brainrots/community/gato-celesto.webp";
+import communityTrippiTroppi from "./assets/brainrots/community/trippi-troppi.webp";
+import communityGangsterFootera from "./assets/brainrots/community/gangster-footera.webp";
+import communityPipiKiwi from "./assets/brainrots/community/pipi-kiwi.webp";
+import uploadBonecaAmbalabu from "./assets/brainrots/community/user-pack/boneca-ambalabu.webp";
+import uploadPipiCorni from "./assets/brainrots/community/user-pack/pipi-corni.webp";
+import uploadHolyArepa from "./assets/brainrots/community/user-pack/holy-arepa.webp";
+import uploadAvocadiniGuffo from "./assets/brainrots/community/user-pack/avocado-owl-unidentified.webp";
+import uploadFrogatoPirato from "./assets/brainrots/community/user-pack/frogato-pirato.webp";
+import uploadGatoCelesto from "./assets/brainrots/community/user-pack/blue-winged-cat-unidentified.webp";
+import uploadTrippiTroppi from "./assets/brainrots/community/user-pack/trippi-troppi.webp";
+import uploadGangsterFootera from "./assets/brainrots/community/user-pack/gangster-footera.webp";
+import uploadPipiKiwi from "./assets/brainrots/community/user-pack/pipi-kiwi.webp";
+import uploadTartaragno from "./assets/brainrots/community/user-pack/tartaragno.webp";
+import uploadFluriflura from "./assets/brainrots/community/user-pack/fluriflura.webp";
+import uploadTimCheese from "./assets/brainrots/community/user-pack/tim-cheese.webp";
+import uploadPipiAvocado from "./assets/brainrots/community/user-pack/pipi-avocado.webp";
+import uploadFrogoElfo from "./assets/brainrots/community/user-pack/frogo-elfo.webp";
+import uploadTricTracBaraboom from "./assets/brainrots/community/user-pack/tric-trac-baraboom.webp";
+import uploadNoobiniSantanini from "./assets/brainrots/community/user-pack/noobini-santanini.webp";
+import uploadMummioRappitto from "./assets/brainrots/community/user-pack/mummio-rappitto.webp";
 
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
 const SITE_THEME_STORAGE_KEY = "braingg-site-theme-v1";
@@ -221,10 +252,45 @@ const DEPOSIT_BRAINROT_IMAGES = {
   "pixel-duo": depPixelDuo,
 };
 
+const COMMUNITY_BRAINROT_ART = [
+  { match: ["frogo elfo"], image: uploadFrogoElfo },
+  { match: ["tric trac baraboom", "tric-trac-baraboom"], image: uploadTricTracBaraboom },
+  { match: ["cupcake koala"], image: communityCupcakeKoala },
+  { match: ["boneca ambalabu"], image: uploadBonecaAmbalabu },
+  { match: ["pipi corni"], image: uploadPipiCorni },
+  { match: ["holy arepa"], image: uploadHolyArepa },
+  { match: ["avocadini guffo"], image: uploadAvocadiniGuffo },
+  { match: ["brri brri bicus dicus bombicus", "brri brri"], image: communityBrriBrri },
+  { match: ["frogato pirato"], image: uploadFrogatoPirato },
+  { match: ["penguino cocosino"], image: communityPenguinoCocosino },
+  { match: ["gato celesto"], image: uploadGatoCelesto },
+  { match: ["trippi troppi"], image: uploadTrippiTroppi },
+  { match: ["gangster footera"], image: uploadGangsterFootera },
+  { match: ["pipi kiwi"], image: uploadPipiKiwi },
+  { match: ["tartaragno"], image: uploadTartaragno },
+  { match: ["fluriflura"], image: uploadFluriflura },
+  { match: ["tim cheese"], image: uploadTimCheese },
+  { match: ["pipi avocado"], image: uploadPipiAvocado },
+  { match: ["noobini santanini"], image: uploadNoobiniSantanini },
+  { match: ["mummio rappitto", "mummio"], image: uploadMummioRappitto },
+];
+
 function brainrotImage(item) {
-  // Do not show unrelated generated characters as if they were official game art.
-  // Exact Steal a Brainrot artwork can be added per character when licensed assets are supplied.
-  return brainrotPlaceholderArt;
+  const name = String(item?.item_name || item?.brainrot_name || item?.name || "")
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const suppliedArt = COMMUNITY_BRAINROT_ART.find(({ match }) =>
+    match.some((candidate) => name.includes(candidate))
+  );
+  if (suppliedArt) return suppliedArt.image;
+
+  const existingArt = BRAINROT_ART.find(({ match }) =>
+    match.some((candidate) => name.includes(candidate))
+  );
+  return existingArt?.image || brainrotPlaceholderArt;
 }
 
 function depositBrainrotImage(item) {
