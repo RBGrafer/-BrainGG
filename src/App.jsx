@@ -52,11 +52,12 @@ import communityTrippiTroppi from "./assets/brainrots/community/trippi-troppi.we
 import communityGangsterFootera from "./assets/brainrots/community/gangster-footera.webp";
 import communityPipiKiwi from "./assets/brainrots/community/pipi-kiwi.webp";
 import uploadBonecaAmbalabu from "./assets/brainrots/community/user-pack/boneca-ambalabu.webp";
+import uploadCupcakeKoala from "./assets/brainrots/community/user-pack/cupcake-koala.webp";
 import uploadPipiCorni from "./assets/brainrots/community/user-pack/pipi-corni.webp";
 import uploadHolyArepa from "./assets/brainrots/community/user-pack/holy-arepa.webp";
-import uploadAvocadiniGuffo from "./assets/brainrots/community/user-pack/avocado-owl-unidentified.webp";
+import uploadAvocadiniGuffo from "./assets/brainrots/community/user-pack/avocadini-guffo.webp";
 import uploadFrogatoPirato from "./assets/brainrots/community/user-pack/frogato-pirato.webp";
-import uploadGatoCelesto from "./assets/brainrots/community/user-pack/blue-winged-cat-unidentified.webp";
+import uploadGatoCelesto from "./assets/brainrots/community/user-pack/gato-celesto.webp";
 import uploadTrippiTroppi from "./assets/brainrots/community/user-pack/trippi-troppi.webp";
 import uploadGangsterFootera from "./assets/brainrots/community/user-pack/gangster-footera.webp";
 import uploadPipiKiwi from "./assets/brainrots/community/user-pack/pipi-kiwi.webp";
@@ -68,6 +69,23 @@ import uploadFrogoElfo from "./assets/brainrots/community/user-pack/frogo-elfo.w
 import uploadTricTracBaraboom from "./assets/brainrots/community/user-pack/tric-trac-baraboom.webp";
 import uploadNoobiniSantanini from "./assets/brainrots/community/user-pack/noobini-santanini.webp";
 import uploadMummioRappitto from "./assets/brainrots/community/user-pack/mummio-rappitto.webp";
+
+import uploadArcadragon from "./assets/brainrots/community/user-pack/arcadragon.webp";
+import uploadTentacoloTecnico from "./assets/brainrots/community/user-pack/tentacolo-tecnico.webp";
+import uploadDragonAquanini from "./assets/brainrots/community/user-pack/dragon-aquanini.webp";
+import uploadElectroQuacko from "./assets/brainrots/community/user-pack/electro-quacko.webp";
+import uploadDragonCannelloni from "./assets/brainrots/community/user-pack/dragon-cannelloni.webp";
+import uploadBrrBrrPatapim from "./assets/brainrots/community/user-pack/brr-brr-patapim.webp";
+import uploadDolphiniJetskini from "./assets/brainrots/community/user-pack/dolphini-jetskini.webp";
+import uploadPretzoRobo from "./assets/brainrots/community/user-pack/pretzo-robo.webp";
+import uploadHeadlessHorseman from "./assets/brainrots/community/user-pack/headless-horseman.webp";
+import uploadBuhoDeFuego from "./assets/brainrots/community/user-pack/buho-de-fuego.webp";
+import uploadCelestialPegasus from "./assets/brainrots/community/user-pack/celestial-pegasus.webp";
+import uploadLoveLoveBear from "./assets/brainrots/community/user-pack/love-love-bear.webp";
+import uploadStrawberryElephant from "./assets/brainrots/community/user-pack/strawberry-elephant.webp";
+import uploadHydraBunny from "./assets/brainrots/community/user-pack/hydra-bunny.webp";
+import uploadVenuspino from "./assets/brainrots/community/user-pack/venuspino.webp";
+
 
 const STREAMER_MODE_STORAGE_KEY = "braingg-streamer-mode-v1";
 const SITE_THEME_STORAGE_KEY = "braingg-site-theme-v1";
@@ -253,9 +271,24 @@ const DEPOSIT_BRAINROT_IMAGES = {
 };
 
 const COMMUNITY_BRAINROT_ART = [
+  { match: ["arcadragon"], image: uploadArcadragon },
+  { match: ["tentacolo tecnico"], image: uploadTentacoloTecnico },
+  { match: ["dragon aquanini"], image: uploadDragonAquanini },
+  { match: ["electro quacko"], image: uploadElectroQuacko },
+  { match: ["dragon cannelloni", "dragon canneloni"], image: uploadDragonCannelloni },
+  { match: ["brr brr patapim"], image: uploadBrrBrrPatapim },
+  { match: ["dolphini jetskini"], image: uploadDolphiniJetskini },
+  { match: ["pretzo robo"], image: uploadPretzoRobo },
+  { match: ["headless horseman"], image: uploadHeadlessHorseman },
+  { match: ["buho de fuego"], image: uploadBuhoDeFuego },
+  { match: ["celestial pegasus"], image: uploadCelestialPegasus },
+  { match: ["love love bear"], image: uploadLoveLoveBear },
+  { match: ["strawberry elephant"], image: uploadStrawberryElephant },
+  { match: ["hydra bunny"], image: uploadHydraBunny },
+  { match: ["venuspino"], image: uploadVenuspino },
   { match: ["frogo elfo"], image: uploadFrogoElfo },
   { match: ["tric trac baraboom", "tric-trac-baraboom"], image: uploadTricTracBaraboom },
-  { match: ["cupcake koala"], image: communityCupcakeKoala },
+  { match: ["cupcake koala"], image: uploadCupcakeKoala },
   { match: ["boneca ambalabu"], image: uploadBonecaAmbalabu },
   { match: ["pipi corni"], image: uploadPipiCorni },
   { match: ["holy arepa"], image: uploadHolyArepa },
